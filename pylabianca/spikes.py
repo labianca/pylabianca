@@ -15,16 +15,39 @@ class SpikeEpochs():
 
         Parameters
         ----------
-        TODO...
-
-        Returns
-        -------
-        TODO
+        time : listlike of np.ndarray
+            List of arrays, where each array contains spike times for one
+            cell (neuron). The times are centered with respect to epoch onset
+            (for example stimulus presentation).
+        trial : listlike of np.ndarray
+            List of arrays, where each array contains trial membership of
+            spikes from respective ``time`` array for one cell (neuron). The
+            trial indices are zero-based integers.
+        time_limits : listlike | None
+            Optional. Two-element array with epoch time limits with respect to
+            epoch-centering event. The limits have to be in seconds.
+            For example ``np.array([-0.5, 1.5])`` means from 0.5 seconds
+            before the event up to 1.5 seconds after the event. The default
+            (``None``) infers time limits from min and max spike times.
+        n_trials : int | None
+            Number of trials. Optional, if the number of trials can't be
+            inferred from the ``trials`` argument.
+        cell_names : list of str | None
+            String identifiers of cells. First string corresponds to first
+            cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
+            Optional, the default (``None``) names the first cell
+            ``'cell000'``, the second cell ``'cell001'`` and so on.
+        metadata : pandas.DataFrame
+            DataFrame with trial-level metadata.
         '''
         self.time = time
         self.trial = trial
         self.time_limits = time_limits
 
+        if time_limits is None:
+            tmin = min([min(x) for x in time])
+            tmax = max([max(x) for x in time])
+            time_limits = np.array([tmin, tmax])
         if n_trials is None:
             n_trials = max(max(tri) for tri in self.trial)
         if cell_names is None:
@@ -44,30 +67,29 @@ class SpikeEpochs():
 
     # TODO - refactor (DRY: merge both loops into one?)
     # TODO - better handling of numpy vs numba implementation
+    # TODO: consider adding `return_type` with `Epochs` option (mne object)
     def spike_rate(self, picks=None, winlen=0.25, step=0.01, tmin=None,
-                   tmax=None, return_type='xarray', backend='numpy'):
+                   tmax=None, backend='numpy'):
         '''Calculate spike rate with a running window.
 
         Parameters
         ----------
-        pick : int
-            The neuron index to use in the calculations.
+        picks : int | listlike of int | None
+            The neuron index to use in the calculations. The default (``None``)
+            uses all cells.
         winlen : float
-            Length of the running window.
+            Length of the running window in seconds.
         step : float | bool
             The step size of the running window. If step is ``False`` then
             spike rate is not calculcated using a running window but with
             a static one with limits defined by ``tmin`` and ``tmax``.
-        return_type : str
-            Can be:
-                * ``'xarray'`` - xarray DataArray
-                * ``'epochs'`` - mne.Epochs (not implemented)
         backend : str
             Can be ``'numpy'`` or ``'numba'``.
 
         Returns
         -------
-        TODO - fill docs
+        frate : xarray.DataArray
+            Xarray with following labeled dimensions: cell, trial, time.
         '''
         picks = _deal_with_picks(self, picks)
 
@@ -76,18 +98,18 @@ class SpikeEpochs():
             assert tmax is not None
             times = f'{tmin} - {tmax} s'
 
-            frates = list()
+            frate = list()
             cell_names = list()
 
             for pick in picks:
-                frate = _compute_spike_rate_fixed(
+                frt = _compute_spike_rate_fixed(
                     self.time[pick], self.trial[pick], [tmin, tmax],
                     self.n_trials)
-                frates.append(frate)
+                frate.append(frt)
                 cell_names.append(self.cell_names[pick])
 
         else:
-            frates = list()
+            frate = list()
             cell_names = list()
 
             if backend == 'numpy':
@@ -99,19 +121,34 @@ class SpikeEpochs():
                 raise ValueError('Backend can be only "numpy" or "numba".')
 
             for pick in picks:
-                times, frate = func(
+                times, frt = func(
                     self.time[pick], self.trial[pick], self.time_limits,
                     self.n_trials, winlen=winlen, step=step)
-                frates.append(frate)
+                frate.append(frt)
                 cell_names.append(self.cell_names[pick])
 
-        frates = np.stack(frates, axis=0)
-        xarr = _turn_spike_rate_to_xarray(times, frates, self,
-                                          cell_names=cell_names)
-        return xarr
+        frate = np.stack(frate, axis=0)
+        frate = _turn_spike_rate_to_xarray(times, frate, self,
+                                           cell_names=cell_names)
+        return frate
 
     def spike_density(self, picks=None, winlen=0.3, gauss_sd=None, sfreq=500.):
-        '''Compute spike density by convolving spikes with gaussian kernel.
+        '''Compute spike density by convolving spikes with a gaussian kernel.
+
+        Parameters
+        ----------
+        picks : int | listlike of int | None
+            The neuron indices to use in the calculations. The default
+            (``None``) uses all cells.
+        winlen : float
+            Length of the gaussian kernel window. By default, if
+            ``gauss_sd=None``, the standard deviation of the kernel is
+            ``winlen / 6``.
+        gauss_sd : float | None
+            Standard deviation of the gaussian kernel.
+        sfreq : float
+            Desired sampling frequency of the spike density. Defaults to 500
+            Hz.
         '''
         picks = _deal_with_picks(self, picks)
         tms, cnt = _spike_density(self, picks=picks, winlen=winlen,
@@ -127,8 +164,24 @@ class SpikeEpochs():
         pass
 
     # TODO: empty trials are dropped by default now...
-    # - [ ] use `group` for faster execution...
+    # - [ ] use `group` from sarna for faster execution...
     def to_neo(self, cell_idx, pool=False):
+        '''Turn spikes of given cell into neo.SpikeTrain format.
+
+        Parameters
+        ----------
+        cell_idx : int
+            Index of the cell to turn into neo.SpikeTrain format.
+        pool : bool
+            Whether to pool all the trials into a single neo.SpikeTrain.
+
+        Returns
+        -------
+        spikes : neo.SpikeTrain | list of neo.SpikeTrain
+            If ``pool=True``, a single neo.SpikeTrain is returned with spikes
+            from separate trials pooled and sorted. Otherwise (``pool=False``)
+            a list of neo.SpikeTrain objects is returned.
+        '''
         import neo
         from quantities import s
 
@@ -149,6 +202,7 @@ class SpikeEpochs():
         return spikes
 
 
+# TODO: the implementation and the API are suboptimal
 def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
     '''Test coocurrence of spike times for SpikeEpochs.
 
@@ -323,6 +377,7 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
 
 # TODO: consider an exact mode where the spikes are not transformed to raw
 #       but placed exactly where the spike is (`loc=spike_time`) and evaluated
+#       (maybe this is what is done by elephant?)
 def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, sfreq=500.):
     '''Calculates normal (constant) spike density.
 
