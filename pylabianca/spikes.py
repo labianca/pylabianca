@@ -440,3 +440,72 @@ def depth_of_selectivity(frate, by):
     numerator = n_categories - (avg_by_probe / rmax).sum(by)
     selectivity = numerator / (n_categories - 1)
     return selectivity, avg_by_probe
+
+
+def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
+                       paired=False):
+    '''Perform cluster-based tests on firing rate data.
+
+    Performs cluster-based ANOVA on firing rate to test, for example,
+    category-selectivity of the neurons. Currently t
+
+    Parameters
+    ----------
+    frate : xarray.DataArray
+        Xarray with spike rate  or spike density containing
+        observations as the first dimension (for example trials for
+        between-trials analysis or cells for between-cells analysis).
+        If you have both cells and trials then the cell should already be
+        selected, via ``frate.isel(cell=0)`` for example or the trials
+        dimension should be averaged (for example ``frate.mean(dim='trial')``).
+    compare : str
+        Dimension labels specified for ``'trial'`` dimension that constitutes
+        categories to test selectivity for.
+    cluster_entry_pval : float
+        Pvalue used as a cluster-entry threshold. The default is ``0.05``.
+
+    Returns
+    -------
+    stats : numpy.ndarray
+        Anova F statistics for every timepoint.
+    clusters : list of numpy.ndarray
+        List of cluster memberships.
+    pval : numpy.ndarray
+        List of p values from anova.
+    '''
+    import warnings
+    from scipy.stats.distributions import f
+    from mne.stats import permutation_cluster_test
+
+    if paired:
+        from mne.stats import f_mway_rm
+        def stat_fun(*args):
+            data = np.stack(args, axis=1)
+            n_factors = data.shape[1]
+            fval, _ = f_mway_rm(data, factor_levels=[n_factors],
+                                return_pvals=False)
+            return fval
+    else:
+        from scipy.stats import f_oneway
+        stat_fun = f_oneway
+
+    # calculate F anova threshold
+    obs_dim = frate.dims[0]
+    n_categories = len(np.unique(frate.coords[compare]))
+    n_trials = len(frate.coords[obs_dim])
+    p_thresh = cluster_entry_pval
+    dfn = n_categories - 1
+    dfd = n_trials - n_categories
+    threshold = f.ppf(1. - p_thresh, dfn, dfd)
+
+    # split data into probe groups
+    arrays = [arr.values for _, arr in frate.groupby(compare)]
+
+    # compute ANOVA cluster-based analysis
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        stat, clusters, pval, _ = permutation_cluster_test(
+            arrays, threshold=threshold, n_permutations=1000,
+            stat_fun=stat_fun, out_type='mask', verbose=False)
+
+    return stat, clusters, pval
