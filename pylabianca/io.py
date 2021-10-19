@@ -105,7 +105,7 @@ def read_spikes(fname, data_name='spike'):
 def _read_spikes_gammbur(fname):
     '''GammBur-specific function that reads spikes and formats metadata.'''
     spikes = read_spikes(fname, data_name='spikes')
-    spikes.metadata = prepare_metadata(spikes.metadata)
+    spikes.metadata = prepare_gammbur_metadata(spikes.metadata)
     return spikes
 
 
@@ -119,5 +119,5 @@ def _read_lfp_gammbur(fname):
     info = mne.create_info(ch_names, sfreq, ch_types='seeg')
 
     epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp')
-    epochs.metadata = prepare_metadata(epochs.metadata)
+    epochs.metadata = prepare_gammbur_metadata(epochs.metadata)
     return epochs
