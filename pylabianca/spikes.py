@@ -8,7 +8,7 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 # - [ ] index by trial?
 # - [ ] make time_limits not obligatory in the contructor?
 class SpikeEpochs():
-    def __init__(self, time, trial, time_limits, n_trials=None,
+    def __init__(self, time, trial, time_limits=None, n_trials=None,
                  cell_names=None, metadata=None):
         '''Create ``SpikeEpochs`` object for convenient storage, analysis and
         visualisation of spikes data.
@@ -40,16 +40,21 @@ class SpikeEpochs():
         metadata : pandas.DataFrame
             DataFrame with trial-level metadata.
         '''
+        if not isinstance(time[0], np.ndarray):
+            time = [np.asarray(x) for x in time]
+        if not isinstance(trial[0], np.ndarray):
+            trial = [np.asarray(x) for x in trial]
         self.time = time
         self.trial = trial
-        self.time_limits = time_limits
 
         if time_limits is None:
             tmin = min([min(x) for x in time])
             tmax = max([max(x) for x in time])
             time_limits = np.array([tmin, tmax])
+        self.time_limits = time_limits
+
         if n_trials is None:
-            n_trials = max(max(tri) for tri in self.trial)
+            n_trials = max(max(tri) + 1 for tri in self.trial)
         if cell_names is None:
             n_cells = len(time)
             cell_names = ['cell{:03d}'.format(idx) for idx in range(n_cells)]
@@ -62,7 +67,7 @@ class SpikeEpochs():
         '''Text representation of SpikeEpochs.'''
         n_cells = len(self.time)
         avg_spikes = np.mean([len(x) for x in self.time])
-        msg = '<SpikeEpochs, {} epochs, {} cells, {:.1f} spikes on average>'
+        msg = '<SpikeEpochs, {} epochs, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(self.n_trials, n_cells, avg_spikes)
 
     # TODO - refactor (DRY: merge both loops into one?)
