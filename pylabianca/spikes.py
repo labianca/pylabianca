@@ -70,6 +70,41 @@ class SpikeEpochs():
         msg = '<SpikeEpochs, {} epochs, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(self.n_trials, n_cells, avg_spikes)
 
+    def picks_cells(self, picks):
+        '''Select cells by name or index. Operates inplace.'''
+        picks = _deal_with_picks(picks)
+        self.time = [self.time[ix] for ix in picks]
+        self.trial = [self.trial[ix] for ix in picks]
+        self.cell_names = [self.cell_names[ix] for ix in picks]
+        return self
+
+    def crop(self, tmin=None, tmax=None):
+        '''Confine time range to specified limit. Operates inplace.
+
+        Parameters
+        ----------
+        tmin : float | None
+            Lower time bound in seconds. Spikes later or equal (``>=``) to this
+            time will be retained.
+        tmax : float | None
+            Higher time bound in seconds. Spikes earlier or equal (``<=``) to
+            this time will be retained.
+        '''
+        if tmin is None and tmax is None:
+            raise TypeError('You have to specify tmin and/or tmax.')
+
+        if tmin is None:
+            tmin = self.time_limits[0]
+        if tmax is None:
+            tmax = self.time_limits[1]
+
+        for cell_idx in range(len(self.time)):
+            sel = (self.time[cell_idx] >= tmin) & (self.time[cell_idx] <= tmax)
+            self.time[cell_idx] = self.time[cell_idx][sel]
+            self.trial[cell_idx] = self.trial[cell_idx][sel]
+        self.time_limits = [tmin, tmax]
+        return self
+
     # TODO - refactor (DRY: merge both loops into one?)
     # TODO - better handling of numpy vs numba implementation
     # TODO: consider adding `return_type` with `Epochs` option (mne object)
@@ -162,11 +197,6 @@ class SpikeEpochs():
             tms, cnt.transpose((1, 0, 2)), self,
             cell_names=self.cell_names[picks])
         return xarr
-
-    def crop(self, tmin=None, tmax=None):
-        if tmin is None and tmax is None:
-            raise TypeError('You have to specify ``tmin`` and/or ``tmax``.')
-        pass
 
     # TODO: empty trials are dropped by default now...
     # - [ ] use `group` from sarna for faster execution...
