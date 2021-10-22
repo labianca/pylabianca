@@ -189,6 +189,11 @@ class SpikeEpochs():
         sfreq : float
             Desired sampling frequency of the spike density. Defaults to 500
             Hz.
+
+        Returns
+        -------
+        frate : xarray.DataArray
+            Spike density in a cell x trial x time xarray.
         '''
         picks = _deal_with_picks(self, picks)
         tms, cnt = _spike_density(self, picks=picks, winlen=winlen,
