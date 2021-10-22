@@ -365,13 +365,17 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     for idx, cell_idx in enumerate(picks):
         from_idx = 0
         for this_tri in range(spk.n_trials):
-            ix = np.argmax(spk.trial[cell_idx][from_idx:] > this_tri)
-            if ix == 0:
+            ix = np.where(spk.trial[cell_idx][from_idx:] == this_tri)[0]
+            if len(ix) == 0:
                 continue
+
+            ix = ix[-1] + 1
             spike_times = spk.time[cell_idx][from_idx:from_idx + ix]
             sample_ix = (np.abs(times[:, np.newaxis]
                                 - spike_times[np.newaxis, :]).argmin(axis=0))
-            trials_raw[this_tri, idx, sample_ix] = 1
+            tsmp, nspk = np.unique(sample_ix, return_counts=True)
+            trials_raw[this_tri, idx, tsmp] = nspk
+
             from_idx = from_idx + ix
     return times, trials_raw
 
