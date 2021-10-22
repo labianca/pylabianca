@@ -2,19 +2,23 @@ import numpy as np
 
 
 def _deal_with_picks(spk, picks):
+    has_str = False
     if picks is None:
         # pick all cells by default
         picks = np.arange(len(spk.cell_names))
     if isinstance(picks, (list, np.ndarray)):
         if isinstance(picks[0], str):
-            is_str = [isinstrance(x, str) for x in picks[1:]]
+            is_str = [isinstance(x, str) for x in picks[1:]]
             has_str = all(is_str) or len(picks) == 1
     if not isinstance(picks, (list, np.ndarray)):
         if isinstance(picks, str):
             has_str = True
         picks = [picks]
     if has_str:
-        picks = [spk.cell_names.index(name) for name in picks]
+        if isinstance(spk.cell_names, list):
+            picks = [spk.cell_names.index(name) for name in picks]
+        else:
+            picks = [np.where(spk.cell_names == name)[0][0] for name in picks]
     return picks
 
 
