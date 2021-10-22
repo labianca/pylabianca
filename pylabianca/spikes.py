@@ -415,44 +415,45 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
     return frate
 
 
+def _symmetric_window_samples(winlen, sfreq):
+    hlflen_smp = int(np.round(winlen / 2 * sfreq))
+    win_smp = np.arange(-hlflen_smp, hlflen_smp + 1)
+    return win_smp, hlflen_smp
+
+
+def _gauss_kernel_samples(window, gauss_sd):
+    from scipy.stats.distributions import norm
+    kernel = norm(loc=0, scale=gauss_sd)
+    kernel = kernel.pdf(window)
+    return kernel
+
+
 # TODO: consider an exact mode where the spikes are not transformed to raw
 #       but placed exactly where the spike is (`loc=spike_time`) and evaluated
 #       (maybe this is what is done by elephant?)
-def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, sfreq=500.):
+# TODO: make windows symmetric wrt 0
+def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, kernel=None,
+                   sfreq=500.):
     '''Calculates normal (constant) spike density.
 
     The density is computed by convolving the binary spike representation
     with a gaussian kernel.
     '''
     from scipy.signal import correlate
-    from scipy.stats.distributions import norm
 
-    stime = 1 / sfreq
-    if gauss_sd is None:
-        gauss_sd = winlen / 6 / stime
+    if kernel is None:
+        gauss_sd = winlen / 6 if gauss_sd is None else gauss_sd
+        gauss_sd = gauss_sd * sfreq
+
+        win_smp, trim = _symmetric_window_samples(winlen, sfreq)
+        kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
     else:
-        gauss_sd = gauss_sd / stime
-
-    hlflen_smp = winlen / 2 / stime
-    win_time = np.arange(-hlflen_smp, hlflen_smp + 1)
-    kernel = norm(loc=0, scale=gauss_sd)
-    kernel = kernel.pdf(win_time)
-    kernel /= stime
+        assert (len(kernel) % 2) == 1
+        trim = int((len(kernel) - 1) / 2)
 
     picks = _deal_with_picks(spk, picks)
     times, binrep = _spikes_to_raw(spk, picks=picks, sfreq=sfreq)
-    n_smp = binrep.shape[-1] - len(win_time) + 1
-    cnt = np.zeros((spk.n_trials, len(picks), n_smp))
-
-    # TODO: it makes more sense to change times to be between current
-    #       time labels, than to asymmetrically trim the time labels?
-    if (len(win_time) - 1) % 2 == 0:
-        trim1 = int((len(win_time) - 1) / 2)
-        trim2 = trim1
-    else:
-        trim1 = int((len(win_time) - 1) / 2)
-        trim2 = trim1 + 1
-    cnt_times = times[trim1:-trim2]
+    cnt_times = times[trim:-trim]
 
     cnt = correlate(binrep, kernel[None, None, :], mode='valid')
     return cnt_times, cnt
