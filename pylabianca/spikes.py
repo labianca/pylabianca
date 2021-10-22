@@ -72,7 +72,7 @@ class SpikeEpochs():
 
     def picks_cells(self, picks):
         '''Select cells by name or index. Operates inplace.'''
-        picks = _deal_with_picks(picks)
+        picks = _deal_with_picks(self, picks)
         self.time = [self.time[ix] for ix in picks]
         self.trial = [self.trial[ix] for ix in picks]
         self.cell_names = [self.cell_names[ix] for ix in picks]
