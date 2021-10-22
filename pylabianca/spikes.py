@@ -524,6 +524,7 @@ def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
 
     if paired:
         from mne.stats import f_mway_rm
+
         def stat_fun(*args):
             data = np.stack(args, axis=1)
             n_factors = data.shape[1]
