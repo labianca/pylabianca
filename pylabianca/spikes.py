@@ -550,3 +550,70 @@ def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
             stat_fun=stat_fun, out_type='mask', verbose=False)
 
     return stat, clusters, pval
+
+
+# TODO: add offsets to spike-centered neurons
+def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
+    from borsar.utils import find_index
+
+    spike_centered = list()
+    _, hlfwin = _symmetric_window_samples(winlen, sfreq)
+    winlims = np.array([-hlfwin, hlfwin + 1])[None, :]
+    lims = [0, len(time)]
+    tri_isok = np.zeros(len(spk.trial[cell_idx]), dtype='bool')
+
+    n_tri = max(spk.trial[cell_idx])
+    for tri_idx in range(n_tri):
+        sel = spk.trial[cell_idx] == tri_idx
+        if sel.any():
+            tms = spk.time[cell_idx][sel]
+            if len(tms) < 1:
+                continue
+
+            closest_smp = find_index(time, tms)
+            twins = closest_smp[:, None] + winlims
+            good = ((twins >= lims[0]) & (twins <= lims[1])).all(axis=1)
+            twins = twins[good]
+            tri_isok[sel] = good
+
+            for twin in twins:
+                sig_part = arr[:, tri_idx, twin[0]:twin[1]]
+                spike_centered.append(sig_part)
+
+    spike_centered = np.stack(spike_centered, axis=1)
+    tri = spk.trial[cell_idx][tri_isok]
+    return spike_centered, tri
+
+
+def spike_xcorr(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
+                kernel_winlen=0.025):
+
+    # create kernel
+    gauss_sd = kernel_winlen / 6 * sfreq
+    win_smp, trim = _symmetric_window_samples(kernel_winlen, sfreq)
+    kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
+
+    # calculate spike density
+    picks = _deal_with_picks(spk, picks)
+    tms, cnt = _spike_density(spk, picks=picks, sfreq=sfreq, kernel=kernel)
+    cnt = cnt.transpose((1, 0, 2))
+
+    # cut out spike-centered windows
+    windows, tri = spike_centered_windows(
+        spk, cell_idx, cnt, tms, sfreq, winlen=winlen)
+
+    # correct autocorrelation if present:
+    if cell_idx in picks:
+        idx = np.where(np.asarray(picks) == cell_idx)[0][0]
+        trim = int((windows.shape[-1] - len(kernel)) / 2)
+        windows[idx, :, trim:-trim] -= kernel
+
+    # turn to xarray
+    tpers = 1 / sfreq
+    win_diff = [-winlen / 2, winlen / 2]
+    time = np.arange(win_diff[0], win_diff[1] + 0.01 * tpers, step=tpers)
+    cell_names = [spk.cell_names[idx] for idx in picks]
+    xcorr = _turn_spike_rate_to_xarray(time, windows, spk, tri=tri,
+                                       cell_names=cell_names)
+
+    return xcorr
