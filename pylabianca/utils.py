@@ -23,7 +23,8 @@ def _deal_with_picks(spk, picks):
 
 
 # TODO: consider changing the array dim order to: trials, cells, times (mne-python-like)
-def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None):
+def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
+                               tri=None):
     '''Turn spike rate data to xarray.
 
     Parameters
@@ -55,8 +56,9 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None):
 
     # later: consider having firing rate from many neurons...
     n_trials = frate.shape[0] if cell_names is None else frate.shape[1]
-    coords = {'trial': np.arange(n_trials)}
-    dims = ['trial']
+    dimname = 'trial' if tri is None else 'spike'
+    coords = {dimname: np.arange(n_trials)}
+    dims = [dimname]
     attrs = None
     if isinstance(times, np.ndarray):
         dims.append('time')
@@ -69,8 +71,14 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None):
         dims = ['cell'] + dims
         coords['cell'] = cell_names
 
+    if tri is not None:
+        coords['trial'] = (dimname, tri)
+
     for col in spike_epochs.metadata.columns:
-        coords[col] = ("trial", spike_epochs.metadata[col])
+        if tri is None:
+            coords[col] = (dimname, spike_epochs.metadata[col])
+        else:
+            coords[col] = (dimname, spike_epochs.metadata[col].iloc[tri])
 
     firing = xr.DataArray(frate, dims=dims, coords=coords,
                           name='firing rate', attrs=attrs)
