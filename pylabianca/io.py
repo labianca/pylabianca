@@ -118,6 +118,10 @@ def _read_lfp_gammbur(fname):
     ch_names += ['hippo01', 'hippo02']
     info = mne.create_info(ch_names, sfreq, ch_types='seeg')
 
-    epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp')
-    epochs.metadata = prepare_gammbur_metadata(epochs.metadata)
-    return epochs
+    try:
+        epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp')
+        epochs.metadata = prepare_gammbur_metadata(epochs.metadata)
+        return epochs
+    except IndexError:
+        # given file does not contain lfp
+        return None
