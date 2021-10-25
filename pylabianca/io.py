@@ -5,13 +5,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .spikes import SpikeEpochs
+from .spikes import SpikeEpochs, Spikes
 
 
 def prepare_gammbur_metadata(df):
     '''Prepare behavioral data from GammBur.
     Name columns apropriately and set their dtypes.
     '''
+    if isinstance(np.ndarray, df):
+        df = pd.DataFrame(df)
+
     df.columns = ['dig1', 'dig2', 'dig3', 'ifcorrect', 'load', 'ifout',
                   'probe', 'RT']
 
@@ -59,6 +62,12 @@ def read_gammbur(subject_id=None, fname=None, kind='spikes'):
         return _read_lfp_gammbur(fname)
     else:
         raise ValueError('The data kind to read has to be "spikes" or "lfp"')
+
+
+def read_raw_gammbur(subject_id=None, fname=None):
+    spk, events = read_raw_spikes(fname, data_name='ft_format')
+    spk.metadata = prepare_gammbur_metadata(spk.metadata)
+    return spk, events
 
 
 # TODO
@@ -125,3 +134,34 @@ def _read_lfp_gammbur(fname):
     except IndexError:
         # given file does not contain lfp
         return None
+
+
+def read_raw_spikes(fname, data_name='spikes'):
+    from scipy.io import loadmat
+    data = loadmat(fname, squeeze_me=True, variable_names=data_name)[data_name]
+
+    cell_names = data['label'].item()
+    timestamps = data['timestamp'].item()
+    trialinfo = data['trialinfo'].item()
+    fields = data['cellinfo'].item().dtype.names
+
+    if 'cellinfo' in data.dtype.names:
+        data_dct = dict()
+        for fld in fields:
+            data_dct[fld] = data['cellinfo'].item()[fld].item()
+        cellinfo = pd.DataFrame(data_dct)
+    else:
+        cellinfo = None
+
+    sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
+    trialinfo = data['trialinfo'].item()
+
+    if 'events' in data.dtype.names:
+        events = data['events'].item().astype('int64')
+    else:
+        events = None
+
+    # create Spikes
+    spk = Spikes(timestamps, sfreq, cell_names=cell_names,
+                 metadata=trialinfo, cellinfo=cellinfo)
+    return spk, events
