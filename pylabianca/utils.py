@@ -22,7 +22,8 @@ def _deal_with_picks(spk, picks):
     return picks
 
 
-# TODO: consider changing the array dim order to: trials, cells, times (mne-python-like)
+# TODO: consider changing the array dim order to: trials, cells, times
+#       (mne-python-like)
 def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
                                tri=None):
     '''Turn spike rate data to xarray.
@@ -46,6 +47,11 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     cell_names : list-like of str | None
         Names of the picked cells. If not ``None`` then indicates that the
         first dimension of ``frate`` contains cells.
+    tri : np.ndarray | None
+        Array of trial indices. Use when the repetitions dimesnion is not
+        equivalent to trials, but spikes within trials (spike-centered
+        windows). Passing this argument allows to copy the trial metadata
+        correctly.
 
     Returns
     -------
