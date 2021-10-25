@@ -622,3 +622,47 @@ def spike_xcorr(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
                                        cell_names=cell_names)
 
     return xcorr
+
+
+class Spikes(object):
+    def __init__(self, timestamps, sfreq, cell_names=None, metadata=None,
+                 cellinfo=None):
+        '''Create ``Spikes`` object for convenient storage, analysis and
+        visualisation of spikes data.
+
+        Parameters
+        ----------
+        timestamps : listlike of np.ndarray
+            List of arrays, where each array contains spike timestamps for one
+            cell (neuron).
+        sfreq : float
+            Sampling frequency of the timestamps. For example in Neuralynx
+            system one timestamp occurs once per microsecond, so the sampling
+            frequency is one million (``1e6``).
+        cell_names : list of str | None
+            String identifiers of cells. First string corresponds to first
+            cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
+            Optional, the default (``None``) names the first cell
+            ``'cell000'``, the second cell ``'cell001'`` and so on.
+        metadata : pandas.DataFrame | None
+            DataFrame with trial-level metadata.
+        cellinfo : pandas.DataFrame | None
+            Additional cell information.
+        '''
+        n_cells = len(timestamps)
+        self.timestamps = timestamps
+        self.sfreq = sfreq
+
+        if cell_names is None:
+            cell_names = ['cell{:03d}'.format(idx) for idx in range(n_cells)]
+
+        self.cell_names = cell_names
+        self.metadata = metadata
+        self.cellinfo = cellinfo
+
+    def __repr__(self):
+        '''Text representation of SpikeEpochs.'''
+        n_cells = len(self.cell_names)
+        avg_spikes = np.mean([len(x) for x in self.timestamps])
+        msg = '<Spikes, {} cells, {:.1f} spikes/cell on average>'
+        return msg.format(n_cells, avg_spikes)
