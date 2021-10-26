@@ -137,6 +137,23 @@ def _read_lfp_gammbur(fname):
 
 
 def read_raw_spikes(fname, data_name='spikes'):
+    '''Read raw spikes fieldtrip format.
+
+    Parameters
+    ----------
+    fname : str
+        Filename / path to the file.
+    data_name : str
+        Name of the variable stored in the .mat file.
+
+    Returns
+    -------
+    spk : Spikes
+        Spikes object.
+    events : np.ndarray | None
+        If ``.events`` field is present in the mat file ``events`` contain
+        64 bit numpy array of the shape n_events x 2. Otherwise it is ``None``.
+    '''
     from scipy.io import loadmat
     data = loadmat(fname, squeeze_me=True, variable_names=data_name)[data_name]
 
