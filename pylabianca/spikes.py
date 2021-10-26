@@ -328,8 +328,12 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
             time.append(tms)
         tidx = first_idx
 
-    trial = np.concatenate(trial)
-    time = np.concatenate(time)
+    if len(trial) > 0:
+        trial = np.concatenate(trial)
+        time = np.concatenate(time)
+    else:
+        trial = [np.array([])]
+        time = [np.array([])]
     return trial, time
 
 
@@ -655,7 +659,8 @@ class Spikes(object):
         self.sfreq = sfreq
 
         if cell_names is None:
-            cell_names = ['cell{:03d}'.format(idx) for idx in range(n_cells)]
+            cell_names = np.array(['cell{:03d}'.format(idx)
+                                   for idx in range(n_cells)])
 
         self.cell_names = cell_names
         self.metadata = metadata
@@ -697,8 +702,18 @@ class Spikes(object):
             use_events = np.in1d(events[:, -1], event_id)
             events = events[use_events, :]
 
-        trial, time = _epoch_spikes(self.timestamps, events, tmin, tmax)
-        spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax])
+        n_neurons = len(self.timestamps)
+        trial, time = list(), list()
+        event_times = events[:, 0] / self.sfreq
+
+        for neuron_idx in range(n_neurons):
+            tri, tim = _epoch_spikes(self.timestamps[neuron_idx] / self.sfreq,
+                                     event_times, tmin, tmax)
+            trial.append(tri)
+            time.append(tim)
+
+        spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
+                          cell_names=self.cell_names)
 
         if self.metadata is not None:
             if spk.n_trials == self.metadata.shape[0]:

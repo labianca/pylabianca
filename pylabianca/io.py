@@ -12,7 +12,7 @@ def prepare_gammbur_metadata(df):
     '''Prepare behavioral data from GammBur.
     Name columns apropriately and set their dtypes.
     '''
-    if isinstance(np.ndarray, df):
+    if isinstance(df, np.ndarray):
         df = pd.DataFrame(df)
 
     df.columns = ['dig1', 'dig2', 'dig3', 'ifcorrect', 'load', 'ifout',
