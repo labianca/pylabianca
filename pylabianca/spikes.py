@@ -673,14 +673,19 @@ class Spikes(object):
 
         Parameters
         ----------
-        events : ...
-            TODO
-        event_id : ...
-            TODO
-        tmin : ...
-            TODO
-        tmax : ...
-            TODO
+        events : numpy.ndarray
+            ``n_events x 2`` or ``n_events x 3`` array of event timestamps.
+            The first column should contain event timestamp (sample) and the
+            second - event type (integer).
+        event_id : None | int | list=like of int
+            Event types to use in epoching. The default, ``None``, uses all
+            events from ``events`` array in epoching.
+        tmin : float
+            Epoch start in seconds with respect to event onset. Default to
+            ``-0.2``.
+        tmax : float
+            Epoch start in seconds with respect to event onset. Default to
+            ``-0.2``.
 
         Returns
         -------
