@@ -283,6 +283,7 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
     return if_match.mean()
 
 
+# TODO: change event_times to events?
 def _epoch_spikes(timestamps, event_times, tmin, tmax):
     '''Epoch spike data with respect to event timestamps.
 
@@ -666,3 +667,36 @@ class Spikes(object):
         avg_spikes = np.mean([len(x) for x in self.timestamps])
         msg = '<Spikes, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(n_cells, avg_spikes)
+
+    def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.):
+        '''Epoch spikes with respect to selected events.
+
+        Parameters
+        ----------
+        events : ...
+            TODO
+        event_id : ...
+            TODO
+        tmin : ...
+            TODO
+        tmax : ...
+            TODO
+
+        Returns
+        -------
+        spk : SpikeEpochs
+            Epoched spikes.
+        '''
+        # TODO: add event_id support
+        trial, time = _epoch_spikes(self.timestamps, events, tmin, tmax)
+        spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax])
+
+        if self.metadata is not None:
+            if spk.n_trials == self.metadata.shape[0]:
+                spk.metadata = self.metadata
+            else:
+                pass
+                # raise warning ...
+
+        return spk
+
