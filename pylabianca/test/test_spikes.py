@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import pylabianca as pln
 
 
@@ -11,6 +12,29 @@ def create_fake_spikes():
               [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]]
     spk = pln.SpikeEpochs(times, trials)
     return spk
+
+
+def create_random_spikes(n_cells=4, **args):
+    n_trials = 25
+    tmin, tmax = -0.5, 1.5
+    tlen = tmax - tmin
+    n_spikes_per_tri = [10, 21]
+
+    times = list()
+    trials = list()
+    for cell_idx in range(n_cells):
+        this_tri = list()
+        this_tim = list()
+        for tri_idx in range(n_trials):
+            n_spk = np.random.randint(*n_spikes_per_tri)
+            tms = np.random.rand(n_spk) * tlen + tmin
+            this_tri.append(np.ones(n_spk) * tri_idx)
+            this_tim.append(tms)
+        this_tri = np.concatenate(this_tri)
+        this_tim = np.concatenate(this_tim)
+        times.append(this_tim)
+        trials.append(this_tri)
+    return pln.SpikeEpochs(times, trials, **args)
 
 
 def test_crop():
@@ -36,6 +60,25 @@ def test_pick_cells():
     spk.picks_cells('cell001')
     assert len(spk.time) == 1
     assert spk.time[0][0] == -0.22
+
+
+def test_pick_cells_cellinfo_query():
+    from copy import deepcopy
+    cellinfo = pd.DataFrame({'cell_idx': [10, 15, 20, 25],
+                             'letter': list('abcd')})
+    spk = create_random_spikes(cellinfo=cellinfo)
+
+    spk2 = deepcopy(spk)
+    spk2.picks_cells(query='cell_idx > 18')
+    assert len(spk2.time) == 2
+    assert spk2.cellinfo.shape[0] == 2
+    assert (spk2.cellinfo.letter.values == np.array(['c', 'd'])).all()
+
+    spk3 = deepcopy(spk)
+    spk3.picks_cells(query="letter in ['a', 'c']")
+    assert len(spk3.time) == 2
+    assert len(spk3.time[1]) == len(spk.time[2])
+    assert (spk3.cellinfo.cell_idx.values == [10, 20]).all()
 
 
 def test_to_raw():

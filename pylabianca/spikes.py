@@ -62,7 +62,10 @@ class SpikeEpochs():
             n_trials = max(max(tri) + 1 for tri in self.trial)
         if cell_names is None:
             n_cells = len(time)
-            cell_names = ['cell{:03d}'.format(idx) for idx in range(n_cells)]
+            cell_names = np.array(['cell{:03d}'.format(idx)
+                                   for idx in range(n_cells)])
+        else:
+            cell_names = np.asarray(cell_names)
 
         if metadata is not None:
             assert isinstance(metadata, pd.DataFrame)
