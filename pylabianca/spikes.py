@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 
@@ -7,9 +8,11 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 # - [x] allow to specify picks by cell name
 # - [x] make time_limits not obligatory in the contructor?
 # - [ ] index by trial?
+# - [ ] maybe passing `n_trials` does not make so much sense? If it is not used
+#       in other places - then maybe not.
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
-                 cell_names=None, metadata=None):
+                 cell_names=None, metadata=None, cellinfo=None):
         '''Create ``SpikeEpochs`` object for convenient storage, analysis and
         visualisation of spikes data.
 
@@ -39,6 +42,8 @@ class SpikeEpochs():
             ``'cell000'``, the second cell ``'cell001'`` and so on.
         metadata : pandas.DataFrame
             DataFrame with trial-level metadata.
+        cellinfo : pandas.DataFrame
+            DataFrame with additional information about the cells.
         '''
         if not isinstance(time[0], np.ndarray):
             time = [np.asarray(x) for x in time]
@@ -59,9 +64,19 @@ class SpikeEpochs():
             n_cells = len(time)
             cell_names = ['cell{:03d}'.format(idx) for idx in range(n_cells)]
 
+        if metadata is not None:
+            assert isinstance(metadata, pd.DataFrame)
+            assert metadata.shape[0] == n_trials
+
+        n_cells = len(self.time)
+        if cellinfo is not None:
+            assert isinstance(cellinfo, pd.DataFrame)
+            assert cellinfo.shape[0] == n_cells
+
         self.n_trials = n_trials
         self.cell_names = cell_names
         self.metadata = metadata
+        self.cellinfo = cellinfo
 
     def __repr__(self):
         '''Text representation of SpikeEpochs.'''
@@ -70,12 +85,24 @@ class SpikeEpochs():
         msg = '<SpikeEpochs, {} epochs, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(self.n_trials, n_cells, avg_spikes)
 
-    def picks_cells(self, picks):
+    def picks_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates inplace.'''
-        picks = _deal_with_picks(self, picks)
+        if picks is None and query is None:
+            return self
+
+        if picks is None and query is not None:
+            assert self.cellinfo is not None
+            cellinfo_sel = self.cellinfo.query(query)
+            picks = cellinfo_sel.index.values
+        else:
+            picks = _deal_with_picks(self, picks)
+
         self.time = [self.time[ix] for ix in picks]
         self.trial = [self.trial[ix] for ix in picks]
-        self.cell_names = [self.cell_names[ix] for ix in picks]
+        self.cell_names = self.cell_names[picks].copy()
+        if self.cellinfo is not None:
+            self.cellinfo = self.cellinfo.loc[picks, :].reset_index(drop=True)
+
         return self
 
     def crop(self, tmin=None, tmax=None):
@@ -105,8 +132,8 @@ class SpikeEpochs():
         self.time_limits = [tmin, tmax]
         return self
 
-    # TODO - refactor (DRY: merge both loops into one?)
-    # TODO - better handling of numpy vs numba implementation
+    # TODO: refactor (DRY: merge both loops into one?)
+    # TODO: better handling of numpy vs numba implementation
     # TODO: consider adding `return_type` with `Epochs` option (mne object)
     def spike_rate(self, picks=None, winlen=0.25, step=0.01, tmin=None,
                    tmax=None, backend='numpy'):
@@ -283,7 +310,6 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
     return if_match.mean()
 
 
-# TODO: change event_times to events?
 def _epoch_spikes(timestamps, event_times, tmin, tmax):
     '''Epoch spike data with respect to event timestamps.
 
@@ -337,7 +363,7 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
     return trial, time
 
 
-# TODO: make this a method of SpikeEpochs and return mne.Epochs
+# TODO: make this a method of SpikeEpochs and return xarray or mne.Epochs
 def _spikes_to_raw(spk, picks=None, sfreq=500.):
     '''Turn epoched spike timestamps into binary representation.
 
@@ -440,7 +466,8 @@ def _gauss_kernel_samples(window, gauss_sd):
 # TODO: consider an exact mode where the spikes are not transformed to raw
 #       but placed exactly where the spike is (`loc=spike_time`) and evaluated
 #       (maybe this is what is done by elephant?)
-# TODO: make windows symmetric wrt 0
+# TODO: check if time is symmetric wrt 0 (in most cases it should be as epochs
+#       are constructed wrt specific event)
 def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, kernel=None,
                    sfreq=500.):
     '''Calculates normal (constant) spike density.
