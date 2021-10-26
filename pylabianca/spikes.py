@@ -293,21 +293,28 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
         Percentage of spikes from first cell that cooccur with spikes from the
         second cell.
     '''
-    tri1, tms1 = spk.trial[cell_idx1], spk.time[cell_idx1]
-    tri2, tms2 = spk.trial[cell_idx2], spk.time[cell_idx2]
+    if isinstance(spk, SpikeEpochs):
+        tri1, tms1 = spk.trial[cell_idx1], spk.time[cell_idx1]
+        tri2, tms2 = spk.trial[cell_idx2], spk.time[cell_idx2]
 
-    n_spikes = len(tri1)
-    if_match = np.zeros(n_spikes, dtype='bool')
-    for idx in range(n_spikes):
-        this_time = tms1[idx]
-        this_tri = tri1[idx]
-        corresp_tri = np.where(tri2 == this_tri)[0]
-        ismatch = False
-        if len(corresp_tri) > 0:
-            corresp_tm = tms2[corresp_tri]
-            ismatch = (np.abs(corresp_tm - this_time) < tol).any()
-        if_match[idx] = ismatch
-    return if_match.mean()
+        n_spikes = len(tri1)
+        if_match = np.zeros(n_spikes, dtype='bool')
+        for idx in range(n_spikes):
+            this_time = tms1[idx]
+            this_tri = tri1[idx]
+            corresp_tri = np.where(tri2 == this_tri)[0]
+            ismatch = False
+            if len(corresp_tri) > 0:
+                corresp_tm = tms2[corresp_tri]
+                ismatch = (np.abs(corresp_tm - this_time) < tol).any()
+            if_match[idx] = ismatch
+        return if_match.mean()
+    elif isinstance(spk, Spikes):
+        tms1 = spk.timestamps[cell_idx1] / spk.sfreq
+        tms2 = spk.timestamps[cell_idx2] / spk.sfreq
+        time_diffs = np.abs(tms1[:, None] - tms2[None, :])
+        closest_time1 = time_diffs.min(axis=1)
+        return (closest_time1 < tol).mean()
 
 
 def _epoch_spikes(timestamps, event_times, tmin, tmax):
