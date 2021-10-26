@@ -44,18 +44,7 @@ def read_gammbur(subject_id=None, fname=None, kind='spikes'):
         Object containing the data.
     '''
     if fname is None and subject_id is not None:
-        import sarna
-
-        dropbox_dir = Path(sarna.proj.find_dropbox())
-        proj_dir = dropbox_dir / 'PROJ' / 'Labianka' / 'GammBur'
-        data_dir = proj_dir / 'cleandata'
-        assert op.isdir(data_dir)
-        fls = os.listdir(data_dir)
-
-        subj_id_txt = '{:02d}'.format(subject_id)
-        fname = [f for f in fls if f.startswith(subj_id_txt)][0]
-        fname = data_dir / fname
-
+        fname = find_file_name_gammbur(subject_id)
     if kind == 'spikes':
         return _read_spikes_gammbur(fname)
     elif kind == 'lfp':
@@ -64,7 +53,24 @@ def read_gammbur(subject_id=None, fname=None, kind='spikes'):
         raise ValueError('The data kind to read has to be "spikes" or "lfp"')
 
 
+def find_file_name_gammbur(subject_id, data_dir='cleandata'):
+    import sarna
+
+    dropbox_dir = Path(sarna.proj.find_dropbox())
+    proj_dir = dropbox_dir / 'PROJ' / 'Labianka' / 'GammBur'
+    data_dir = proj_dir / data_dir
+    assert op.isdir(data_dir)
+    fls = os.listdir(data_dir)
+
+    subj_id_txt = '{:02d}'.format(subject_id)
+    fname = [f for f in fls if f.startswith(subj_id_txt)][0]
+    fname = data_dir / fname
+    return fname
+
+
 def read_raw_gammbur(subject_id=None, fname=None):
+    if fname is None and subject_id is not None:
+        fname = find_file_name_gammbur(subject_id, data_dir='cleandataraw')
     spk, events = read_raw_spikes(fname, data_name='ft_format')
     spk.metadata = prepare_gammbur_metadata(spk.metadata)
     return spk, events
