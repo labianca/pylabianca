@@ -692,7 +692,11 @@ class Spikes(object):
         spk : SpikeEpochs
             Epoched spikes.
         '''
-        # TODO: add event_id support
+        # event_id support
+        if event_id is not None:
+            use_events = np.in1d(events[:, -1], event_id)
+            events = events[use_events, :]
+
         trial, time = _epoch_spikes(self.timestamps, events, tmin, tmax)
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax])
 
