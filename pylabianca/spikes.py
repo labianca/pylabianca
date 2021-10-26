@@ -4,9 +4,9 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 
 
 # TODO:
-# - [ ] allow to specify picks by cell name
+# - [x] allow to specify picks by cell name
+# - [x] make time_limits not obligatory in the contructor?
 # - [ ] index by trial?
-# - [ ] make time_limits not obligatory in the contructor?
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  cell_names=None, metadata=None):
@@ -699,4 +699,3 @@ class Spikes(object):
                 # raise warning ...
 
         return spk
-
