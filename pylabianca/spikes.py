@@ -461,9 +461,9 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
 
 
 def _symmetric_window_samples(winlen, sfreq):
-    hlflen_smp = int(np.round(winlen / 2 * sfreq))
-    win_smp = np.arange(-hlflen_smp, hlflen_smp + 1)
-    return win_smp, hlflen_smp
+    half_len_smp = int(np.round(winlen / 2 * sfreq))
+    win_smp = np.arange(-half_len_smp, half_len_smp + 1)
+    return win_smp, half_len_smp
 
 
 def _gauss_kernel_samples(window, gauss_sd):
@@ -575,12 +575,20 @@ def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
             return fval
     else:
         from scipy.stats import f_oneway
-        stat_fun = f_oneway
+        def stat_fun(*args):
+            fval, _ = f_oneway(*args)
+            return fval
 
     # calculate F anova threshold
     obs_dim = frate.dims[0]
-    n_categories = len(np.unique(frate.coords[compare]))
-    n_trials = len(frate.coords[obs_dim])
+    if paired:
+        n_categories = len(np.unique(frate.coords[compare]))
+        n_trials = len(frate.coords[obs_dim])
+    else:
+        categories, counts = np.unique(
+            frate.coords[compare], return_counts=True)
+        n_categories, n_trials = len(categories), counts.sum()
+
     p_thresh = cluster_entry_pval
     dfn = n_categories - 1
     dfd = n_trials - n_categories
@@ -604,8 +612,8 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
     from borsar.utils import find_index
 
     spike_centered = list()
-    _, hlfwin = _symmetric_window_samples(winlen, sfreq)
-    winlims = np.array([-hlfwin, hlfwin + 1])[None, :]
+    _, half_win = _symmetric_window_samples(winlen, sfreq)
+    winlims = np.array([-half_win, half_win + 1])[None, :]
     lims = [0, len(time)]
     tri_is_ok = np.zeros(len(spk.trial[cell_idx]), dtype='bool')
 
@@ -656,9 +664,10 @@ def spike_xcorr(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
         windows[idx, :, trim:-trim] -= kernel
 
     # turn to xarray
-    tpers = 1 / sfreq
+    t_per_smp = 1 / sfreq
     win_diff = [-winlen / 2, winlen / 2]
-    time = np.arange(win_diff[0], win_diff[1] + 0.01 * tpers, step=tpers)
+    time = np.arange(win_diff[0], win_diff[1] + 0.01 * t_per_smp,
+                     step=t_per_smp)
     cell_names = [spk.cell_names[idx] for idx in picks]
     xcorr = _turn_spike_rate_to_xarray(time, windows, spk, tri=tri,
                                        cell_names=cell_names)
