@@ -48,7 +48,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         Names of the picked cells. If not ``None`` then indicates that the
         first dimension of ``frate`` contains cells.
     tri : np.ndarray | None
-        Array of trial indices. Use when the repetitions dimesnion is not
+        Array of trial indices. Use when the repetitions dimension is not
         equivalent to trials, but spikes within trials (spike-centered
         windows). Passing this argument allows to copy the trial metadata
         correctly.

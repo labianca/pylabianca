@@ -6,7 +6,7 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 
 # TODO:
 # - [x] allow to specify picks by cell name
-# - [x] make time_limits not obligatory in the contructor?
+# - [x] make time_limits not obligatory in the constructor?
 # - [ ] index by trial?
 # - [ ] maybe passing `n_trials` does not make so much sense? If it is not used
 #       in other places - then maybe not.
@@ -14,7 +14,7 @@ class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  cell_names=None, metadata=None, cellinfo=None):
         '''Create ``SpikeEpochs`` object for convenient storage, analysis and
-        visualisation of spikes data.
+        visualization of spikes data.
 
         Parameters
         ----------
@@ -151,7 +151,7 @@ class SpikeEpochs():
             Length of the running window in seconds.
         step : float | bool
             The step size of the running window. If step is ``False`` then
-            spike rate is not calculcated using a running window but with
+            spike rate is not calculated using a running window but with
             a static one with limits defined by ``tmin`` and ``tmax``.
         backend : str
             Can be ``'numpy'`` or ``'numba'``.
@@ -274,7 +274,7 @@ class SpikeEpochs():
 
 # TODO: the implementation and the API are suboptimal
 def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
-    '''Test coocurrence of spike times for SpikeEpochs.
+    '''Test concurrence of spike times for SpikeEpochs.
 
     Parameters
     ----------
@@ -285,15 +285,15 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
         checked.
     cell_idx2 : int
         Index of the second cell to compare. Spikes of the first cell will
-        be tested for coocurrence with spikes coming from this cell.
+        be tested for concurrence with spikes coming from this cell.
     tol : float
-        Coocurence tolerance in seconds. Spikes no further that this will be
+        Concurrence tolerance in seconds. Spikes no further that this will be
         deemed coocurring.
 
     Returns
     -------
     float
-        Percentage of spikes from first cell that cooccur with spikes from the
+        Percentage of spikes from first cell that concur with spikes from the
         second cell.
     '''
     if isinstance(spk, SpikeEpochs):
@@ -306,11 +306,11 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
             this_time = tms1[idx]
             this_tri = tri1[idx]
             corresp_tri = np.where(tri2 == this_tri)[0]
-            ismatch = False
+            match = False
             if len(corresp_tri) > 0:
                 corresp_tm = tms2[corresp_tri]
-                ismatch = (np.abs(corresp_tm - this_time) < tol).any()
-            if_match[idx] = ismatch
+                match = (np.abs(corresp_tm - this_time) < tol).any()
+            if_match[idx] = match
         return if_match.mean()
     elif isinstance(spk, Spikes):
         tms1 = spk.timestamps[cell_idx1] / spk.sfreq
@@ -346,14 +346,14 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
     trial = list()
     time = list()
 
-    tidx = 0
+    t_idx = 0
     n_epochs = event_times.shape[0]
-    this_epo = (timestamps[tidx] < (event_times + tmax)).argmax()
+    this_epo = (timestamps[t_idx] < (event_times + tmax)).argmax()
 
     for epo_idx in range(this_epo, n_epochs):
         # find spikes that fit within the epoch
-        first_idx = (timestamps[tidx:] > (
-            event_times[epo_idx] + tmin)).argmax() + tidx
+        first_idx = (timestamps[t_idx:] > (
+            event_times[epo_idx] + tmin)).argmax() + t_idx
         msk = timestamps[first_idx:] < (event_times[epo_idx] + tmax)
 
         # select these spikes and center wrt event time
@@ -362,7 +362,7 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
             tri = np.ones(len(tms), dtype='int') * epo_idx
             trial.append(tri)
             time.append(tms)
-        tidx = first_idx
+        t_idx = first_idx
 
     if len(trial) > 0:
         trial = np.concatenate(trial)
@@ -523,8 +523,8 @@ def depth_of_selectivity(frate, by):
     '''
     avg_by_probe = frate.groupby(by).mean(dim='trial')
     n_categories = len(avg_by_probe.coords[by])
-    rmax = avg_by_probe.max(by)
-    numerator = n_categories - (avg_by_probe / rmax).sum(by)
+    r_max = avg_by_probe.max(by)
+    numerator = n_categories - (avg_by_probe / r_max).sum(by)
     selectivity = numerator / (n_categories - 1)
     return selectivity, avg_by_probe
 
@@ -549,7 +549,7 @@ def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
         Dimension labels specified for ``'trial'`` dimension that constitutes
         categories to test selectivity for.
     cluster_entry_pval : float
-        Pvalue used as a cluster-entry threshold. The default is ``0.05``.
+        p value used as a cluster-entry threshold. The default is ``0.05``.
 
     Returns
     -------
@@ -607,7 +607,7 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
     _, hlfwin = _symmetric_window_samples(winlen, sfreq)
     winlims = np.array([-hlfwin, hlfwin + 1])[None, :]
     lims = [0, len(time)]
-    tri_isok = np.zeros(len(spk.trial[cell_idx]), dtype='bool')
+    tri_is_ok = np.zeros(len(spk.trial[cell_idx]), dtype='bool')
 
     n_tri = max(spk.trial[cell_idx])
     for tri_idx in range(n_tri):
@@ -621,14 +621,14 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
             twins = closest_smp[:, None] + winlims
             good = ((twins >= lims[0]) & (twins <= lims[1])).all(axis=1)
             twins = twins[good]
-            tri_isok[sel] = good
+            tri_is_ok[sel] = good
 
             for twin in twins:
                 sig_part = arr[:, tri_idx, twin[0]:twin[1]]
                 spike_centered.append(sig_part)
 
     spike_centered = np.stack(spike_centered, axis=1)
-    tri = spk.trial[cell_idx][tri_isok]
+    tri = spk.trial[cell_idx][tri_is_ok]
     return spike_centered, tri
 
 
@@ -670,7 +670,7 @@ class Spikes(object):
     def __init__(self, timestamps, sfreq, cell_names=None, metadata=None,
                  cellinfo=None):
         '''Create ``Spikes`` object for convenient storage, analysis and
-        visualisation of spikes data.
+        visualization of spikes data.
 
         Parameters
         ----------
