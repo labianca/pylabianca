@@ -640,7 +640,7 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
     return spike_centered, tri
 
 
-def spike_xcorr(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
+def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
                 kernel_winlen=0.025):
 
     # create kernel
