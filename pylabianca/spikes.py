@@ -759,7 +759,7 @@ class Spikes(object):
             time.append(tim)
 
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
-                          cell_names=self.cell_names)
+                          cell_names=self.cell_names, cellinfo=self.cellinfo)
 
         if self.metadata is not None:
             if spk.n_trials == self.metadata.shape[0]:
