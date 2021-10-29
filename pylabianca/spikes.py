@@ -5,7 +5,6 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 
 
 # TODO:
-# - [x] allow to specify picks by cell name
 # - [x] make time_limits not obligatory in the constructor?
 # - [ ] index by trial?
 # - [ ] maybe passing `n_trials` does not make so much sense? If it is not used
@@ -34,7 +33,8 @@ class SpikeEpochs():
             (``None``) infers time limits from min and max spike times.
         n_trials : int | None
             Number of trials. Optional, if the number of trials can't be
-            inferred from the ``trials`` argument.
+            inferred from the ``trials`` argument (for example when none of the
+            cells fire for the last few trials).
         cell_names : list of str | None
             String identifiers of cells. First string corresponds to first
             cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
@@ -395,9 +395,9 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
         ``trials x cells x timesamples`` array with binary spike information.
     '''
     picks = _deal_with_picks(spk, picks)
-    stime = 1 / sfreq
+    sample_time = 1 / sfreq
     tmin, tmax = spk.time_limits
-    times = np.arange(tmin, tmax + 0.01 * stime, step=stime)
+    times = np.arange(tmin, tmax + 0.01 * sample_time, step=sample_time)
 
     n_cells = len(picks)
     n_times = len(times)
@@ -414,8 +414,8 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
             spike_times = spk.time[cell_idx][from_idx:from_idx + ix]
             sample_ix = (np.abs(times[:, np.newaxis]
                                 - spike_times[np.newaxis, :]).argmin(axis=0))
-            tsmp, nspk = np.unique(sample_ix, return_counts=True)
-            trials_raw[this_tri, idx, tsmp] = nspk
+            t_smp, n_spikes = np.unique(sample_ix, return_counts=True)
+            trials_raw[this_tri, idx, t_smp] = n_spikes
 
             from_idx = from_idx + ix
     return times, trials_raw
@@ -427,17 +427,17 @@ def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
     epoch_len = time_limits[1] - time_limits[0]
     n_steps = int(np.floor((epoch_len - winlen) / step + 1))
 
-    fr_tstart = time_limits[0] + halfwin
+    fr_t_start = time_limits[0] + halfwin
     fr_tend = time_limits[1] - halfwin + step * 0.001
-    times = np.arange(fr_tstart, fr_tend, step=step)
+    times = np.arange(fr_t_start, fr_tend, step=step)
     frate = np.zeros((n_trials, n_steps))
 
     for step_idx in range(n_steps):
         winlims = times[step_idx] + np.array([-halfwin, halfwin])
         msk = (spike_times >= winlims[0]) & (spike_times < winlims[1])
         tri = spike_trials[msk]
-        intri, count = np.unique(tri, return_counts=True)
-        frate[intri, step_idx] = count / winlen
+        in_tri, count = np.unique(tri, return_counts=True)
+        frate[in_tri, step_idx] = count / winlen
 
     return times, frate
 
