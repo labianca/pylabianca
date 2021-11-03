@@ -88,6 +88,12 @@ class SpikeEpochs():
         msg = '<SpikeEpochs, {} epochs, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(self.n_trials, n_cells, avg_spikes)
 
+# TODO: ability to get a shallow copy might also be useful
+    def copy(self):
+        '''Return a deep copy of the object.'''
+        from copy import deepcopy
+        return deepcopy(self)
+
     def picks_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates inplace.'''
         if picks is None and query is None:
