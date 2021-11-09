@@ -681,6 +681,57 @@ def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
     return xcorr
 
 
+# TODO: add shift predictor
+def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
+                         kernel_winlen=0.025, shift_predictor=False):
+    from scipy.signal import correlate
+    import quantities as pq
+    from elephant.conversion import BinnedSpikeTrain
+    from elephant.spike_train_correlation import cross_correlation_histogram
+
+    # create kernel
+    gauss_sd = kernel_winlen / 6 * sfreq
+    win_smp, trim = _symmetric_window_samples(kernel_winlen, sfreq)
+    kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
+
+    # bin spikes
+    binsize = 1 / sfreq
+    spk1 = spk.to_neo(0)
+    spk2 = spk.to_neo(1)
+    bst1 = BinnedSpikeTrain(spk1, bin_size=binsize * pq.s)
+    bst2 = BinnedSpikeTrain(spk2, bin_size=binsize * pq.s)
+
+    cch_list = list()
+    n_tri = bst1.shape[0]
+    if shift_predictor:
+        n_tri -= 1
+
+    for tri in range(n_tri):
+        if not shift_predictor:
+            tri1, tri2 = tri, tri
+        else:
+            tri1, tri2 = tri, tri + 1
+
+        cch, lags = cross_correlation_histogram(
+            bst1[tri1], bst2[tri2], window=[-50, 50], kernel=kernel)
+        cch_list.append(np.array(cch)[:, 0])
+
+    # add last trial if shift predictor
+    if shift_predictor:
+        cch, lags = cross_correlation_histogram(
+            bst1[-1], bst2[-2], window=[-50, 50], kernel=kernel)
+        cch_list.append(np.array(cch)[:, 0])
+
+    cch_list = np.stack(cch_list, axis=0)
+    lags = lags * binsize
+
+    cell_name = '{}-{}'.format(spk.cell_names[cell_idx1],
+                               spk.cell_names[cell_idx2])
+    cch = _turn_spike_rate_to_xarray(lags, cch_list[None, :], spk,
+                                     cell_names=[cell_name])
+    return cch
+
+
 class Spikes(object):
     def __init__(self, timestamps, sfreq, cell_names=None, metadata=None,
                  cellinfo=None):
