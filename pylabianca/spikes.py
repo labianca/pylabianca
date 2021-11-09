@@ -5,7 +5,6 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 
 
 # TODO:
-# - [x] make time_limits not obligatory in the constructor?
 # - [ ] index by trial?
 # - [ ] maybe passing `n_trials` does not make so much sense? If it is not used
 #       in other places - then maybe not.
@@ -94,7 +93,7 @@ class SpikeEpochs():
         from copy import deepcopy
         return deepcopy(self)
 
-    def picks_cells(self, picks=None, query=None):
+    def pick_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates inplace.'''
         if picks is None and query is None:
             return self
@@ -240,7 +239,8 @@ class SpikeEpochs():
         return xarr
 
     # TODO: empty trials are dropped by default now...
-    # - [ ] use `group` from sarna for faster execution...
+    # - [ ] use `group` from sarna in looping through trials
+    #       for faster execution...
     def to_neo(self, cell_idx, pool=False):
         '''Turn spikes of given cell into neo.SpikeTrain format.
 
