@@ -641,7 +641,7 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
 
 
 def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
-                kernel_winlen=0.025):
+                        kernel_winlen=0.025):
 
     # create kernel
     gauss_sd = kernel_winlen / 6 * sfreq
