@@ -5,7 +5,6 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 
 
 # TODO:
-# - [x] make time_limits not obligatory in the constructor?
 # - [ ] index by trial?
 # - [ ] maybe passing `n_trials` does not make so much sense? If it is not used
 #       in other places - then maybe not.
@@ -88,7 +87,13 @@ class SpikeEpochs():
         msg = '<SpikeEpochs, {} epochs, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(self.n_trials, n_cells, avg_spikes)
 
-    def picks_cells(self, picks=None, query=None):
+# TODO: ability to get a shallow copy might also be useful
+    def copy(self):
+        '''Return a deep copy of the object.'''
+        from copy import deepcopy
+        return deepcopy(self)
+
+    def pick_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates inplace.'''
         if picks is None and query is None:
             return self
@@ -234,7 +239,8 @@ class SpikeEpochs():
         return xarr
 
     # TODO: empty trials are dropped by default now...
-    # - [ ] use `group` from sarna for faster execution...
+    # - [ ] use `group` from sarna in looping through trials
+    #       for faster execution...
     def to_neo(self, cell_idx, pool=False):
         '''Turn spikes of given cell into neo.SpikeTrain format.
 
@@ -673,6 +679,57 @@ def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
                                        cell_names=cell_names)
 
     return xcorr
+
+
+# TODO: add shift predictor
+def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
+                         kernel_winlen=0.025, shift_predictor=False):
+    from scipy.signal import correlate
+    import quantities as pq
+    from elephant.conversion import BinnedSpikeTrain
+    from elephant.spike_train_correlation import cross_correlation_histogram
+
+    # create kernel
+    gauss_sd = kernel_winlen / 6 * sfreq
+    win_smp, trim = _symmetric_window_samples(kernel_winlen, sfreq)
+    kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
+
+    # bin spikes
+    binsize = 1 / sfreq
+    spk1 = spk.to_neo(0)
+    spk2 = spk.to_neo(1)
+    bst1 = BinnedSpikeTrain(spk1, bin_size=binsize * pq.s)
+    bst2 = BinnedSpikeTrain(spk2, bin_size=binsize * pq.s)
+
+    cch_list = list()
+    n_tri = bst1.shape[0]
+    if shift_predictor:
+        n_tri -= 1
+
+    for tri in range(n_tri):
+        if not shift_predictor:
+            tri1, tri2 = tri, tri
+        else:
+            tri1, tri2 = tri, tri + 1
+
+        cch, lags = cross_correlation_histogram(
+            bst1[tri1], bst2[tri2], window=[-50, 50], kernel=kernel)
+        cch_list.append(np.array(cch)[:, 0])
+
+    # add last trial if shift predictor
+    if shift_predictor:
+        cch, lags = cross_correlation_histogram(
+            bst1[-1], bst2[-2], window=[-50, 50], kernel=kernel)
+        cch_list.append(np.array(cch)[:, 0])
+
+    cch_list = np.stack(cch_list, axis=0)
+    lags = lags * binsize
+
+    cell_name = '{}-{}'.format(spk.cell_names[cell_idx1],
+                               spk.cell_names[cell_idx2])
+    cch = _turn_spike_rate_to_xarray(lags, cch_list[None, :], spk,
+                                     cell_names=[cell_name])
+    return cch
 
 
 class Spikes(object):
