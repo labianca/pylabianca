@@ -2,7 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None):
+def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
+                    x_dim='time'):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -55,13 +56,15 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None):
         for val in avg.coords[groupby]:
             sel[groupby] = val.item()
             lines = avg.sel(**sel).plot(label=val.item(), ax=ax)
-            ax.fill_between(avg.time, ci_low.sel(**sel),
+            ax.fill_between(avg.coords[x_dim], ci_low.sel(**sel),
                             ci_high.sel(**sel), alpha=0.3)
     else:
         lines = avg.plot(ax=ax)
-        ax.fill_between(avg.time, ci_low, ci_high, alpha=0.3)
+        ax.fill_between(avg.coords[x_dim], ci_low, ci_high, alpha=0.3)
 
-    ax.set_xlabel('Time (s)', fontsize=14)
+    if x_dim == 'time':
+        ax.set_xlabel('Time (s)', fontsize=14)
+
     ax.set_ylabel('Spike rate (Hz)', fontsize=14)
     if groupby is not None:
         ax.legend(title=f'{groupby}:')
