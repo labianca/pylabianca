@@ -681,7 +681,6 @@ def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
     return xcorr
 
 
-# TODO: add shift predictor
 def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
                          kernel_winlen=0.025, shift_predictor=False):
     from scipy.signal import correlate
@@ -701,11 +700,15 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
     bst1 = BinnedSpikeTrain(spk1, bin_size=binsize * pq.s)
     bst2 = BinnedSpikeTrain(spk2, bin_size=binsize * pq.s)
 
+    # window length
+    win_len = int(winlen / 2 / binsize)
+
     cch_list = list()
     n_tri = bst1.shape[0]
     if shift_predictor:
         n_tri -= 1
 
+    # iterate through trials
     for tri in range(n_tri):
         if not shift_predictor:
             tri1, tri2 = tri, tri
@@ -713,7 +716,7 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
             tri1, tri2 = tri, tri + 1
 
         cch, lags = cross_correlation_histogram(
-            bst1[tri1], bst2[tri2], window=[-50, 50], kernel=kernel)
+            bst1[tri1], bst2[tri2], window=[-win_len, win_len], kernel=kernel)
         cch_list.append(np.array(cch)[:, 0])
 
     # add last trial if shift predictor
