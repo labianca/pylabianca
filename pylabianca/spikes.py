@@ -695,8 +695,8 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
 
     # bin spikes
     binsize = 1 / sfreq
-    spk1 = spk.to_neo(0)
-    spk2 = spk.to_neo(1)
+    spk1 = spk.to_neo(cell_idx1)
+    spk2 = spk.to_neo(cell_idx2)
     bst1 = BinnedSpikeTrain(spk1, bin_size=binsize * pq.s)
     bst2 = BinnedSpikeTrain(spk2, bin_size=binsize * pq.s)
 
