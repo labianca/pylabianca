@@ -89,3 +89,68 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     firing = xr.DataArray(frate, dims=dims, coords=coords,
                           name='firing rate', attrs=attrs)
     return firing
+
+
+def _symmetric_window_samples(winlen, sfreq):
+    '''Returns a symmetric window of given length.'''
+    half_len_smp = int(np.round(winlen / 2 * sfreq))
+    win_smp = np.arange(-half_len_smp, half_len_smp + 1)
+    return win_smp, half_len_smp
+
+
+def _gauss_kernel_samples(window, gauss_sd):
+    '''Returns a gaussian kernel given window and sd in samples.'''
+    from scipy.stats.distributions import norm
+    kernel = norm(loc=0, scale=gauss_sd)
+    kernel = kernel.pdf(window)
+    return kernel
+
+
+# TODO: add offsets to spike-centered neurons
+def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
+    '''Cut out windows from signal centered on spike times.
+
+    Parameters
+    ----------
+    spk : FIXME
+        FIXME
+    cell_idx : FIXME
+        FIXME
+    arr : xarray.DataArray
+        FIXME
+    time : FIXME
+        FIXME
+    sfreq : FIXME
+        FIXME
+    winlen : FIXME
+        FIXME
+    '''
+    from borsar.utils import find_index
+
+    spike_centered = list()
+    _, half_win = _symmetric_window_samples(winlen, sfreq)
+    winlims = np.array([-half_win, half_win + 1])[None, :]
+    lims = [0, len(time)]
+    tri_is_ok = np.zeros(len(spk.trial[cell_idx]), dtype='bool')
+
+    n_tri = max(spk.trial[cell_idx])
+    for tri_idx in range(n_tri):
+        sel = spk.trial[cell_idx] == tri_idx
+        if sel.any():
+            tms = spk.time[cell_idx][sel]
+            if len(tms) < 1:
+                continue
+
+            closest_smp = find_index(time, tms)
+            twins = closest_smp[:, None] + winlims
+            good = ((twins >= lims[0]) & (twins <= lims[1])).all(axis=1)
+            twins = twins[good]
+            tri_is_ok[sel] = good
+
+            for twin in twins:
+                sig_part = arr[:, tri_idx, twin[0]:twin[1]]
+                spike_centered.append(sig_part)
+
+    spike_centered = np.stack(spike_centered, axis=1)
+    tri = spk.trial[cell_idx][tri_is_ok]
+    return spike_centered, tri

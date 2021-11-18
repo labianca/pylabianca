@@ -1,13 +1,14 @@
 import numpy as np
 import pandas as pd
 
-from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
+from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
+                    _symmetric_window_samples, _gauss_kernel_samples,
+                    spike_centered_windows)
+from .spike_rate import compute_spike_rate, _spike_density
 
 
 # TODO:
 # - [ ] index by trial?
-# - [ ] maybe passing `n_trials` does not make so much sense? If it is not used
-#       in other places - then maybe not.
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  cell_names=None, metadata=None, cellinfo=None):
@@ -158,54 +159,20 @@ class SpikeEpochs():
             The step size of the running window. If step is ``False`` then
             spike rate is not calculated using a running window but with
             a static one with limits defined by ``tmin`` and ``tmax``.
+        tmin : float | None
+            Time start in seconds. Default to trial start if ``tmin`` is ``None``.
+        tmax : float | None
+            Time end in seconds. Default to trial end if ``tmax`` is ``None``.
         backend : str
-            Can be ``'numpy'`` or ``'numba'``.
+            Execution backend. Can be ``'numpy'`` or ``'numba'``.
 
         Returns
         -------
         frate : xarray.DataArray
             Xarray with following labeled dimensions: cell, trial, time.
         '''
-        picks = _deal_with_picks(self, picks)
-
-        if isinstance(step, bool) and not step:
-            assert tmin is not None
-            assert tmax is not None
-            times = f'{tmin} - {tmax} s'
-
-            frate = list()
-            cell_names = list()
-
-            for pick in picks:
-                frt = _compute_spike_rate_fixed(
-                    self.time[pick], self.trial[pick], [tmin, tmax],
-                    self.n_trials)
-                frate.append(frt)
-                cell_names.append(self.cell_names[pick])
-
-        else:
-            frate = list()
-            cell_names = list()
-
-            if backend == 'numpy':
-                func = _compute_spike_rate_numpy
-            elif backend == 'numba':
-                from ._numba import _compute_spike_rate_numba
-                func = _compute_spike_rate_numba
-            else:
-                raise ValueError('Backend can be only "numpy" or "numba".')
-
-            for pick in picks:
-                times, frt = func(
-                    self.time[pick], self.trial[pick], self.time_limits,
-                    self.n_trials, winlen=winlen, step=step)
-                frate.append(frt)
-                cell_names.append(self.cell_names[pick])
-
-        frate = np.stack(frate, axis=0)
-        frate = _turn_spike_rate_to_xarray(times, frate, self,
-                                           cell_names=cell_names)
-        return frate
+        return compute_spike_rate(self, picks=picks, winlen=winlen, step=step,
+                                  tmin=tmin, tmax=tmax, backend=backend)
 
     def spike_density(self, picks=None, winlen=0.3, gauss_sd=None, sfreq=500.):
         '''Compute spike density by convolving spikes with a gaussian kernel.
@@ -238,7 +205,7 @@ class SpikeEpochs():
             cell_names=self.cell_names[picks])
         return xarr
 
-    # TODO: empty trials are dropped by default now...
+    # TODO:
     # - [ ] use `group` from sarna in looping through trials
     #       for faster execution...
     def to_neo(self, cell_idx, pool=False):
@@ -276,6 +243,29 @@ class SpikeEpochs():
                 times * s, t_stop=self.time_limits[1],
                 t_start=self.time_limits[0])
         return spikes
+
+    def to_raw(self, picks=None, sfreq=500.):
+        '''Turn epoched spike timestamps into binned continuous representation.
+
+        Parameters
+        ----------
+        spk : SpikeEpochs
+            Spikes to turn into binary representation.
+        picks : list-like of int | None
+            Cell indices to turn to binary representation. Optional, the default
+            (``None``) uses all available neurons.
+        sfreq : float
+            Sampling frequency of the the output array. Defaults to ``500.``.
+
+        Returns
+        -------
+        times : numpy array
+            1d array of time labels.
+        trials_raw : numpy array
+            ``trials x cells x timesamples`` array with binary spike
+            information.
+        '''
+        return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
 
 
 # TODO: the implementation and the API are suboptimal
@@ -427,114 +417,6 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     return times, trials_raw
 
 
-def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
-                              n_trials, winlen=0.25, step=0.05):
-    halfwin = winlen / 2
-    epoch_len = time_limits[1] - time_limits[0]
-    n_steps = int(np.floor((epoch_len - winlen) / step + 1))
-
-    fr_t_start = time_limits[0] + halfwin
-    fr_tend = time_limits[1] - halfwin + step * 0.001
-    times = np.arange(fr_t_start, fr_tend, step=step)
-    frate = np.zeros((n_trials, n_steps))
-
-    for step_idx in range(n_steps):
-        winlims = times[step_idx] + np.array([-halfwin, halfwin])
-        msk = (spike_times >= winlims[0]) & (spike_times < winlims[1])
-        tri = spike_trials[msk]
-        in_tri, count = np.unique(tri, return_counts=True)
-        frate[in_tri, step_idx] = count / winlen
-
-    return times, frate
-
-
-# @numba.jit(nopython=True)
-# currently raises warnings, and jit is likely not necessary here
-# Encountered the use of a type that is scheduled for deprecation: type
-# 'reflected list' found for argument 'time_limits' of function
-# '_compute_spike_rate_fixed'
-def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
-                              n_trials):
-
-    winlen = time_limits[1] - time_limits[0]
-    frate = np.zeros(n_trials)
-    msk = (spike_times >= time_limits[0]) & (spike_times < time_limits[1])
-    tri = spike_trials[msk]
-    intri, count = np.unique(tri, return_counts=True)
-    frate[intri] = count / winlen
-
-    return frate
-
-
-def _symmetric_window_samples(winlen, sfreq):
-    half_len_smp = int(np.round(winlen / 2 * sfreq))
-    win_smp = np.arange(-half_len_smp, half_len_smp + 1)
-    return win_smp, half_len_smp
-
-
-def _gauss_kernel_samples(window, gauss_sd):
-    from scipy.stats.distributions import norm
-    kernel = norm(loc=0, scale=gauss_sd)
-    kernel = kernel.pdf(window)
-    return kernel
-
-
-# TODO: consider an exact mode where the spikes are not transformed to raw
-#       but placed exactly where the spike is (`loc=spike_time`) and evaluated
-#       (maybe this is what is done by elephant?)
-# TODO: check if time is symmetric wrt 0 (in most cases it should be as epochs
-#       are constructed wrt specific event)
-def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, kernel=None,
-                   sfreq=500.):
-    '''Calculates normal (constant) spike density.
-
-    The density is computed by convolving the binary spike representation
-    with a gaussian kernel.
-    '''
-    from scipy.signal import correlate
-
-    if kernel is None:
-        gauss_sd = winlen / 6 if gauss_sd is None else gauss_sd
-        gauss_sd = gauss_sd * sfreq
-
-        win_smp, trim = _symmetric_window_samples(winlen, sfreq)
-        kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
-    else:
-        assert (len(kernel) % 2) == 1
-        trim = int((len(kernel) - 1) / 2)
-
-    picks = _deal_with_picks(spk, picks)
-    times, binrep = _spikes_to_raw(spk, picks=picks, sfreq=sfreq)
-    cnt_times = times[trim:-trim]
-
-    cnt = correlate(binrep, kernel[None, None, :], mode='valid')
-    return cnt_times, cnt
-
-
-def depth_of_selectivity(frate, by):
-    '''Compute depth of selectivity for given category.
-
-    Parameters
-    ----------
-    frate : xarray
-        Xarray with firing rate data.
-    by : str
-        Name of the dimension to group by and calculate depth of
-        selectivity for.
-
-    Returns
-    -------
-    selectivity : xarray
-        Xarray with depth of selectivity.
-    '''
-    avg_by_probe = frate.groupby(by).mean(dim='trial')
-    n_categories = len(avg_by_probe.coords[by])
-    r_max = avg_by_probe.max(by)
-    numerator = n_categories - (avg_by_probe / r_max).sum(by)
-    selectivity = numerator / (n_categories - 1)
-    return selectivity, avg_by_probe
-
-
 def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
                        paired=False):
     '''Perform cluster-based tests on firing rate data.
@@ -612,38 +494,6 @@ def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
 
     return stat, clusters, pval
 
-
-# TODO: add offsets to spike-centered neurons
-def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
-    from borsar.utils import find_index
-
-    spike_centered = list()
-    _, half_win = _symmetric_window_samples(winlen, sfreq)
-    winlims = np.array([-half_win, half_win + 1])[None, :]
-    lims = [0, len(time)]
-    tri_is_ok = np.zeros(len(spk.trial[cell_idx]), dtype='bool')
-
-    n_tri = max(spk.trial[cell_idx])
-    for tri_idx in range(n_tri):
-        sel = spk.trial[cell_idx] == tri_idx
-        if sel.any():
-            tms = spk.time[cell_idx][sel]
-            if len(tms) < 1:
-                continue
-
-            closest_smp = find_index(time, tms)
-            twins = closest_smp[:, None] + winlims
-            good = ((twins >= lims[0]) & (twins <= lims[1])).all(axis=1)
-            twins = twins[good]
-            tri_is_ok[sel] = good
-
-            for twin in twins:
-                sig_part = arr[:, tri_idx, twin[0]:twin[1]]
-                spike_centered.append(sig_part)
-
-    spike_centered = np.stack(spike_centered, axis=1)
-    tri = spk.trial[cell_idx][tri_is_ok]
-    return spike_centered, tri
 
 
 def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
