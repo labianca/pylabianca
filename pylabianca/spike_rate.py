@@ -139,7 +139,7 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, kernel=None,
         trim = int((len(kernel) - 1) / 2)
 
     picks = _deal_with_picks(spk, picks)
-    times, binrep = spk.to_raw(spk, picks=picks, sfreq=sfreq)
+    times, binrep = spk.to_raw(picks=picks, sfreq=sfreq)
     cnt_times = times[trim:-trim]
 
     cnt = correlate(binrep, kernel[None, None, :], mode='valid')
