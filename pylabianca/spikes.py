@@ -4,7 +4,8 @@ import pandas as pd
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _symmetric_window_samples, _gauss_kernel_samples,
                     spike_centered_windows)
-from .spike_rate import compute_spike_rate, _spike_density
+from .spike_rate import (compute_spike_rate, depth_of_selectivity,
+                         _spike_density)
 
 
 # TODO:
