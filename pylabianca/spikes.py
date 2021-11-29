@@ -1,3 +1,4 @@
+from typing import Type
 import numpy as np
 import pandas as pd
 
@@ -96,7 +97,16 @@ class SpikeEpochs():
         return deepcopy(self)
 
     def pick_cells(self, picks=None, query=None):
-        '''Select cells by name or index. Operates inplace.'''
+        '''Select cells by name or index. Operates inplace.
+
+        Parameters
+        ----------
+        picks : int | str | listlike of int | list of str | None
+            Cell names or indices to select.
+        query : str | None
+            Query for ``.cellinfo`` - to pick cells by their properties, not
+            names or indices. Used only when ``picks`` is ``None``.
+        '''
         if picks is None and query is None:
             return self
 
@@ -245,6 +255,7 @@ class SpikeEpochs():
                 t_start=self.time_limits[0])
         return spikes
 
+    # TODO: return xarray?
     def to_raw(self, picks=None, sfreq=500.):
         '''Turn epoched spike timestamps into binned continuous representation.
 
@@ -267,6 +278,37 @@ class SpikeEpochs():
             information.
         '''
         return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
+
+    def __getitem__(self, key):
+        '''Select trials using a metadata query.'''
+        if isinstance(key, str):
+            if self.metadata is None:
+                raise TypeError('metadata cannot be ``None`` when selecting '
+                                'trials with a query.')
+            # treat as pandas-style query
+            new_metadata = self.metadata.query(key)
+            tri_idx = new_metadata.index.values
+        else:
+            raise TypeError('Currently only string queries are allowed to '
+                            'select elements of SpikeEpochs')
+
+        newtime, newtrial = list(), list()
+        new_metadata = new_metadata.reset_index(drop=True)
+
+        # for each cell select relevant trials:
+        for cell_idx in range(len(self.trial)):
+            cell_tri = self.trial[cell_idx]
+            sel = np.in1d(cell_tri, tri_idx)
+            newtime.append(self.time[cell_idx][sel])
+
+            this_tri = (cell_tri[sel, None] == tri_idx[None, :]).argmax(axis=1)
+            newtrial.append(this_tri)
+
+        new_cellinfo = None if self.cellinfo is None else self.cellinfo.copy()
+        return SpikeEpochs(newtime, newtrial, time_limits=self.time_limits,
+                           n_trials=new_metadata.shape[0],
+                            cell_names=self.cell_names.copy(),
+                            metadata=new_metadata, cellinfo=new_cellinfo)
 
 
 # TODO: the implementation and the API are suboptimal
