@@ -10,7 +10,7 @@ from .spikes import SpikeEpochs, Spikes
 
 def prepare_gammbur_metadata(df):
     '''Prepare behavioral data from GammBur.
-    Name columns apropriately and set their dtypes.
+    Name columns appropriately and set their dtypes.
     '''
     if isinstance(df, np.ndarray):
         df = pd.DataFrame(df)
@@ -24,6 +24,9 @@ def prepare_gammbur_metadata(df):
     df = df.astype(col_types)
 
     df['RT'] = df['RT'] / 1000
+
+    n_trials = df.shape[0]
+    df.loc[:, 'trial'] = np.arange(n_trials)
     return df
 
 
@@ -87,7 +90,7 @@ def read_spikes(fname, data_name='spike'):
         Path to the file to read.
     data_name : str
         The name of the saved variable - this can be arbitrary so it is
-        necessay to specify. ``'spike'`` by default.
+        necessary to specify. ``'spike'`` by default.
 
     Returns
     -------
