@@ -279,15 +279,22 @@ class SpikeEpochs():
         '''
         return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
 
-    def __getitem__(self, key):
-        '''Select trials using a metadata query.'''
-        if isinstance(key, str):
+    def __getitem__(self, selection):
+        '''Select trials using an array of integers or metadata query.'''
+        if isinstance(selection, str):
             if self.metadata is None:
                 raise TypeError('metadata cannot be ``None`` when selecting '
                                 'trials with a query.')
             # treat as pandas-style query
-            new_metadata = self.metadata.query(key)
+            new_metadata = self.metadata.query(selection)
             tri_idx = new_metadata.index.values
+        elif isinstance(selection, (np.ndarray, list, tuple)):
+            selection = np.asarray(selection)
+            assert selection.dtype == np.int
+
+            if self.metadata is not None:
+                new_metadata = self.metadata.iloc[selection, :]
+            tri_idx = selection
         else:
             raise TypeError('Currently only string queries are allowed to '
                             'select elements of SpikeEpochs')
