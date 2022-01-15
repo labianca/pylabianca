@@ -112,18 +112,26 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
 
     Parameters
     ----------
-    spk : FIXME
-        FIXME
-    cell_idx : FIXME
-        FIXME
-    arr : xarray.DataArray
-        FIXME
-    time : FIXME
-        FIXME
-    sfreq : FIXME
-        FIXME
-    winlen : FIXME
-        FIXME
+    spk : pylabianca.SpikeEpochs
+        Spike epochs object.
+    cell_idx : int
+        Index of the cell providing spikes.
+    arr : np.ndarray | xarray.DataArray
+        Array with the signal to be cut out. The dimesions should be
+        ``n_channels x n_trials x n_times``.
+    time : np.ndarray
+        Coordinates of the time axis.
+    sfreq : float
+        Sampling frequency.
+    winlen : float
+        Window length in seconds.
+
+    Returns
+    -------
+    spike_centered : np.ndarray
+        Spike-centered windows. ``n_spikes x n_channels x n_times``.
+    tri : np.ndarray
+        Trial indices of the spike-centered windows for the spikes dimension.
     '''
     from borsar.utils import find_index
 
