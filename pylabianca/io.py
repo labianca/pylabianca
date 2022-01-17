@@ -144,7 +144,7 @@ def _read_lfp_gammbur(fname):
     info = mne.create_info(ch_names, sfreq, ch_types='seeg')
 
     matfile = loadmat(fname, squeeze_me=True, simplify_cells=True)
-    has_lfp = 'lfp' in matfile
+    has_lfp = ('lfp' in matfile) and (len(matfile['lfp']) > 0)
 
     if has_lfp:
         epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp')
