@@ -118,7 +118,7 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
         Index of the cell providing spikes.
     arr : np.ndarray | xarray.DataArray
         Array with the signal to be cut out. The dimesions should be
-        ``n_channels x n_trials x n_times``.
+        ``n_trials x n_channels x n_times``.
     time : np.ndarray
         Coordinates of the time axis.
     sfreq : float
@@ -128,8 +128,8 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
 
     Returns
     -------
-    spike_centered : np.ndarray
-        Spike-centered windows. `` n_channels x n_spikes x n_times``.
+    spike_centered : xarray.DataArray
+        Spike-centered windows. ``n_spikes x n_channels x n_times``.
     '''
     import xarray as xr
     from borsar.utils import find_index
@@ -154,22 +154,22 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
             tri_is_ok[sel] = good
 
             for twin in twins:
-                sig_part = arr[:, tri_idx, twin[0]:twin[1]]
+                sig_part = arr[tri_idx, :, twin[0]:twin[1]]
                 spike_centered.append(sig_part)
 
     # stack windows
-    spike_centered = np.stack(spike_centered, axis=1)
+    spike_centered = np.stack(spike_centered, axis=0)
 
     # prepare coordinates
     spike_idx = np.where(tri_is_ok)[0]
     tri = spk.trial[cell_idx][tri_is_ok]
-    n_channels = arr.shape[0]
+    n_channels = arr.shape[1]
     channel_idx = np.arange(n_channels)
 
     # construct xarray and assign coords
     spike_centered = xr.DataArray(
-        spike_centered, dims=['channel', 'spike', 'time'],
-        coords={'channel': channel_idx, 'spike': spike_idx,
+        spike_centered, dims=['spike', 'channel', 'time'],
+        coords={'spike': spike_idx, 'channel': channel_idx,
                 'time': window_time})
     spike_centered = spike_centered.assign_coords(trial=('spike', tri))
 
