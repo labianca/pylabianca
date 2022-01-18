@@ -290,7 +290,7 @@ class SpikeEpochs():
             tri_idx = new_metadata.index.values
         elif isinstance(selection, (np.ndarray, list, tuple)):
             selection = np.asarray(selection)
-            assert selection.dtype == np.int
+            assert np.issubdtype(selection.dtype, np.integer)
 
             if self.metadata is not None:
                 new_metadata = self.metadata.iloc[selection, :]
