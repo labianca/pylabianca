@@ -145,13 +145,6 @@ def _read_lfp_gammbur(fname, verbose=True):
     ch_names += ['hippo01', 'hippo02']
     info = mne.create_info(ch_names, sfreq, ch_types='seeg', verbose=verbose)
 
-<<<<<<< HEAD
-    try:
-        # read_epochs_fieldtrip should have verbose!
-        epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp') #,
-                                              # verbose=verbose)
-        epochs.metadata = prepare_gammbur_metadata(epochs.metadata)
-=======
     matfile = loadmat(fname, squeeze_me=True, simplify_cells=True)
     has_lfp = ('lfp' in matfile) and (len(matfile['lfp']) > 0)
 
@@ -160,7 +153,6 @@ def _read_lfp_gammbur(fname, verbose=True):
         tri_idx = _prepare_trial_inices(epochs, matfile['removed_tri_lfp'] - 1)
         epochs.metadata = prepare_gammbur_metadata(epochs.metadata,
                                                    trial_indices=tri_idx)
->>>>>>> 843bb5098e276f2c3c52e41fd13a4f451f7f26fb
         return epochs
     else:
         # given file does not contain lfp
