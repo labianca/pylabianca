@@ -30,7 +30,7 @@ def prepare_gammbur_metadata(df):
     return df
 
 
-def read_gammbur(subject_id=None, fname=None, kind='spikes'):
+def read_gammbur(subject_id=None, fname=None, kind='spikes', verbose=True):
     '''Read GammBur fieldtrip data format straight from the .mat file.
 
     Parameters
@@ -40,6 +40,8 @@ def read_gammbur(subject_id=None, fname=None, kind='spikes'):
     kind : str
         The data kind to read. Currently ``'spikes'`` and ``'lfp'`` are
         supported.
+    verbose : bool
+        Verbosity level.
 
     Returns
     -------
@@ -51,7 +53,7 @@ def read_gammbur(subject_id=None, fname=None, kind='spikes'):
     if kind == 'spikes':
         return _read_spikes_gammbur(fname)
     elif kind == 'lfp':
-        return _read_lfp_gammbur(fname)
+        return _read_lfp_gammbur(fname, verbose=verbose)
     else:
         raise ValueError('The data kind to read has to be "spikes" or "lfp"')
 
@@ -127,17 +129,19 @@ def _read_spikes_gammbur(fname):
     return spikes
 
 
-def _read_lfp_gammbur(fname):
+def _read_lfp_gammbur(fname, verbose=True):
     '''GammBur-specific function that reads lfp data and formats metadata.'''
     import mne
 
     sfreq = 500  # assumed LFP sampling frequency
     ch_names = ['dlpfc0{}'.format(idx) for idx in range(1, 5)]
     ch_names += ['hippo01', 'hippo02']
-    info = mne.create_info(ch_names, sfreq, ch_types='seeg')
+    info = mne.create_info(ch_names, sfreq, ch_types='seeg', verbose=verbose)
 
     try:
-        epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp')
+        # read_epochs_fieldtrip should have verbose!
+        epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp') #,
+                                              # verbose=verbose)
         epochs.metadata = prepare_gammbur_metadata(epochs.metadata)
         return epochs
     except IndexError:
