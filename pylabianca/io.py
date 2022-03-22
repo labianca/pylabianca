@@ -191,3 +191,116 @@ def read_raw_spikes(fname, data_name='spikes'):
     spk = Spikes(timestamps, sfreq, cell_names=cell_names,
                  metadata=trialinfo, cellinfo=cellinfo)
     return spk, events
+
+
+# TODO: add progressbar?
+# TODO: waveforms!
+def read_combinato(path, label=None, alignment='both'):
+    '''Read spikes from combinato sorting output.
+
+    Note that groups are read as single units, the class information is stored
+    inside the Spikes object.
+
+    Parameters
+    ----------
+    '''
+    import h5py
+
+    if alignment == 'both':
+        alignment = ['neg', 'pos']
+
+    # currently we read only SU by default
+    types_oi = [2]  # 2: SU; 1: MU; 0: artifact
+
+    channel_dirs = os.listdir(path)
+    group = list()
+    align = list()
+    channel = list()
+    spike_data = {'timestamp': list(), 'waveform': list(), 'class': list(),
+                  'distance': list()}
+
+    for subdir in channel_dirs:
+        has_content = False
+        subdir_path = op.join(path, subdir)
+        hdf5_file = op.join(subdir_path, 'data_' + subdir + '.h5')
+
+        if op.isdir(subdir_path) and op.exists(hdf5_file):
+            sort_dirs = os.listdir(subdir_path)
+
+            for pol in alignment:
+                subdir_prefix = f'sort_{pol}_'
+                pol_subdirs = [f for f in sort_dirs if subdir_prefix in f]
+
+                if len(pol_subdirs) == 0:
+                    continue
+
+                if label is None:
+                    labels = np.unique([dr.split('_')[2]
+                                       for dr in pol_subdirs])
+                    if labels.shape[0] > 1:
+                        msg = ('Multiple sorting labels present, please provi'
+                               'de a sorting label to read results from. Found'
+                               f' the following labels in {subdir} directory: '
+                                ', '.join(labels))
+                        raise RuntimeError(msg)
+                    else:
+                        label = str(labels[0])
+
+                pol_subdir = f'sort_{pol}_{label}'
+                full_sorting_path = op.join(subdir_path, pol_subdir,
+                                            'sort_cat.h5')
+                if not op.exists(full_sorting_path):
+                    continue
+
+                sorting_file = h5py.File(full_sorting_path, 'r')
+
+                types = np.asarray(sorting_file['types'])
+                # find SUs (or SUs and MUs)
+                is_SU = np.in1d(types[:, -1], types_oi)
+
+                if not is_SU.any():
+                    continue
+
+                if not has_content:
+                    spikes_file = h5py.File(hdf5_file, 'r')
+
+                has_content = True
+                groups_oi = types[is_SU, 0]
+                groups = np.asarray(sorting_file['groups'])
+                groups_sel = np.in1d(groups[:, 1], groups_oi)
+                groups = groups[groups_sel, :]
+
+                spike_classes = np.asarray(sorting_file['classes'])
+                spike_indices = np.asarray(sorting_file['index'])
+                spike_distance = np.asarray(sorting_file['distance'])
+                sorting_file.close()
+
+                times = np.asarray(spikes_file[pol]['times'])
+                waveforms = np.asarray(spikes_file[pol]['spikes'])
+
+                for grp in groups_oi:
+                    msk = groups[:, 1] == grp
+                    this_classes = groups[msk, 0]
+                    class_msk = np.in1d(spike_classes, this_classes)
+
+                    idx = spike_indices[class_msk]
+                    # some groups can be empty with label that was not updated
+                    if len(idx) > 0:
+                        group.append(grp)
+                        align.append(pol)
+                        channel.append(subdir)
+                        spike_data['timestamp'].append(times[idx])
+                        spike_data['waveform'].append(waveforms[idx, :])
+
+                        spike_data['class'].append(spike_classes[class_msk])
+                        spike_data['distance'].append(
+                            spike_distance[class_msk])
+
+        if has_content:
+            spikes_file.close()
+
+    # organize into one Spikes object
+    cellinfo = pd.DataFrame(data={'channel': channel, 'alignment': align,
+                                  'group': group})
+    spikes = Spikes(spike_data['timestamp'], sfreq=1e6, cellinfo=cellinfo)
+    return spikes
