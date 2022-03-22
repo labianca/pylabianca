@@ -311,7 +311,9 @@ def read_combinato(path, label=None, alignment='both'):
                         group.append(grp)
                         align.append(pol)
                         channel.append(subdir)
-                        spike_data['timestamp'].append(times[idx])
+                        # Combinato times are in ms, but we turn this
+                        # to 1 microsecond timestamps used by Neuralynx
+                        spike_data['timestamp'].append(times[idx] * 1000)
                         spike_data['waveform'].append(waveforms[idx, :])
 
                         spike_data['class'].append(spike_classes[class_msk])
