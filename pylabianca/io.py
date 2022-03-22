@@ -324,5 +324,6 @@ def read_combinato(path, label=None, alignment='both'):
     # organize into one Spikes object
     cellinfo = pd.DataFrame(data={'channel': channel, 'alignment': align,
                                   'group': group})
-    spikes = Spikes(spike_data['timestamp'], sfreq=1e6, cellinfo=cellinfo)
+    spikes = Spikes(spike_data['timestamp'], sfreq=1e6, cellinfo=cellinfo,
+                    waveform=spike_data['waveform'])
     return spikes
