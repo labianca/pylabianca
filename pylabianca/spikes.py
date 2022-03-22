@@ -11,9 +11,10 @@ from .spike_rate import (compute_spike_rate, depth_of_selectivity,
 
 # TODO:
 # - [ ] index by trial?
+# - [ ] object of type 'SpikeEpochs' has no len() !
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
-                 cell_names=None, metadata=None, cellinfo=None):
+                 waveform=None, cell_names=None, metadata=None, cellinfo=None):
         '''Create ``SpikeEpochs`` object for convenient storage, analysis and
         visualization of spikes data.
 
@@ -37,6 +38,8 @@ class SpikeEpochs():
             Number of trials. Optional, if the number of trials can't be
             inferred from the ``trials`` argument (for example when none of the
             cells fire for the last few trials).
+        waveform : list of numpy ndarrays | None
+            List of spikes x samples waveform arrays.
         cell_names : list of str | None
             String identifiers of cells. First string corresponds to first
             cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
@@ -78,7 +81,11 @@ class SpikeEpochs():
             assert isinstance(cellinfo, pd.DataFrame)
             assert cellinfo.shape[0] == n_cells
 
+        if waveform is not None:
+            _check_waveforms(self.time, waveform)
+
         self.n_trials = n_trials
+        self.waveform = waveform
         self.cell_names = cell_names
         self.metadata = metadata
         self.cellinfo = cellinfo
@@ -406,9 +413,13 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
         Information about the trial that the given spike belongs to.
     time : numpy array
         Spike times with respect to event onset.
+    sel : numpy array
+        Boolean array informing which spikes were retained.
     '''
     trial = list()
     time = list()
+    n_spikes = len(timestamps)
+    sel = np.zeros(n_spikes, dtype='bool')
 
     t_idx = 0
     n_epochs = event_times.shape[0]
@@ -419,6 +430,7 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
         first_idx = (timestamps[t_idx:] > (
             event_times[epo_idx] + tmin)).argmax() + t_idx
         msk = timestamps[first_idx:] < (event_times[epo_idx] + tmax)
+        sel[first_idx:][msk] = True
 
         # select these spikes and center wrt event time
         tms = timestamps[first_idx:][msk] - event_times[epo_idx]
@@ -434,7 +446,7 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
     else:
         trial = [np.array([])]
         time = [np.array([])]
-    return trial, time
+    return trial, time, sel
 
 
 # TODO: make this a method of SpikeEpochs and return xarray or mne.Epochs
@@ -739,14 +751,22 @@ class Spikes(object):
         trial, time = list(), list()
         event_times = events[:, 0] / self.sfreq
 
+        has_waveform = self.waveform is not None
+        waveforms = list() if has_waveform else None
+
         for neuron_idx in range(n_neurons):
-            tri, tim = _epoch_spikes(self.timestamps[neuron_idx] / self.sfreq,
-                                     event_times, tmin, tmax)
+            tri, tim, sel = _epoch_spikes(
+                self.timestamps[neuron_idx] / self.sfreq, event_times,
+                tmin, tmax)
             trial.append(tri)
             time.append(tim)
 
+            if has_waveform:
+                waveforms.append(self.waveform[neuron_idx][sel, :])
+
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
-                          cell_names=self.cell_names, cellinfo=self.cellinfo)
+                          cell_names=self.cell_names, cellinfo=self.cellinfo,
+                          waveform=waveforms)
 
         if self.metadata is not None:
             if spk.n_trials == self.metadata.shape[0]:
