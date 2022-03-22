@@ -502,7 +502,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 
 
 def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
-                       paired=False):
+                       paired=False, verbose=True):
     '''Perform cluster-based tests on firing rate data.
 
     Performs cluster-based ANOVA on firing rate to test, for example,
@@ -522,6 +522,8 @@ def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
         categories to test selectivity for.
     cluster_entry_pval : float
         p value used as a cluster-entry threshold. The default is ``0.05``.
+    paired : bool
+        Whether a paired (repeated measures) or unpaired test should be used.
 
     Returns
     -------
@@ -574,7 +576,7 @@ def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
         warnings.simplefilter('ignore')
         stat, clusters, pval, _ = permutation_cluster_test(
             arrays, threshold=threshold, n_permutations=1000,
-            stat_fun=stat_fun, out_type='mask', verbose=False)
+            stat_fun=stat_fun, out_type='mask', verbose=verbose)
 
     return stat, clusters, pval
 
