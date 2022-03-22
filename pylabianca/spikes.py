@@ -342,6 +342,10 @@ class SpikeEpochs():
                             cell_names=self.cell_names.copy(),
                             metadata=new_metadata, cellinfo=new_cellinfo)
 
+    def plot_waveform(self, pick=0, ax=None):
+        from .viz import plot_waveform
+        return plot_waveform(self, pick=pick, ax=ax)
+
 
 # TODO: the implementation and the API are suboptimal
 def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
@@ -776,6 +780,10 @@ class Spikes(object):
                 # raise warning ...
 
         return spk
+
+    def plot_waveform(self, pick=0, ax=None):
+        from .viz import plot_waveform
+        return plot_waveform(self, pick=pick, ax=ax)
 
 
 def _check_waveforms(times, waveform):
