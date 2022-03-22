@@ -329,3 +329,29 @@ def read_combinato(path, label=None, alignment='both'):
     spikes = Spikes(spike_data['timestamp'], sfreq=1e6, cellinfo=cellinfo,
                     waveform=spike_data['waveform'])
     return spikes
+
+
+def read_neuralynx_events(path, read_zeros=False):
+    '''Read neuralynx events in the from of mne events array.'''
+    import neuralynx_io as ni
+
+    if op.isdir(path):
+        fname = 'Events.nev'
+        path = op.join(path, fname)
+
+    nev = ni.neuralynx_io.load_nev(path)
+    event_timestamps = nev['events']['TimeStamp'].astype('int64')
+    triggers = nev['events']['ttl']
+
+    if not read_zeros:
+        nonzero = triggers > 0
+        triggers = triggers[nonzero]
+        event_timestamps = event_timestamps[nonzero]
+
+    # construct mne-like events array
+    n_events = event_timestamps.shape[0]
+    events = np.zeros((n_events, 3), dtype='int64')
+    events[:, 0] = event_timestamps
+    events[:, -1] = triggers
+
+    return events
