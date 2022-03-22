@@ -8,29 +8,35 @@ import pandas as pd
 from .spikes import SpikeEpochs, Spikes
 
 
-def prepare_gammbur_metadata(df):
+def prepare_gammbur_metadata(df, trial_indices=None):
     '''Prepare behavioral data from GammBur.
     Name columns appropriately and set their dtypes.
     '''
     if isinstance(df, np.ndarray):
         df = pd.DataFrame(df)
 
+    # set column names
     df.columns = ['dig1', 'dig2', 'dig3', 'ifcorrect', 'load', 'ifout',
                   'probe', 'RT']
 
+    # set dtypes
     int_cols = ['dig1', 'dig2', 'dig3', 'load', 'probe']
     col_types = {col: 'int' for col in int_cols}
     col_types.update({col: 'bool' for col in ['ifcorrect', 'ifout']})
     df = df.astype(col_types)
 
+    # set RT to seconds
     df['RT'] = df['RT'] / 1000
 
-    n_trials = df.shape[0]
-    df.loc[:, 'trial'] = np.arange(n_trials)
+    if trial_indices is None:
+        n_trials = df.shape[0]
+        trial_indices = np.arange(n_trials)
+
+    df.loc[:, 'trial'] = trial_indices
     return df
 
 
-def read_gammbur(subject_id=None, fname=None, kind='spikes'):
+def read_gammbur(subject_id=None, fname=None, kind='spikes', verbose=True):
     '''Read GammBur fieldtrip data format straight from the .mat file.
 
     Parameters
@@ -40,6 +46,8 @@ def read_gammbur(subject_id=None, fname=None, kind='spikes'):
     kind : str
         The data kind to read. Currently ``'spikes'`` and ``'lfp'`` are
         supported.
+    verbose : bool
+        Verbosity level.
 
     Returns
     -------
@@ -51,7 +59,7 @@ def read_gammbur(subject_id=None, fname=None, kind='spikes'):
     if kind == 'spikes':
         return _read_spikes_gammbur(fname)
     elif kind == 'lfp':
-        return _read_lfp_gammbur(fname)
+        return _read_lfp_gammbur(fname, verbose=verbose)
     else:
         raise ValueError('The data kind to read has to be "spikes" or "lfp"')
 
@@ -127,20 +135,26 @@ def _read_spikes_gammbur(fname):
     return spikes
 
 
-def _read_lfp_gammbur(fname):
+def _read_lfp_gammbur(fname, verbose=True):
     '''GammBur-specific function that reads lfp data and formats metadata.'''
     import mne
+    from scipy.io import loadmat
 
     sfreq = 500  # assumed LFP sampling frequency
     ch_names = ['dlpfc0{}'.format(idx) for idx in range(1, 5)]
     ch_names += ['hippo01', 'hippo02']
-    info = mne.create_info(ch_names, sfreq, ch_types='seeg')
+    info = mne.create_info(ch_names, sfreq, ch_types='seeg', verbose=verbose)
 
-    try:
+    matfile = loadmat(fname, squeeze_me=True, simplify_cells=True)
+    has_lfp = ('lfp' in matfile) and (len(matfile['lfp']) > 0)
+
+    if has_lfp:
         epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp')
-        epochs.metadata = prepare_gammbur_metadata(epochs.metadata)
+        tri_idx = _prepare_trial_inices(epochs, matfile['removed_tri_lfp'] - 1)
+        epochs.metadata = prepare_gammbur_metadata(epochs.metadata,
+                                                   trial_indices=tri_idx)
         return epochs
-    except IndexError:
+    else:
         # given file does not contain lfp
         return None
 
@@ -191,6 +205,14 @@ def read_raw_spikes(fname, data_name='spikes'):
     spk = Spikes(timestamps, sfreq, cell_names=cell_names,
                  metadata=trialinfo, cellinfo=cellinfo)
     return spk, events
+
+
+def _prepare_trial_inices(epochs, removed_idx):
+    n_removed = len(removed_idx)
+    n_all_tri = epochs.metadata.shape[0] + n_removed
+    tri_idx = np.arange(n_all_tri)
+    tri_idx = np.delete(tri_idx, removed_idx)
+    return tri_idx
 
 
 # TODO: add progressbar?

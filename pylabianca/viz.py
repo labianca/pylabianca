@@ -73,3 +73,43 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
     ttl = 'Firing rate' + add_txt
     ax.set_title(ttl, fontsize=16)
     return lines[0].axes
+
+
+# TODO: move to sarna sometime
+def check_modify_progressbar(pbar, total=None):
+    '''Reset ``pbar`` and change its total if it is a tqdm progressbar.
+    Otherwise create new progressbar.
+
+    Parameters
+    ----------
+    pbar : bool | str | tqdm progressbar
+        Progressbar to modify or instructions on whether (if bool) or of what
+        kind (if str) a progressbar should be created.
+    total : int | None
+        Total number of steps in the progressbar.
+
+    Returns
+    -------
+    pbar : tqdm progressbar | empty sarna progressbar
+        Modified or newly created progressbar. Can also be an empty progressbar
+        from sarna - a progressbar that has some of the tqdm's API but does not
+        do anything.
+    '''
+    if isinstance(pbar, bool):
+        if pbar:
+            from tqdm.auto import tqdm
+            pbar = tqdm(total=total)
+        else:
+            from sarna.utils import EmptyProgressbar
+            pbar = EmptyProgressbar(total=total)
+    elif isinstance(pbar, str):
+        if pbar == 'notebook':
+            from tqdm.notebook import tqdm
+        elif pbar == 'text':
+            from tqdm import tqdm
+        pbar = tqdm(total=total)
+    else:
+        from tqdm.notebook import tqdm_notebook
+        if isinstance(pbar, tqdm_notebook):
+            pbar.reset(total=total)
+    return pbar

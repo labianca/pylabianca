@@ -219,27 +219,37 @@ class SpikeEpochs():
     # TODO:
     # - [ ] use `group` from sarna in looping through trials
     #       for faster execution...
-    def to_neo(self, cell_idx, pool=False):
+    def to_neo(self, cell_idx, join=False, sep_time=0.):
         '''Turn spikes of given cell into neo.SpikeTrain format.
 
         Parameters
         ----------
         cell_idx : int
             Index of the cell to turn into neo.SpikeTrain format.
-        pool : bool
-            Whether to pool all the trials into a single neo.SpikeTrain.
+        join : bool | str
+            Whether and how to join all the trials into a single
+            neo.SpikeTrain. Defaults to ``False`` which does not perform
+            any joining. If ``join=True`` or ``join='concat'``, the trials
+            are concatenated into a single neo.SpikeTrain using ``sep_time``
+            as time separation between consecutive trials. If ``join='pool'``,
+            all the spikes are pooled and sorted with respect to their time
+            (irrespective of trial number).
 
         Returns
         -------
         spikes : neo.SpikeTrain | list of neo.SpikeTrain
-            If ``pool=True``, a single neo.SpikeTrain is returned with spikes
-            from separate trials pooled and sorted. Otherwise (``pool=False``)
-            a list of neo.SpikeTrain objects is returned.
+            If ``join=True``, a single neo.SpikeTrain is returned with spikes
+            from separate trials concatenated (or pooled and sorted if
+            ``join='pool'``. Otherwise (``join=False``) a list of
+            neo.SpikeTrain objects is returned.
         '''
         import neo
         from quantities import s
 
-        if not pool:
+        if isinstance(join, bool) and join:
+            join = 'concat'
+
+        if not join:
             spikes = list()
             trials = range(self.n_trials)
             for tri in trials:
@@ -248,7 +258,15 @@ class SpikeEpochs():
                     times * s, t_stop=self.time_limits[1],
                     t_start=self.time_limits[0])
                 spikes.append(spiketrain)
-        else:
+        elif join == 'concat':
+            trial_len = self.time_limits[1] - self.time_limits[0]
+            full_sep = trial_len + sep_time
+            new_times = self.time[cell_idx] + full_sep * self.trial[cell_idx]
+            t_stop = trial_len * self.n_trials + sep_time * (self.n_trials - 1)
+
+            spikes = neo.SpikeTrain(
+                new_times * s, t_stop=t_stop * s, t_start=self.time_limits[0])
+        elif join == 'pool':
             times = np.sort(self.time[cell_idx])
             spikes = neo.SpikeTrain(
                 times * s, t_stop=self.time_limits[1],
@@ -279,15 +297,22 @@ class SpikeEpochs():
         '''
         return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
 
-    def __getitem__(self, key):
-        '''Select trials using a metadata query.'''
-        if isinstance(key, str):
+    def __getitem__(self, selection):
+        '''Select trials using an array of integers or metadata query.'''
+        if isinstance(selection, str):
             if self.metadata is None:
                 raise TypeError('metadata cannot be ``None`` when selecting '
                                 'trials with a query.')
             # treat as pandas-style query
-            new_metadata = self.metadata.query(key)
+            new_metadata = self.metadata.query(selection)
             tri_idx = new_metadata.index.values
+        elif isinstance(selection, (np.ndarray, list, tuple)):
+            selection = np.asarray(selection)
+            assert np.issubdtype(selection.dtype, np.integer)
+
+            if self.metadata is not None:
+                new_metadata = self.metadata.iloc[selection, :]
+            tri_idx = selection
         else:
             raise TypeError('Currently only string queries are allowed to '
                             'select elements of SpikeEpochs')

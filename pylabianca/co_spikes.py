@@ -3,7 +3,7 @@ from scipy.signal import correlate, correlation_lags
 from tqdm.notebook import tqdm
 
 import borsar
-from . import utils
+from . import utils, viz
 
 def xcorr(x, y, maxlag=None):
     '''Compute un-normalized cross-correlation for required max lag.
@@ -36,8 +36,10 @@ def xcorr(x, y, maxlag=None):
     return lags, corr
 
 def shuffled_spike_xcorr(spk, cell_idx1, cell_idx2, sfreq=500,
-                         gauss_winlen=0.025, max_lag=0.1):
+                         gauss_winlen=0.025, max_lag=0.1, pbar=True,
+                         n_shuffles=1_000):
     '''FIXME'''
+    pbar = viz.check_modify_progressbar(pbar, total=n_shuffles)
     max_lag_smp = int(np.round(sfreq * max_lag))
 
     time, bin_spk = spk.to_raw(picks=[cell_idx1, cell_idx2], sfreq=sfreq)
@@ -61,12 +63,11 @@ def shuffled_spike_xcorr(spk, cell_idx1, cell_idx2, sfreq=500,
     lags = lags / sfreq
 
     n_lags = len(lags)
-    n_shuffles = 1_000
     corr_shuffled = np.zeros(shape=(n_shuffles, n_lags))
 
     cnt1 = cnt[0]
     # shuffle trials n_times
-    for shuffle_idx in tqdm(range(n_shuffles)):
+    for shuffle_idx in range(n_shuffles):
         tri = np.arange(n_trials)
         np.random.shuffle(tri)
 
@@ -78,6 +79,7 @@ def shuffled_spike_xcorr(spk, cell_idx1, cell_idx2, sfreq=500,
         cnt_shuffled = correlate(concat_shuffled, gauss, mode='same')
         _, this_corr = xcorr(cnt1, cnt_shuffled, maxlag=max_lag_smp)
         corr_shuffled[shuffle_idx] = this_corr
+        pbar.update(1)
 
     avg_shfl = corr_shuffled.mean(axis=0)
     std_shfl = corr_shuffled.std(axis=0)
