@@ -113,3 +113,38 @@ def check_modify_progressbar(pbar, total=None):
         if isinstance(pbar, tqdm_notebook):
             pbar.reset(total=total)
     return pbar
+
+
+# TODO:
+# - [ ] set y limits
+# - [ ] plot_waveform function
+# - [ ] kind='line' ?
+# - [ ] upsample in x dim?
+def plot_waveform(spk, pick=0, ax=None):
+    n_spikes, n_samples = spk.waveform[pick].shape
+    x_coords = np.tile(np.arange(n_samples), (n_spikes, 1))
+
+    # assume default combinato times
+    sfreq = 32_000
+    sample_time = 1000 / sfreq
+    time_edges = [-19 * sample_time, (n_samples - 20) * sample_time]
+
+    hist, xbins, ybins = np.histogram2d(x_coords.ravel(),
+                                        spk.waveform[pick].ravel(),
+                                        bins=[n_samples, 100])
+
+    max_alpha = np.percentile(hist[hist > 0], 45)
+    max_lim = np.percentile(hist[hist > 0], 99)
+
+    alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
+    alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
+    alpha_sum[alpha_sum > 1] = 1
+
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    ax.imshow(hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
+              extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
+              aspect='auto')
+    ax.set_xlabel('Time (ms)', fontsize=14)
+    ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
