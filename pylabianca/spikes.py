@@ -655,7 +655,7 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
 
 class Spikes(object):
     def __init__(self, timestamps, sfreq, cell_names=None, metadata=None,
-                 cellinfo=None):
+                 cellinfo=None, waveform=None):
         '''Create ``Spikes`` object for convenient storage, analysis and
         visualization of spikes data.
 
@@ -677,6 +677,8 @@ class Spikes(object):
             DataFrame with trial-level metadata.
         cellinfo : pandas.DataFrame | None
             Additional cell information.
+        waveform : list of np.ndarray
+            List of spikes x samples waveform arrays.
         '''
         n_cells = len(timestamps)
         self.timestamps = timestamps
@@ -690,6 +692,12 @@ class Spikes(object):
         self.metadata = metadata
         self.cellinfo = cellinfo
 
+        if waveform is not None:
+            _check_waveforms(timestamps, waveform)
+            self.waveform = waveform
+        else:
+            self.waveform = None
+
     def __repr__(self):
         '''Text representation of SpikeEpochs.'''
         n_cells = len(self.cell_names)
@@ -697,6 +705,7 @@ class Spikes(object):
         msg = '<Spikes, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(n_cells, avg_spikes)
 
+    # TODO - when epoching - select waveforms!
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.):
         '''Epoch spikes with respect to selected events.
 
@@ -747,3 +756,10 @@ class Spikes(object):
                 # raise warning ...
 
         return spk
+
+
+def _check_waveforms(times, waveform):
+    assert len(times) == len(waveform)
+    n_spikes_times = np.array([len(x) for x in times])
+    n_spikes_waveform = np.array([x.shape[0] for x in waveform])
+    assert (n_spikes_times == n_spikes_waveform).all()
