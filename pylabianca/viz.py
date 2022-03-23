@@ -116,21 +116,38 @@ def check_modify_progressbar(pbar, total=None):
 
 
 # TODO:
-# - [ ] set y limits
-# - [ ] plot_waveform function
+# - [x] set y limits
+# - [x] plot_waveform function
 # - [ ] kind='line' ?
 # - [ ] upsample in x dim?
-def plot_waveform(spk, pick=0, ax=None):
+def plot_waveform(spk, pick=0, upsample=False, ax=None):
     n_spikes, n_samples = spk.waveform[pick].shape
+    waveform = spk.waveform[pick]
+    if upsample:
+        if isinstance(upsample, bool):
+            upsample = 3
+        from scipy import interpolate
+
+        x = np.arange(n_samples)
+        interp = interpolate.interp1d(x, waveform, kind='cubic',
+                                      assume_sorted=True)
+
+        new_x = np.linspace(0, n_samples - 1, num=n_samples * upsample)
+        waveform = interp(new_x)
+        n_samples = len(new_x)
+    else:
+        upsample = 1
+
     x_coords = np.tile(np.arange(n_samples), (n_spikes, 1))
 
     # assume default combinato times
     sfreq = 32_000
     sample_time = 1000 / sfreq
-    time_edges = [-19 * sample_time, (n_samples - 20) * sample_time]
+    time_edges = [-19 * sample_time,
+                  (n_samples / upsample - 20) * sample_time]
 
     hist, xbins, ybins = np.histogram2d(x_coords.ravel(),
-                                        spk.waveform[pick].ravel(),
+                                        waveform.ravel(),
                                         bins=[n_samples, 100])
 
     max_alpha = np.percentile(hist[hist > 0], 45)
