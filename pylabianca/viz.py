@@ -2,6 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+# TODO - get y axis from xarray data name (?)
+# TODO - x_dim='auto' (infers which is the likely x dimension)
+# TODO - the info about "one other dimension" (that is reduced) seems to be no
+#        longer accurate
 def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
                     x_dim='time'):
     '''Plot spike rate with standard error of the mean.
