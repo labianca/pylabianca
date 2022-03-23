@@ -129,6 +129,8 @@ class SpikeEpochs():
         self.cell_names = self.cell_names[picks].copy()
         if self.cellinfo is not None:
             self.cellinfo = self.cellinfo.loc[picks, :].reset_index(drop=True)
+        if self.waveform is not None:
+            self.waveform = [self.waveform[ix] for ix in picks]
 
         return self
 
