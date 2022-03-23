@@ -344,9 +344,9 @@ class SpikeEpochs():
                             cell_names=self.cell_names.copy(),
                             metadata=new_metadata, cellinfo=new_cellinfo)
 
-    def plot_waveform(self, pick=0, ax=None):
+    def plot_waveform(self, pick=0, upsample=False, ax=None):
         from .viz import plot_waveform
-        return plot_waveform(self, pick=pick, ax=ax)
+        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax)
 
 
 # TODO: the implementation and the API are suboptimal
@@ -785,9 +785,40 @@ class Spikes(object):
 
         return spk
 
-    def plot_waveform(self, pick=0, ax=None):
+    # TODO: refactor out common parts with SpikeEpochs.pick_cells
+    def pick_cells(self, picks=None, query=None):
+        '''Select cells by name or index. Operates inplace.
+
+        Parameters
+        ----------
+        picks : int | str | listlike of int | list of str | None
+            Cell names or indices to select.
+        query : str | None
+            Query for ``.cellinfo`` - to pick cells by their properties, not
+            names or indices. Used only when ``picks`` is ``None``.
+        '''
+        if picks is None and query is None:
+            return self
+
+        if picks is None and query is not None:
+            assert self.cellinfo is not None
+            cellinfo_sel = self.cellinfo.query(query)
+            picks = cellinfo_sel.index.values
+        else:
+            picks = _deal_with_picks(self, picks)
+
+        self.timestamps = [self.timestamps[ix] for ix in picks]
+        self.cell_names = self.cell_names[picks].copy()
+        if self.cellinfo is not None:
+            self.cellinfo = self.cellinfo.loc[picks, :].reset_index(drop=True)
+        if self.waveform is not None:
+            self.waveform = [self.waveform[ix] for ix in picks]
+
+        return self
+
+    def plot_waveform(self, pick=0, upsample=False, ax=None):
         from .viz import plot_waveform
-        return plot_waveform(self, pick=pick, ax=ax)
+        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax)
 
 
 def _check_waveforms(times, waveform):
