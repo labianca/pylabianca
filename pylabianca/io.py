@@ -355,3 +355,26 @@ def read_neuralynx_events(path, read_zeros=False):
     events[:, -1] = triggers
 
     return events
+
+
+def add_region_from_channels_table(spk, channel_info):
+    '''Add brain region information to Spikes from channel info excel table.
+
+    Parameters
+    ----------
+    spk : Spikes | SpikeEpochs
+        Spikes object whose cell metadata (``.cellinfo``) should be filled
+        with brain region information from the table.
+    channel_info : pandas.DataFrame
+        Dataframe containing brain region info for specified channel ranges.
+    '''
+    chans = spk.cellinfo.channel.unique()
+
+    for chan in chans:
+        chan_num = int(chan[3:])
+        msk = (channel_info['channel start'] <= chan_num) & (
+            channel_info['channel end'] >= chan_num)
+        region = channel_info.loc[msk, 'area'].values[0]
+
+        cell_msk = spk.cellinfo.channel == chan
+        spk.cellinfo.loc[cell_msk, 'region'] = region
