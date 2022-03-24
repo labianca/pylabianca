@@ -336,6 +336,9 @@ class SpikeEpochs():
         newtime, newtrial = list(), list()
         new_metadata = new_metadata.reset_index(drop=True)
 
+        has_waveform = self.waveform is not None
+        waveform = list() if has_waveform else None
+
         # for each cell select relevant trials:
         for cell_idx in range(len(self.trial)):
             cell_tri = self.trial[cell_idx]
@@ -345,11 +348,15 @@ class SpikeEpochs():
             this_tri = (cell_tri[sel, None] == tri_idx[None, :]).argmax(axis=1)
             newtrial.append(this_tri)
 
+            if has_waveform:
+                waveform.append(self.waveform[cell_idx][sel])
+
         new_cellinfo = None if self.cellinfo is None else self.cellinfo.copy()
         return SpikeEpochs(newtime, newtrial, time_limits=self.time_limits,
                            n_trials=new_metadata.shape[0],
                             cell_names=self.cell_names.copy(),
-                            metadata=new_metadata, cellinfo=new_cellinfo)
+                            metadata=new_metadata, cellinfo=new_cellinfo,
+                            waveform=waveform)
 
     def plot_waveform(self, pick=0, upsample=False, ax=None):
         '''Plot waveform heatmap for one cell.
