@@ -419,13 +419,13 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
         Information about the trial that the given spike belongs to.
     time : numpy array
         Spike times with respect to event onset.
-    sel : numpy array
-        Boolean array informing which spikes were retained.
+    idx : numpy array
+        Indices of spikes that were retained. Depending on the epoching, some
+        spikes may be duplicated.
     '''
     trial = list()
     time = list()
-    n_spikes = len(timestamps)
-    sel = np.zeros(n_spikes, dtype='bool')
+    idx = list()
 
     t_idx = 0
     n_epochs = event_times.shape[0]
@@ -436,7 +436,6 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
         first_idx = (timestamps[t_idx:] > (
             event_times[epo_idx] + tmin)).argmax() + t_idx
         msk = timestamps[first_idx:] < (event_times[epo_idx] + tmax)
-        sel[first_idx:][msk] = True
 
         # select these spikes and center wrt event time
         tms = timestamps[first_idx:][msk] - event_times[epo_idx]
@@ -444,15 +443,21 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
             tri = np.ones(len(tms), dtype='int') * epo_idx
             trial.append(tri)
             time.append(tms)
+
+            idx.append(np.where(msk)[0] + first_idx)
         t_idx = first_idx
 
     if len(trial) > 0:
         trial = np.concatenate(trial)
         time = np.concatenate(time)
+        idx = np.concatenate(idx)
     else:
+        # not sure why a list with empty array is returned
+        # (why wrap with list?)
         trial = [np.array([])]
         time = [np.array([])]
-    return trial, time, sel
+
+    return trial, time, idx
 
 
 # TODO: make this a method of SpikeEpochs and return xarray or mne.Epochs
@@ -763,14 +768,14 @@ class Spikes(object):
         waveforms = list() if has_waveform else None
 
         for neuron_idx in range(n_neurons):
-            tri, tim, sel = _epoch_spikes(
+            tri, tim, idx = _epoch_spikes(
                 self.timestamps[neuron_idx] / self.sfreq, event_times,
                 tmin, tmax)
             trial.append(tri)
             time.append(tim)
 
             if has_waveform:
-                waveforms.append(self.waveform[neuron_idx][sel, :])
+                waveforms.append(self.waveform[neuron_idx][idx, :])
 
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
                           cell_names=self.cell_names, cellinfo=self.cellinfo,
