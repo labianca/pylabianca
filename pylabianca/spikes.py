@@ -790,6 +790,13 @@ class Spikes(object):
 
         return spk
 
+    # TODO: ability to get a shallow copy might also be useful
+    # TODO: refactor with `.copy()` in SpikeEpochs
+    def copy(self):
+        '''Return a deep copy of the object.'''
+        from copy import deepcopy
+        return deepcopy(self)
+
     # TODO: refactor out common parts with SpikeEpochs.pick_cells
     def pick_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates inplace.
