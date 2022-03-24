@@ -208,11 +208,13 @@ class SpikeEpochs():
             The neuron indices to use in the calculations. The default
             (``None``) uses all cells.
         winlen : float
-            Length of the gaussian kernel window. By default, if
-            ``gauss_sd=None``, the standard deviation of the kernel is
-            ``winlen / 6``.
+            Length of the gaussian kernel window in seconds. Defaults to 0.3.
+            Standard deviation of the gaussian kernel (``gauss_sd``), if
+            unspecified (``gauss_sd=None``, default), is set as one sixth of
+            the window length.
         gauss_sd : float | None
-            Standard deviation of the gaussian kernel.
+            Standard deviation of the gaussian kernel. By default it is set to
+            ``winlen / 6``.
         sfreq : float
             Desired sampling frequency of the spike density. Defaults to 500
             Hz.
@@ -350,6 +352,19 @@ class SpikeEpochs():
                             metadata=new_metadata, cellinfo=new_cellinfo)
 
     def plot_waveform(self, pick=0, upsample=False, ax=None):
+        '''Plot waveform heatmap for one cell.
+
+        Parameters
+        ----------
+        pick : int
+            Cell index to plot waveform for.
+        upsample : bool | float
+            Whether to upsample the waveform (defaults to ``False``). If
+            ``True`` the waveform is upsampled by a factor of three. Can also
+            be a value to specify the upsampling factor.
+        ax : matplotlib.Axes | None
+            Axis to plot to. By default opens a new figure.
+        '''
         from .viz import plot_waveform
         return plot_waveform(self, pick=pick, upsample=upsample, ax=ax)
 
@@ -513,6 +528,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     return times, trials_raw
 
 
+# TODO - change to use sarna.cluster.permutation_cluster_test_array !
 def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
                        paired=False, verbose=True):
     '''Perform cluster-based tests on firing rate data.
@@ -834,6 +850,19 @@ class Spikes(object):
         return self
 
     def plot_waveform(self, pick=0, upsample=False, ax=None):
+        '''Plot waveform heatmap for one cell.
+
+        Parameters
+        ----------
+        pick : int
+            Cell index to plot waveform for.
+        upsample : bool | float
+            Whether to upsample the waveform (defaults to ``False``). If
+            ``True`` the waveform is upsampled by a factor of three. Can also
+            be a value to specify the upsampling factor.
+        ax : matplotlib.Axes | None
+            Axis to plot to. By default opens a new figure.
+        '''
         from .viz import plot_waveform
         return plot_waveform(self, pick=pick, upsample=upsample, ax=ax)
 
