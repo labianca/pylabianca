@@ -103,6 +103,11 @@ class SpikeEpochs():
         from copy import deepcopy
         return deepcopy(self)
 
+    # TODO: consider if it is better to return number of epochs?
+    def __len__(self):
+        '''Return the number of neurons in SpikeEpochs.'''
+        return len(self.time)
+
     def pick_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates inplace.
 
