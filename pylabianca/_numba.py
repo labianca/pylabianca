@@ -53,3 +53,25 @@ def np_unique(a, return_counts=False):
         return np_unique_impl
     else:
         return np_unique_wcounts_impl
+
+
+@numba.jit(nopython=True)
+def _numba_compare_times(times1, times2, distances):
+    n_times1 = times1.shape[0]
+    n_times2 = times2.shape[0]
+
+    tm2_idx = 0
+    for idx1 in range(n_times1):
+        time = times1[idx1]
+        min_distance = times2.max()
+        for idx2 in range(tm2_idx, n_times2):
+            this_distance = np.abs(time - times2[idx2])
+            if this_distance < min_distance:
+                min_distance = this_distance
+            else:
+                distances[idx1] = min_distance
+                tm2_idx = max(tm2_idx - 2, 0)
+                break
+        distances[idx1] = min_distance
+        tm2_idx = max(tm2_idx - 2, 0)
+    return distances
