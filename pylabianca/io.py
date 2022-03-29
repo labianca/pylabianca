@@ -343,6 +343,66 @@ def read_combinato(path, label=None, alignment='both'):
     return spikes
 
 
+# TODO: add option to resample (and trim?) the waveforms
+# TODO: add option to read the standard osort format (``format='standard'``)
+def read_osort(path):
+    '''Read osort selected sorting results in mm format.
+
+    The mm format can be obtained using updateSORTINGresults_mm matlab
+    function.
+
+    Parameters
+    ----------
+    path : str
+        Path to the directory with the ``.mat`` files obtained with
+        ``updateSORTINGresults_mm``.
+
+    Returns
+    -------
+    spk : pylabianca.spikes.Spikes
+        Spikes object.
+    '''
+    from tqdm import tqdm
+    from scipy.io import loadmat
+
+    files = [f for f in os.listdir(path) if f.endswith('.mat')]
+    cluster_id, alignment, threshold, channel = [list() for _ in range(4)]
+    timestamp, waveform = list(), list()
+
+    # TEMP: older exporting function had a spelling error
+    correct_field = ['aligment', 'alignment']
+
+    for fname in tqdm(files):
+        fpath = op.join(path, fname)
+        data = loadmat(fpath, squeeze_me=False)
+
+        # TEMP: older exporting function had a spelling error
+        if isinstance(correct_field, list):
+            correct_field = [field for field in correct_field
+                             if field in data][0]
+
+        cluster_id.append(data['cluster_id'].astype('int64'))
+        alignment.append([x[0][0] for x in data[correct_field]])
+        threshold.append(data['threshold'].astype('float32'))
+        channel.append([x[0][0] for x in data['channel']])
+
+        # unpack to list (and then use .extend)
+        timestamp.extend([x[0][0] for x in data['timestamp']])
+
+        # trim first X timesamples?
+        waveform.extend([x[0] for x in data['waveform']])
+
+    cluster_id = np.concatenate(cluster_id)
+    alignment = np.concatenate(alignment)
+    threshold = np.concatenate(threshold)
+    channel = np.concatenate(channel)
+
+    cellinfo = pd.DataFrame(dict(channel=channel, cluster=cluster_id[:, 0],
+                                alignment=alignment, threshold=threshold[:, 0]))
+
+    return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveform)
+
+
 def read_neuralynx_events(path, read_zeros=False):
     '''Read neuralynx events in the from of mne events array.'''
     import neuralynx_io as ni
