@@ -69,9 +69,7 @@ def _numba_compare_times(times1, times2, distances):
             if this_distance < min_distance:
                 min_distance = this_distance
             else:
-                distances[idx1] = min_distance
-                tm2_idx = max(tm2_idx - 2, 0)
                 break
         distances[idx1] = min_distance
-        tm2_idx = max(tm2_idx - 2, 0)
+        tm2_idx = max(idx2 - 1, 0)
     return distances
