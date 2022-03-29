@@ -216,7 +216,6 @@ def _prepare_trial_inices(epochs, removed_idx):
 
 
 # TODO: add progressbar?
-# TODO: waveforms!
 def read_combinato(path, label=None, alignment='both'):
     '''Read spikes from combinato sorting output.
 
@@ -225,11 +224,24 @@ def read_combinato(path, label=None, alignment='both'):
 
     Parameters
     ----------
+    path : str
+        Path to directory with combinato channel subdirectories with sorting
+        results.
+    label : str | None
+        Read specific sorting labels (if multiple). Defaults to ``None``, which
+        reads the first available label.
+    alignment : str
+        The alignment to read. Can be:
+        * ``'pos'`` - read only positive alignment sorting results
+        * ``'neg'`` - read only negative alignment sorting results
+        * ``'both'`` - read both alignments
     '''
     import h5py
 
     if alignment == 'both':
         alignment = ['neg', 'pos']
+    elif isinstance(alignment, str):
+        alignment = [alignment]
 
     # currently we read only SU by default
     types_oi = [2]  # 2: SU; 1: MU; 0: artifact
