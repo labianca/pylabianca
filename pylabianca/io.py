@@ -345,7 +345,7 @@ def read_combinato(path, label=None, alignment='both'):
 
 # TODO: add option to resample (and trim?) the waveforms
 # TODO: add option to read the standard osort format (``format='standard'``)
-def read_osort(path):
+def read_osort(path, waveform=True):
     '''Read osort selected sorting results in mm format.
 
     The mm format can be obtained using updateSORTINGresults_mm matlab
@@ -367,19 +367,26 @@ def read_osort(path):
 
     files = [f for f in os.listdir(path) if f.endswith('.mat')]
     cluster_id, alignment, threshold, channel = [list() for _ in range(4)]
-    timestamp, waveform = list(), list()
+
+    timestamp = list()
+    waveforms = list() if waveform else None
 
     # TEMP: older exporting function had a spelling error
     correct_field = ['aligment', 'alignment']
+    var_names = None
+    read_vars = ['cluster_id', 'threshold', 'channel', 'timestamp']
+    if waveform:
+        read_vars.append('waveform')
 
     for fname in tqdm(files):
         fpath = op.join(path, fname)
-        data = loadmat(fpath, squeeze_me=False)
+        data = loadmat(fpath, squeeze_me=False, variable_names=var_names)
 
         # TEMP: older exporting function had a spelling error
         if isinstance(correct_field, list):
             correct_field = [field for field in correct_field
                              if field in data][0]
+            var_names = read_vars + [correct_field]
 
         cluster_id.append(data['cluster_id'].astype('int64'))
         alignment.append([x[0][0] for x in data[correct_field]])
@@ -390,7 +397,8 @@ def read_osort(path):
         timestamp.extend([x[0][0] for x in data['timestamp']])
 
         # trim first X timesamples?
-        waveform.extend([x[0] for x in data['waveform']])
+        if waveform:
+            waveforms.extend([x[0] for x in data['waveform']])
 
     cluster_id = np.concatenate(cluster_id)
     alignment = np.concatenate(alignment)
@@ -398,9 +406,10 @@ def read_osort(path):
     channel = np.concatenate(channel)
 
     cellinfo = pd.DataFrame(dict(channel=channel, cluster=cluster_id[:, 0],
-                                alignment=alignment, threshold=threshold[:, 0]))
+                                 alignment=alignment,
+                                 threshold=threshold[:, 0]))
 
-    return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveform)
+    return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveforms)
 
 
 def read_neuralynx_events(path, read_zeros=False):
