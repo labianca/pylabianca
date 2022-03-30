@@ -5,9 +5,14 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     spike_centered_windows)
 
 
+# TODO: ``tol=None`` could return the distances without thresholding
+# TODO: consider other name like ``find_spike_distances``
+# TODO: test for presence of numba and use the numba implementation
+#       (could also use ``backend`` argument)
+# TODO: multiprocessing could be useful
 # TODO: the implementation and the API are suboptimal
 def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
-    '''Test concurrence of spike times for SpikeEpochs.
+    '''Test concurrence of spike times for Spikes or SpikeEpochs.
 
     Parameters
     ----------
@@ -53,14 +58,6 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
         time_diffs = np.abs(tms1[:, None] - tms2[None, :])
         closest_time1 = time_diffs.min(axis=1)
         return (closest_time1 < tol).mean()
-
-
-def numpy_compare_times(spk, cell_idx1, cell_idx2):
-    tms1 = spk.timestamps[cell_idx1] / spk.sfreq
-    tms2 = spk.timestamps[cell_idx2] / spk.sfreq
-    time_diffs = np.abs(tms1[:, None] - tms2[None, :])
-    closest_time1 = time_diffs.min(axis=1)
-    return closest_time1
 
 
 def numpy_compare_times(spk, cell_idx1, cell_idx2):

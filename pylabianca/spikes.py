@@ -486,7 +486,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     return times, trials_raw
 
 
-# TODO - change to use sarna.cluster.permutation_cluster_test_array !
+# TODO: change to use sarna.cluster.permutation_cluster_test_array !
 def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
                        paired=False, verbose=True):
     '''Perform cluster-based tests on firing rate data.
@@ -619,7 +619,6 @@ class Spikes(object):
         msg = '<Spikes, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(n_cells, avg_spikes)
 
-    # TODO - when epoching - select waveforms!
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.):
         '''Epoch spikes with respect to selected events.
 
