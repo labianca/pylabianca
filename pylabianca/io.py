@@ -365,7 +365,8 @@ def read_osort(path, waveform=True):
     from tqdm import tqdm
     from scipy.io import loadmat
 
-    files = [f for f in os.listdir(path) if f.endswith('.mat')]
+    files = [f for f in os.listdir(path)
+             if f.endswith('.mat') and 'mm_format' in f]
     cluster_id, alignment, threshold, channel = [list() for _ in range(4)]
 
     timestamp = list()
@@ -452,7 +453,7 @@ def add_region_from_channels_table(spk, channel_info):
     chans = spk.cellinfo.channel.unique()
 
     for chan in chans:
-        chan_num = int(chan[3:])
+        chan_num = int(''.join([char for char in chan if char.isdigit()]))
         msk = (channel_info['channel start'] <= chan_num) & (
             channel_info['channel end'] >= chan_num)
         region = channel_info.loc[msk, 'area'].values[0]
