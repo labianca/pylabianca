@@ -156,3 +156,141 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
     cch = _turn_spike_rate_to_xarray(lags, cch_list[None, :], spk,
                                      cell_names=[cell_name])
     return cch
+
+
+# TODO: clean up zasady comments
+# TODO: some time, maybe add more control (kwargs)
+def drop_duplicated_units(spk, similarity, return_clusters=False):
+    # %% zasady
+    # podobieństwo 1.0, ta sama elektroda -> duplikat, usuwamy dowolny
+    #
+    # jeżeli ten sam kanał b duże podobienstwo (np. > 0.5), różny alignment
+    # - wybierz neuron, który ma więcej spike'ów? (czyli de facto - wybierz
+    # ten, którego mniej spike'ów zawiera się w drugim)
+
+    # duży klaster, wiele elektrod, wysokie podobieństwa (ok > 0.4)
+    # oraz wiele par ma wysoką korelację waveformów ->
+    # zrobić osort ze średnia referencją
+    #
+    # inny kanał, bardzo podobny średni waveform (np. cross-corr > 0.9) ->
+    # wybierz ten co ma więcej spike'ow
+    #
+    # gdy tylko kilka neuronów w klastrze:
+    # różne kanały, >= 30% ko-spike'ów, wysoki peak kroskorelacji średnich
+    # wavefromow -> wybierz ten, co ma więcej spike'ów
+    import scipy
+    import borsar
+
+    # init drop vector
+    drop = np.zeros(len(spk.timestamps), dtype='bool')
+
+    # cluster by similarity over 0.3 threshold
+    adj = similarity >= 0.3
+    suspicious = adj.any(axis=0) | adj.any(axis=1)
+    suspicious_idx = np.where(suspicious)[0]
+    adj_susp = adj[suspicious_idx[:, None], suspicious_idx[None, :]]
+
+    fake_signal = np.ones(len(suspicious_idx))
+    clusters, counts = borsar.cluster.find_clusters(
+        fake_signal, 0.5, adjacency=adj_susp, backend='mne')
+
+    # go through pairs within each cluster and apply selection rules
+    for cluster_idx in range(len(clusters)):
+        idxs = suspicious_idx[clusters[cluster_idx]]
+        simil_part = similarity[idxs[:, None], idxs[None, :]]
+
+        # 1. remove duplicates (any similarity == 1.)
+        if (simil_part == 1).any():
+            s1, s2 = np.where(simil_part == 1.)
+            for ix in range(len(s1)):
+                identical = min([s1[ix], s2[ix]])
+                drop[idxs[identical]] = True
+
+        # 2. pairs with similarity > 0.5, same channels, different alignment
+        info = spk.cellinfo.loc[idxs, :]
+        if (simil_part > 0.5).any():
+            s1, s2 = np.where(simil_part > 0.5)
+            for ix in range(len(s1)):
+                ix1, ix2 = s1[ix], s2[ix]
+                same_chan = info.channel.iloc[ix1] == info.channel.iloc[ix2]
+                same_align = (info.alignment.iloc[ix1]
+                              == info.alignment.iloc[ix2])
+                if same_chan and not same_align:
+                    s1_in_s2 = simil_part[ix1, ix2]
+                    s2_in_s1 = simil_part[ix2, ix1]
+                    rel_idx = np.argmax([s1_in_s2, s2_in_s1])
+                    drop_idx = [ix1, ix2][rel_idx]
+                    drop[idxs[drop_idx]] = True
+
+        # 2. pairs with similarity > 0.3, different channels,
+        #    very similar waveforms
+        s1, s2 = np.where(simil_part > 0.3)
+        avg_wave = [spk.waveform[idx].mean(axis=0) for idx in idxs]
+        for ix in range(len(s1)):
+            ix1, ix2 = s1[ix], s2[ix]
+            same_chan = info.channel.iloc[ix1] == info.channel.iloc[ix2]
+            same_align = info.alignment.iloc[ix1] == info.alignment.iloc[ix2]
+            if not same_chan:
+                s1_in_s2 = simil_part[ix1, ix2]
+                s2_in_s1 = simil_part[ix2, ix1]
+                rel_idx = np.argmax([s1_in_s2, s2_in_s1])
+                drop_idx = [ix1, ix2][rel_idx]
+
+                # but only if waveform max cross-corr is > 0.9
+                wave1 = avg_wave[ix1]
+                wave2 = avg_wave[ix2]
+                corr = scipy.signal.correlate(wave1, wave2)
+                auto1 = (wave1 * wave1).sum()
+                auto2 = (wave2 * wave2).sum()
+                norm = np.sqrt(auto1 * auto2)
+                corr = corr / norm
+                corr_maxabs = np.abs(corr).max()
+
+                if corr_maxabs > 0.9:
+                    drop[idxs[drop_idx]] = True
+
+    if not return_clusters:
+        return drop
+    else:
+        return drop, clusters, counts, suspicious_idx
+
+
+# TODO: clean up
+def plot_high_similarity_cluster(similarity, clusters, suspicious_idx,
+                                 cluster_idx=0):
+    idxs = suspicious_idx[clusters[cluster_idx]]
+
+    n_cells = len(idxs)
+    simil_part = similarity[idxs[:, None], idxs[None, :]]
+
+    fig, ax = plt.subplots(nrows=n_cells + 1, ncols=n_cells + 1)
+
+    for idx, cell_idx in enumerate(idxs):
+        spk.plot_waveform(cell_idx, ax=ax[0, idx + 1])
+        spk.plot_waveform(cell_idx, ax=ax[idx + 1, 0])
+
+        info = spk.cellinfo.loc[cell_idx, :]
+        n_spikes = len(spk.timestamps[cell_idx])
+        title = f'{info.channel}, {info.alignment}\n{n_spikes} spikes'
+        ax[0, idx + 1].set_title(title)
+
+    for this_ax in ax.ravel():
+        this_ax.set_ylabel('')
+        this_ax.set_xlabel('')
+        this_ax.set_xticks([])
+        this_ax.set_yticks([])
+
+    ax[0, 0].axis(False)
+    max_val = simil_part.max()
+    for row_idx in range(n_cells):
+        for col_idx in range(n_cells):
+            value = simil_part[row_idx, col_idx]
+            val_perc = value / max_val
+            txt_col = 'black' if val_perc > 0.5 else 'white'
+            ax[row_idx + 1, col_idx + 1].text(0.5, 0.5, f'{value:0.3f}',
+                                            horizontalalignment='center',
+                                            verticalalignment='center',
+                                            color=txt_col)
+
+            color = plt.cm.viridis(val_perc)
+            ax[row_idx + 1, col_idx + 1].set_facecolor(color)
