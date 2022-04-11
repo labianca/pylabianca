@@ -380,8 +380,8 @@ def read_osort(path, waveform=True):
         read_vars.append('waveform')
 
     for fname in tqdm(files):
-        fpath = op.join(path, fname)
-        data = loadmat(fpath, squeeze_me=False, variable_names=var_names)
+        file_path = op.join(path, fname)
+        data = loadmat(file_path, squeeze_me=False, variable_names=var_names)
 
         # TEMP: older exporting function had a spelling error
         if isinstance(correct_field, list):
@@ -413,28 +413,93 @@ def read_osort(path, waveform=True):
     return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveforms)
 
 
-def read_neuralynx_events(path, read_zeros=False):
-    '''Read neuralynx events in the from of mne events array.'''
+def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
+                          first_timestamp_from='CSC130.ncs'):
+    '''Turn neuralynx events file to a simple dataframe.
+
+    Parameters
+    ----------
+    path : str | pathlib.Path
+        Path to the folder containing neuralynx files.
+    events_file : str
+        Name of the file containing events. ``'Events.nev'`` by default.
+    format : "dataframe" | "mne"
+        How to format the events:
+        * ``"dataframe"`` - dataframe in BIDS events format
+        * ``"mne"`` - array in mne-python format
+        defaults to ``"dataframe"``.
+    first_timestamp_from : str
+        Name of the file to take first timestamp from. ``'CSC130.ncs'`` by
+        default. Not used when ``False`` or ``format`` is ``"mne"``.
+
+    Returns
+    -------
+    events : pandas.DataFrame | numpy.ndarray
+        If ``format ="dataframe"``: dataframe containing event times (wrt the
+        recording start), trigger values and timestamps. If ``format="mne"``:
+        n_events by 3 array in mne-python format (first column - timestamps,
+        last columns - trigger values).
+    '''
     import neuralynx_io as ni
 
-    if op.isdir(path):
-        fname = 'Events.nev'
-        path = op.join(path, fname)
+    events_path = op.join(path, events_file)
+    nev = ni.neuralynx_io.load_nev(events_path)
 
-    nev = ni.neuralynx_io.load_nev(path)
+    # take all trigger timestamps
     event_timestamps = nev['events']['TimeStamp'].astype('int64')
-    triggers = nev['events']['ttl']
-
-    if not read_zeros:
-        nonzero = triggers > 0
-        triggers = triggers[nonzero]
-        event_timestamps = event_timestamps[nonzero]
-
-    # construct mne-like events array
     n_events = event_timestamps.shape[0]
-    events = np.zeros((n_events, 3), dtype='int64')
-    events[:, 0] = event_timestamps
-    events[:, -1] = triggers
+
+    # take only non-zero event triggers
+    ttls = nev['events']['ttl']
+    nonzero = ttls > 0
+    event_timestamps = event_timestamps[nonzero]
+    ttls = ttls[nonzero]
+
+    if format == 'dataframe':
+        # take first timestamp of the recording from one of the files
+        if first_timestamp_from:
+            ncs_path = op.join(fpath, first_timestamp_from)
+            ncs = ni.neuralynx_io.load_ncs(ncs_path)
+            first_sample = ncs['time'][0].astype('int64')
+            del ncs
+
+        # prepare dataframe
+        columns = ['start', 'duration', 'type', 'trigger', 'timestamp']
+        if first_timestamp_from:
+            columns.pop(2)
+
+        indices = np.arange(0, n_events + (1 if first_timestamp_from else 0))
+        events = pd.DataFrame(columns=columns, index=indices)
+
+        # first row is a special case - info about first timestamp
+        # of the recording
+        if first_timestamp_from:
+            events.loc[0, 'start'] = 0.
+            events.loc[0, 'duration'] = 'n/a'
+            events.loc[0, 'type'] = 'start'
+            events.loc[0, 'trigger'] = -1
+            events.loc[0, 'timestamp'] = first_sample
+            start, end = 1, n_events
+        else:
+            start,end = 0, n_events - 1
+
+        # the rest is just copying data to the dataframe
+        starts = (event_timestamps - first_sample) / 1e6
+        events.loc[start:end, 'start'] = starts
+        events.loc[start:end, 'duration'] = 'n/a'
+        events.loc[start:end, 'trigger'] = ttls
+        events.loc[start:end, 'timestamp'] = event_timestamps
+
+        if first_timestamp_from:
+            events.loc[start:end, 'type'] = 'trigger'
+
+        events= events.infer_objects()
+    elif format == 'mne':
+        events = np.zeros((n_events, 3), dtype='int')
+        events[:, 0] = event_timestamps
+        events[:, -1] = ttls
+    else:
+        raise ValueError(f'Unknown format "{format}".')
 
     return events
 
