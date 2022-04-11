@@ -72,6 +72,7 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
     frate = np.stack(frate, axis=0)
     frate = _turn_spike_rate_to_xarray(times, frate, spk,
                                         cell_names=cell_names)
+    return frate
 
 
 def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
