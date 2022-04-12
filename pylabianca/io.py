@@ -449,10 +449,10 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
     event_timestamps = nev['events']['TimeStamp'].astype('int64')
 
     # take only non-zero event triggers
-    ttls = nev['events']['ttl']
-    nonzero = ttls > 0
+    triggers = nev['events']['ttl']
+    nonzero = triggers > 0
     event_timestamps = event_timestamps[nonzero]
-    ttls = ttls[nonzero]
+    triggers = triggers[nonzero]
 
     n_events = event_timestamps.shape[0]
     if format == 'dataframe':
@@ -487,7 +487,7 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
         starts = (event_timestamps - first_sample) / 1e6
         events.loc[start:end, 'start'] = starts
         events.loc[start:end, 'duration'] = 'n/a'
-        events.loc[start:end, 'trigger'] = ttls
+        events.loc[start:end, 'trigger'] = triggers
         events.loc[start:end, 'timestamp'] = event_timestamps
 
         if first_timestamp_from:
@@ -497,7 +497,7 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
     elif format == 'mne':
         events = np.zeros((n_events, 3), dtype='int64')
         events[:, 0] = event_timestamps
-        events[:, -1] = ttls
+        events[:, -1] = triggers
     else:
         raise ValueError(f'Unknown format "{format}".')
 
