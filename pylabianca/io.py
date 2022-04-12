@@ -495,7 +495,7 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
 
         events= events.infer_objects()
     elif format == 'mne':
-        events = np.zeros((n_events, 3), dtype='int')
+        events = np.zeros((n_events, 3), dtype='int64')
         events[:, 0] = event_timestamps
         events[:, -1] = ttls
     else:
