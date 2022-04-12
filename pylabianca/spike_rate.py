@@ -171,7 +171,8 @@ def depth_of_selectivity(frate, by):
     return selectivity, avg_by_probe
 
 
-def compute_selectivity_windows(spk, windows=None, compare='image'):
+def compute_selectivity_windows(spk, windows=None, compare='image',
+                                baseline=None, progress=True):
     '''
     Compute selectivity for each cell in specific time windows.
 
@@ -194,6 +195,7 @@ def compute_selectivity_windows(spk, windows=None, compare='image'):
     '''
     import pandas as pd
     from scipy.stats import kruskal
+    from sarna.utils import progressbar
 
     if windows is None:
         windows = {'early': (0.1, 0.6), 'late': (0.6, 1.1)}
@@ -203,13 +205,22 @@ def compute_selectivity_windows(spk, windows=None, compare='image'):
     if not has_region:
         columns.pop(1)
 
+    level_labels = np.unique(spk.metadata[compare])
+    n_levels = len(level_labels)
+    level_cols = [f'FR_{compare}{lb}' for lb in level_labels]
+    level_cols_norm = (list() if baseline is None else
+                       [f'nFR_{compare}{lb}' for lb in level_labels])
+    columns += level_cols + level_cols_norm
+
     frate, df = dict(), dict()
     for name, limits in windows.items():
         frate[name] = spk.spike_rate(tmin=limits[0], tmax=limits[1],
                                      step=False)
-        df['early'] = pd.DataFrame(columns=columns)
+        df[name] = pd.DataFrame(columns=columns)
 
     n_cells = len(spk)
+    n_windows = len(windows.keys())
+    pbar = progressbar(progress, total=n_cells * n_windows)
     for cell_idx in range(n_cells):
         if has_region:
             brain_region = spk.cellinfo.loc[cell_idx, 'region']
@@ -245,7 +256,25 @@ def compute_selectivity_windows(spk, windows=None, compare='image'):
                 txt = ''
             df[window].loc[cell_idx, 'preferred_second'] = txt
 
+            # save firing rate
+            if baseline is not None:
+                base_fr = baseline[cell_idx].mean(dim='trial').item()
+                if base_fr == 0:
+                    base_fr = avg[avg > 0].min().item()
+
+            for idx in range(n_levels):
+                fr = avg[idx].item()
+                level = avg.coords[compare][idx].item()
+                df[window].loc[cell_idx, f'FR_{compare}{level}'] = fr
+
+                if baseline is not None:
+                    nfr = fr / base_fr
+                    df[window].loc[cell_idx, f'nFR_{compare}{level}'] = nfr
+
+            pbar.update(1)
+
     for window in windows.keys():
         df[window] = df[window].infer_objects()
+        df[window].loc[:, 'preferred'] = df[window]['preferred'].astype('int')
 
-    return df
+    return df, frate
