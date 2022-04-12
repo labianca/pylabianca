@@ -447,7 +447,6 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
 
     # take all trigger timestamps
     event_timestamps = nev['events']['TimeStamp'].astype('int64')
-    n_events = event_timestamps.shape[0]
 
     # take only non-zero event triggers
     ttls = nev['events']['ttl']
@@ -455,6 +454,7 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
     event_timestamps = event_timestamps[nonzero]
     ttls = ttls[nonzero]
 
+    n_events = event_timestamps.shape[0]
     if format == 'dataframe':
         # take first timestamp of the recording from one of the files
         if first_timestamp_from:
