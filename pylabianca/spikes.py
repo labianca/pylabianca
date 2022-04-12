@@ -487,6 +487,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 
 
 # TODO: change to use sarna.cluster.permutation_cluster_test_array !
+# TODO: move out to spike_rate or stats...
 def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
                        paired=False, verbose=True):
     '''Perform cluster-based tests on firing rate data.
@@ -684,6 +685,10 @@ class Spikes(object):
         '''Return a deep copy of the object.'''
         from copy import deepcopy
         return deepcopy(self)
+
+    def __len__(self):
+        '''Return the number of neurons in SpikeEpochs.'''
+        return len(self.timestamps)
 
     # TODO: refactor out common parts with SpikeEpochs.pick_cells
     def pick_cells(self, picks=None, query=None):
