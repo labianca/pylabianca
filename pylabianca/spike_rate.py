@@ -169,3 +169,83 @@ def depth_of_selectivity(frate, by):
     numerator = n_categories - (avg_by_probe / r_max).sum(by)
     selectivity = numerator / (n_categories - 1)
     return selectivity, avg_by_probe
+
+
+def compute_selectivity_windows(spk, windows=None, compare='image'):
+    '''
+    Compute selectivity for each cell in specific time windows.
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        Spike epochs object.
+    windows : dict of tuples
+        Dictionary with keys being the names of the windows and values being
+        ``(start, end)`` tuples of window time limits in seconds.
+    compare : str
+        Metadata category to compare. Defaults to ``'image'``.
+
+    Returns
+    -------
+    selectivity : dict of pandas.DataFrame
+        Dictionary of dataframes with selectivity for each cell. Each
+        dictionary key and each dataframe corresponds to a time window of given
+        name.
+    '''
+    import pandas as pd
+    from scipy.stats import kruskal
+
+    if windows is None:
+        windows = {'early': (0.1, 0.6), 'late': (0.6, 1.1)}
+
+    columns = ['neuron', 'region', 'kruskal_stat', 'kruskal_pvalue', 'DoS']
+    has_region = 'region' in spk.cellinfo
+    if not has_region:
+        columns.pop(1)
+
+    frate, df = dict(), dict()
+    for name, limits in windows.items():
+        frate[name] = spk.spike_rate(tmin=limits[0], tmax=limits[1],
+                                     step=False)
+        df['early'] = pd.DataFrame(columns=columns)
+
+    n_cells = len(spk)
+    for cell_idx in range(n_cells):
+        if has_region:
+            brain_region = spk.cellinfo.loc[cell_idx, 'region']
+        for window in windows.keys():
+
+            if has_region:
+                df[window].loc[cell_idx, 'region'] = brain_region
+            df[window].loc[cell_idx, 'neuron'] = spk.cell_names[cell_idx]
+
+            if not (frate[window][cell_idx].values > 0).any():
+                stat, pvalue = np.nan, 1.
+            else:
+                data = [arr.values for label, arr in
+                        frate[window][cell_idx].groupby(compare)]
+                stat, pvalue = kruskal(*data)
+
+            df[window].loc[cell_idx, 'kruskal_stat'] = stat
+            df[window].loc[cell_idx, 'kruskal_pvalue'] = pvalue
+
+            # compute DoS
+            dos, avg = depth_of_selectivity(frate[window][cell_idx],
+                                            by=compare)
+            preferred = int(avg.argmax(dim=compare).item())
+            df[window].loc[cell_idx, 'DoS'] = dos.item()
+            df[window].loc[cell_idx, 'preferred'] = preferred
+
+            # other preferred?
+            perc_of_max = avg / avg[preferred]
+            other_pref = ((perc_of_max < 1.) & (perc_of_max >= 0.75))
+            if other_pref.any().item():
+                txt = ','.join([str(x) for x in np.where(other_pref)[0]])
+            else:
+                txt = ''
+            df[window].loc[cell_idx, 'preferred_second'] = txt
+
+    for window in windows.keys():
+        df[window] = df[window].infer_objects()
+
+    return df
