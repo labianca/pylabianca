@@ -458,7 +458,7 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
     if format == 'dataframe':
         # take first timestamp of the recording from one of the files
         if first_timestamp_from:
-            ncs_path = op.join(fpath, first_timestamp_from)
+            ncs_path = op.join(path, first_timestamp_from)
             ncs = ni.neuralynx_io.load_ncs(ncs_path)
             first_sample = ncs['time'][0].astype('int64')
             del ncs

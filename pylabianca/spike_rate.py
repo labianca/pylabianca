@@ -260,7 +260,10 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
             if baseline is not None:
                 base_fr = baseline[cell_idx].mean(dim='trial').item()
                 if base_fr == 0:
-                    base_fr = avg[avg > 0].min().item()
+                    if (avg > 0).any().item():
+                        base_fr = avg[avg > 0].min().item()
+                    else:
+                        base_fr = 1.
 
             for idx in range(n_levels):
                 fr = avg[idx].item()
