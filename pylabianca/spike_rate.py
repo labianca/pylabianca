@@ -184,7 +184,13 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
         Dictionary with keys being the names of the windows and values being
         ``(start, end)`` tuples of window time limits in seconds.
     compare : str
-        Metadata category to compare. Defaults to ``'image'``.
+        Metadata category to compare. Defaults to ``'image'``. If ``None``,
+        the average firing rate is compared to the baseline.
+    baseline : None | xarray.DataArray
+        Baseline firing rate to compare to.
+    progress : bool | str
+        Whether to show a progress bar. If string, it can be ``'text'`` for
+        text progress bar or ``'notebook'`` for a notebook progress bar.
 
     Returns
     -------
@@ -205,12 +211,15 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     if not has_region:
         columns.pop(1)
 
-    level_labels = np.unique(spk.metadata[compare])
-    n_levels = len(level_labels)
-    level_cols = [f'FR_{compare}{lb}' for lb in level_labels]
-    level_cols_norm = (list() if baseline is None else
-                       [f'nFR_{compare}{lb}' for lb in level_labels])
-    columns += level_cols + level_cols_norm
+    if compare is not None:
+        level_labels = np.unique(spk.metadata[compare])
+        n_levels = len(level_labels)
+        level_cols = [f'FR_{compare}{lb}' for lb in level_labels]
+        level_cols_norm = (list() if baseline is None else
+                        [f'nFR_{compare}{lb}' for lb in level_labels])
+        columns += level_cols + level_cols_norm
+    else:
+        columns += ['FR_baseline', 'FR_condition', 'nFR_condition']
 
     frate, df = dict(), dict()
     for name, limits in windows.items():
@@ -224,60 +233,72 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     for cell_idx in range(n_cells):
         if has_region:
             brain_region = spk.cellinfo.loc[cell_idx, 'region']
-        for window in windows.keys():
 
+        for window in windows.keys():
             if has_region:
                 df[window].loc[cell_idx, 'region'] = brain_region
             df[window].loc[cell_idx, 'neuron'] = spk.cell_names[cell_idx]
 
             if not (frate[window][cell_idx].values > 0).any():
                 stat, pvalue = np.nan, 1.
-            else:
+            elif compare is not None:
                 data = [arr.values for label, arr in
                         frate[window][cell_idx].groupby(compare)]
+                stat, pvalue = kruskal(*data)
+            elif compare is None and baseline is not None:
+                data = [frate[window][cell_idx].values,
+                        baseline[cell_idx].values]
                 stat, pvalue = kruskal(*data)
 
             df[window].loc[cell_idx, 'kruskal_stat'] = stat
             df[window].loc[cell_idx, 'kruskal_pvalue'] = pvalue
 
             # compute DoS
-            dos, avg = depth_of_selectivity(frate[window][cell_idx],
-                                            by=compare)
-            preferred = int(avg.argmax(dim=compare).item())
-            df[window].loc[cell_idx, 'DoS'] = dos.item()
-            df[window].loc[cell_idx, 'preferred'] = preferred
+            if compare is not None:
+                dos, avg = depth_of_selectivity(frate[window][cell_idx],
+                                                by=compare)
+                preferred = int(avg.argmax(dim=compare).item())
+                df[window].loc[cell_idx, 'DoS'] = dos.item()
+                df[window].loc[cell_idx, 'preferred'] = preferred
 
-            # other preferred?
-            perc_of_max = avg / avg[preferred]
-            other_pref = ((perc_of_max < 1.) & (perc_of_max >= 0.75))
-            if other_pref.any().item():
-                txt = ','.join([str(x) for x in np.where(other_pref)[0]])
-            else:
-                txt = ''
-            df[window].loc[cell_idx, 'preferred_second'] = txt
+                # other preferred?
+                perc_of_max = avg / avg[preferred]
+                other_pref = ((perc_of_max < 1.) & (perc_of_max >= 0.75))
+                if other_pref.any().item():
+                    txt = ','.join([str(x) for x in np.where(other_pref)[0]])
+                else:
+                    txt = ''
+                df[window].loc[cell_idx, 'preferred_second'] = txt
 
             # save firing rate
             if baseline is not None:
                 base_fr = baseline[cell_idx].mean(dim='trial').item()
                 if base_fr == 0:
-                    if (avg > 0).any().item():
+                    if compare is not None and (avg > 0).any().item():
                         base_fr = avg[avg > 0].min().item()
                     else:
                         base_fr = 1.
 
-            for idx in range(n_levels):
-                fr = avg[idx].item()
-                level = avg.coords[compare][idx].item()
-                df[window].loc[cell_idx, f'FR_{compare}{level}'] = fr
+            if compare is not None:
+                for idx in range(n_levels):
+                    fr = avg[idx].item()
+                    level = avg.coords[compare][idx].item()
+                    df[window].loc[cell_idx, f'FR_{compare}{level}'] = fr
 
-                if baseline is not None:
-                    nfr = fr / base_fr
-                    df[window].loc[cell_idx, f'nFR_{compare}{level}'] = nfr
-
+                    if baseline is not None:
+                        nfr = fr / base_fr
+                        df[window].loc[cell_idx, f'nFR_{compare}{level}'] = nfr
+            else:
+                average_fr = frate[window][cell_idx].mean(dim='trial').item()
+                df[window].loc[cell_idx, 'FR_baseline'] = base_fr
+                df[window].loc[cell_idx, 'FR_condition'] = average_fr
+                df[window].loc[cell_idx, 'nFR_condition'] = average_fr / base_fr
             pbar.update(1)
 
     for window in windows.keys():
         df[window] = df[window].infer_objects()
-        df[window].loc[:, 'preferred'] = df[window]['preferred'].astype('int')
+        if compare is not None:
+            df[window].loc[:, 'preferred'] = (
+                df[window]['preferred'].astype('int'))
 
     return df, frate
