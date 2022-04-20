@@ -367,6 +367,8 @@ def read_osort(path, waveform=True):
 
     files = [f for f in os.listdir(path)
              if f.endswith('.mat') and 'mm_format' in f]
+    files.sort()
+
     cluster_id, alignment, threshold, channel = [list() for _ in range(4)]
 
     timestamp = list()
