@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 def _deal_with_picks(spk, picks):
@@ -6,11 +7,13 @@ def _deal_with_picks(spk, picks):
     if picks is None:
         # pick all cells by default
         picks = np.arange(len(spk.cell_names))
-    if isinstance(picks, (list, np.ndarray)):
+    if isinstance(picks, (list, np.ndarray, pd.Series)):
         if isinstance(picks[0], str):
             is_str = [isinstance(x, str) for x in picks[1:]]
             has_str = all(is_str) or len(picks) == 1
-    if not isinstance(picks, (list, np.ndarray)):
+        elif isinstance(picks, pd.Series):
+            picks = picks.values
+    if not isinstance(picks, (list, np.ndarray, pd.Series)):
         if isinstance(picks, str):
             has_str = True
         picks = [picks]
