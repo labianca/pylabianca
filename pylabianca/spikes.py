@@ -487,9 +487,11 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 
 
 # TODO: change to use sarna.cluster.permutation_cluster_test_array !
+# TODO: auto-infer paired from xarray
 # TODO: move out to spike_rate or stats...
-def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
-                       paired=False, verbose=True):
+def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
+                       paired=False, stat_fun=None, n_permutations=1_000,
+                       n_stat_permutations=0, tail=None, verbose=True):
     '''Perform cluster-based tests on firing rate data.
 
     Performs cluster-based ANOVA on firing rate to test, for example,
@@ -521,49 +523,20 @@ def cluster_based_test(frate, compare='probe', cluster_entry_pval=0.05,
     pval : numpy.ndarray
         List of p values from anova.
     '''
-    import warnings
-    from scipy.stats.distributions import f
-    from mne.stats import permutation_cluster_test
+    from sarna.cluster import permutation_cluster_test_array
 
-    if paired:
-        from mne.stats import f_mway_rm
-
-        def stat_fun(*args):
-            data = np.stack(args, axis=1)
-            n_factors = data.shape[1]
-            fval, _ = f_mway_rm(data, factor_levels=[n_factors],
-                                return_pvals=False)
-            return fval
-    else:
-        from scipy.stats import f_oneway
-        def stat_fun(*args):
-            fval, _ = f_oneway(*args)
-            return fval
-
-    # calculate F anova threshold
-    obs_dim = frate.dims[0]
-    if paired:
-        n_categories = len(np.unique(frate.coords[compare]))
-        n_trials = len(frate.coords[obs_dim])
-    else:
-        categories, counts = np.unique(
-            frate.coords[compare], return_counts=True)
-        n_categories, n_trials = len(categories), counts.sum()
-
-    p_thresh = cluster_entry_pval
-    dfn = n_categories - 1
-    dfd = n_trials - n_categories
-    threshold = f.ppf(1. - p_thresh, dfn, dfd)
-
-    # split data into probe groups
+    # TODO: check if theres is a condition dimension (if so -> paired)
     arrays = [arr.values for _, arr in frate.groupby(compare)]
 
-    # compute ANOVA cluster-based analysis
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        stat, clusters, pval, _ = permutation_cluster_test(
-            arrays, threshold=threshold, n_permutations=1000,
-            stat_fun=stat_fun, out_type='mask', verbose=verbose)
+    if tail is None:
+        n_groups = len(arrays)
+        tail = 'both' if n_groups == 2 else 'pos'
+
+    stat, clusters, pval = permutation_cluster_test_array(
+        arrays, adjacency=None, stat_fun=stat_fun, threshold=None,
+        p_threshold=cluster_entry_pval, paired=paired, tail=tail,
+        n_permutations=n_permutations, n_stat_permutations=n_stat_permutations,
+        progress=True)
 
     return stat, clusters, pval
 
