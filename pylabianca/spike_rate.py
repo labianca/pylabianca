@@ -408,6 +408,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
                     df_cluster.loc[df_idx, 'neuron'] = cell_name
                     df_cluster.loc[df_idx, 'region'] = np.nan
                     df_cluster.loc[df_idx, 'region_short'] = np.nan
+                    df_cluster.loc[df_idx, 'cluster'] = ord_idx + 1
                     df_cluster.loc[df_idx, 'pval'] = this_pval
                     df_cluster.loc[df_idx, 'window'] = twin_str
                     df_cluster.loc[df_idx, 'in_toi'] = in_toi
