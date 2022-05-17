@@ -3,6 +3,7 @@ import pandas as pd
 
 
 def _deal_with_picks(spk, picks):
+    '''Deal with various formats in which ``picks`` can be passed.'''
     has_str = False
     if picks is None:
         # pick all cells by default
@@ -51,10 +52,11 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         Names of the picked cells. If not ``None`` then indicates that the
         first dimension of ``frate`` contains cells.
     tri : np.ndarray | None
-        Array of trial indices. Use when the repetitions dimension is not
-        equivalent to trials, but spikes within trials (spike-centered
-        windows). Passing this argument allows to copy the trial metadata
-        correctly.
+        Array of trial indices. Use when the repetitions dimension of ``frate``
+        array is not equivalent to trials, but at least some repetitions come
+        from the same trial (for example - spikes within trials when using
+        spike-centered windows). Passing ``tri`` allows to copy the trial
+        metadata correctly.
 
     Returns
     -------
