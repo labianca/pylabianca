@@ -91,6 +91,11 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         else:
             coords[col] = (dimname, spike_epochs.metadata[col].iloc[tri])
 
+    if cell_names is not None and spike_epochs.cellinfo is not None:
+        ch_idx = _deal_with_picks(spike_epochs, cell_names)
+        for col in spike_epochs.cellinfo.columns:
+            coords[col] = ('cell', spike_epochs.cellinfo[col].iloc[ch_idx])
+
     firing = xr.DataArray(frate, dims=dims, coords=coords,
                           name='firing rate', attrs=attrs)
     return firing
