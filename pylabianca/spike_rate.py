@@ -429,7 +429,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
 
                 # find preferred categories
                 perc_pref = prefferred / prefferred.max()
-                pref_idx = np.where(perc_pref > 0.75)[0]
+                pref_idx = np.where(perc_pref >= 0.75)[0]
                 perc_pref_sel = perc_pref.values[pref_idx].argsort()[::-1]
 
                 # check if cluster time window can be deemed as selective
