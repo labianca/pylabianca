@@ -159,8 +159,14 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
 
 
 # TODO: clean up zasady comments
+# TODO: clean up a bit, many indexing levels make it a bit confusing to read
+#       and modify
 # TODO: some time, maybe add more control (kwargs)
-def drop_duplicated_units(spk, similarity, return_clusters=False):
+# TODO: allow to drop one from pair when different channels, different
+#       alignments, high waveform similarity (?) - in case of ground ref this
+#       may happen...
+def drop_duplicated_units(spk, similarity, return_clusters=False,
+                          verbose=False):
     # %% zasady
     # podobieństwo 1.0, ta sama elektroda -> duplikat, usuwamy dowolny
     #
@@ -200,16 +206,24 @@ def drop_duplicated_units(spk, similarity, return_clusters=False):
         simil_part = similarity[idxs[:, None], idxs[None, :]]
 
         # 1. remove duplicates (any similarity == 1.)
+        msg = 'Removed {}-{} pair - identical units.'
         if (simil_part == 1).any():
             s1, s2 = np.where(simil_part == 1.)
             for ix in range(len(s1)):
                 identical = min([s1[ix], s2[ix]])
                 drop[idxs[identical]] = True
 
+                if verbose:
+                    name1 = spk.cell_names[idxs[s1[ix]]]
+                    name2 = spk.cell_names[idxs[s2[ix]]]
+                    print(msg.format(name1, name2))
+
         # 2. pairs with similarity > 0.5, same channels, different alignment
         info = spk.cellinfo.loc[idxs, :]
-        if (simil_part > 0.5).any():
-            s1, s2 = np.where(simil_part > 0.5)
+        if (simil_part > 0.3).any():
+            msg = ('Removed {}-{} pair - same channel, different alignment, '
+                   'spike coincidence: {:.3f}.')
+            s1, s2 = np.where(simil_part > 0.3)
             for ix in range(len(s1)):
                 ix1, ix2 = s1[ix], s2[ix]
                 same_chan = info.channel.iloc[ix1] == info.channel.iloc[ix2]
@@ -222,8 +236,17 @@ def drop_duplicated_units(spk, similarity, return_clusters=False):
                     drop_idx = [ix1, ix2][rel_idx]
                     drop[idxs[drop_idx]] = True
 
+                    if verbose:
+                        name1 = spk.cell_names[idxs[ix1]]
+                        name2 = spk.cell_names[idxs[ix2]]
+                        this_simil = max([s1_in_s2, s2_in_s1])
+                        print(msg.format(name1, name2, this_simil))
+
         # 2. pairs with similarity > 0.3, different channels,
         #    very similar waveforms
+
+        msg = ('Removed {}-{} pair - different channel, very similar waveform, '
+                'spike coincidence: {:.3f}, max waveform xcorr: {:.3f}.')
         s1, s2 = np.where(simil_part > 0.3)
         avg_wave = [spk.waveform[idx].mean(axis=0) for idx in idxs]
         for ix in range(len(s1)):
@@ -249,6 +272,12 @@ def drop_duplicated_units(spk, similarity, return_clusters=False):
                 if corr_maxabs > 0.9:
                     drop[idxs[drop_idx]] = True
 
+                    if verbose:
+                        name1 = spk.cell_names[idxs[ix1]]
+                        name2 = spk.cell_names[idxs[ix2]]
+                        this_simil = max([s1_in_s2, s2_in_s1])
+                        print(msg.format(name1, name2, this_simil, corr_maxabs))
+
     if not return_clusters:
         return drop
     else:
@@ -256,8 +285,10 @@ def drop_duplicated_units(spk, similarity, return_clusters=False):
 
 
 # TODO: clean up
-def plot_high_similarity_cluster(similarity, clusters, suspicious_idx,
+def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
                                  cluster_idx=0):
+    import matplotlib.pyplot as plt
+
     idxs = suspicious_idx[clusters[cluster_idx]]
 
     n_cells = len(idxs)
