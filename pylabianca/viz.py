@@ -80,6 +80,7 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
 
 
 # TODO: move to sarna sometime
+# TODO: make sure the pbar is cleared ... (tqdm._instances.clear() may help)
 def check_modify_progressbar(pbar, total=None):
     '''Reset ``pbar`` and change its total if it is a tqdm progressbar.
     Otherwise create new progressbar.
@@ -182,3 +183,34 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None):
               aspect='auto')
     ax.set_xlabel('Time (ms)', fontsize=14)
     ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
+
+
+# TODO: add order=False for groupby?
+def plot_raster(spk, picks=0, groupby=None):
+    '''Add docstring!'''
+
+    spk_cell = spk.copy().pick_cells(picks=picks)
+
+    tri_spikes = list()
+    colors = list()
+
+    if groupby is not None:
+        values = np.unique(spk_cell.metadata.loc[:, groupby])
+    else:
+        values = [None]
+
+    for idx, value in enumerate(values):
+        img_color = f'C{idx}'
+        if groupby is not None:
+            trials = spk_img.metadata.query(f'{groupby} == {value}').index.values
+        else:
+            trials = spk_img.metadata.index.values
+
+        for trial in trials:
+            msk = spk_cell.trial[0] == trial
+            tri_spikes.append(spk_cell.time[0][msk])
+            colors.append(img_color)
+
+    plt.eventplot(tri_spikes, colors=colors)
+    n_trials = len(tri_spikes)
+    plt.ylim(-1, n_trials)
