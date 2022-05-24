@@ -123,6 +123,7 @@ def check_modify_progressbar(pbar, total=None):
 # TODO:
 # - [ ] kind='line' ?
 # - [ ] datashader backend
+# - [ ] allow to plot multiple average waveforms as lines
 def plot_waveform(spk, pick=0, upsample=False, ax=None):
     '''Plot waveform heatmap for one cell.
 
@@ -138,6 +139,11 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None):
         be a value to specify the upsampling factor.
     ax : matplotlib.Axes | None
         Axis to plot to. By default opens a new figure.
+
+    Returns
+    -------
+    ax : matplotlib.Axes
+        Axis with the waveform plot.
     '''
     n_spikes, n_samples = spk.waveform[pick].shape
     waveform = spk.waveform[pick]
@@ -176,13 +182,14 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None):
     alpha_sum[alpha_sum > 1] = 1
 
     if ax is None:
-        fig, ax = plt.subplots()
+        _, ax = plt.subplots()
 
     ax.imshow(hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
               extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
               aspect='auto')
     ax.set_xlabel('Time (ms)', fontsize=14)
     ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
+    return ax
 
 
 # TODO: add order=False for groupby?
