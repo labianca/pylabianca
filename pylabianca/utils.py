@@ -87,11 +87,12 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     if tri is not None:
         coords['trial'] = (dimname, tri)
 
-    for col in spike_epochs.metadata.columns:
-        if tri is None:
-            coords[col] = (dimname, spike_epochs.metadata[col])
-        else:
-            coords[col] = (dimname, spike_epochs.metadata[col].iloc[tri])
+    if spike_epochs.metadata is not None:
+        for col in spike_epochs.metadata.columns:
+            if tri is None:
+                coords[col] = (dimname, spike_epochs.metadata[col])
+            else:
+                coords[col] = (dimname, spike_epochs.metadata[col].iloc[tri])
 
     if copy_cellinfo:
         if cell_names is not None and spike_epochs.cellinfo is not None:
