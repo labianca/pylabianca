@@ -242,4 +242,94 @@ def plot_raster(spk, pick=0, groupby=None, ax=None):
 
     # set y limits
     n_trials = len(tri_spikes)
-    plt.ylim(-1, n_trials)
+    ax.set_ylim(-1, n_trials)
+
+    # set x limits
+    xlim = spk.time_limits + np.array([-0.05, 0.05])
+    ax.set_xlim(xlim)
+
+    return ax
+
+
+def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
+                min_pval=0.001):
+    '''PLot average spike rate and spike raster.'''
+    # select cell from frate
+    if isinstance(pick, str):
+        cell_name = pick
+        this_frate = frate.sel(cell=cell_name)
+    else:
+        this_frate = frate.isel(cell=pick)
+        cell_name = this_frate.coords['cell'].item()
+
+    # plot
+    gridspec_kw = {'bottom': 0.15, 'left': 0.15}
+    fig, ax = plt.subplots(nrows=2, gridspec_kw=gridspec_kw)
+    plot_spike_rate(this_frate, groupby=groupby, ax=ax[0])
+
+    # add highlight
+    if df_clst is not None:
+        this_clst = df_clst.query(f'neuron == "{cell_name}"')
+        pvals = this_clst.pval.values
+        masks = [_create_mask_from_window_str(twin, this_frate)
+                 for twin in this_clst.window.values]
+        add_highlights(this_frate, masks, pvals, ax=ax[0],
+                       min_pval=min_pval)
+
+    plot_raster(spk.copy().pick_cells(cell_name), pick=0,
+                groupby=groupby, ax=ax[1])
+    ylim = ax[1].get_xlim()
+    ax[0].set_xlim(ylim)
+
+    ax[0].set_xlabel('')
+    ax[0].set_ylabel('Spike rate (Hz)', fontsize=12)
+    ax[1].set_xlabel('Time (s)', fontsize=12)
+    ax[1].set_ylabel('Trials', fontsize=12)
+
+    return fig
+
+
+def _create_mask_from_window_str(window, frate):
+    twin = [float(x) for x in window.split(' - ')]
+    mask = (frate.time.values >= twin[0]) & (frate.time.values <= twin[1])
+    return mask
+
+
+def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
+                   min_pval=0.001):
+    '''FIXME: add docstring.'''
+    import sarna
+
+    if ax is None:
+        ax = plt.gca()
+
+    if pvals is None:
+        return
+    pvals_significant = pvals < p_threshold
+    last_dim = arr.dims[-1]
+
+    if pvals_significant.any():
+        import borsar
+
+        ylm = ax.get_ylim()
+        y_rng = np.diff(ylm)[0]
+        text_y = ylm[1] - 0.01 * y_rng
+        ax.set_ylim([ylm[0], ylm[1] + 0.1 * y_rng])
+
+        sig_idx = np.where(pvals_significant)[0]
+        x_coords = arr.coords[last_dim].values
+
+        sig_clusters = [clusters[ix] for ix in sig_idx]
+        sarna.viz.highlight(x_coords, sig_clusters,
+                            bottom_bar=True, axis=ax)
+
+        for ix in sig_idx:
+            this_pval = pvals[ix]
+            text_x = x_coords[clusters[ix]][0]
+
+            if this_pval < min_pval:
+                p_txt = 'p < {:.3f}'.format(min_pval)
+            else:
+                p_txt = borsar.stats.format_pvalue()
+
+            ax.text(text_x, text_y, p_txt)
