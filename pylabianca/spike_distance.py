@@ -167,7 +167,7 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
 #       alignments, high waveform similarity (?) - in case of ground ref this
 #       may happen...
 def drop_duplicated_units(spk, similarity, return_clusters=False,
-                          verbose=False):
+                          verbose=False, same_alignment_threshold=0.4):
     # %% zasady
     # podobieństwo 1.0, ta sama elektroda -> duplikat, usuwamy dowolny
     #
@@ -219,9 +219,9 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
                     name2 = spk.cell_names[idxs[s2[ix]]]
                     print(msg.format(name1, name2))
 
-        # 2. pairs with similarity > 0.5, same channels, different alignment
+        # 2. pairs with similarity >= 0.4, same channels, different alignment
         info = spk.cellinfo.loc[idxs, :]
-        if (simil_part > 0.3).any():
+        if (simil_part >= same_alignment_threshold).any():
             msg = ('Removed {}-{} pair - same channel, different alignment, '
                    'spike coincidence: {:.3f}.')
             s1, s2 = np.where(simil_part > 0.3)
