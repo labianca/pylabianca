@@ -29,7 +29,7 @@ def _deal_with_picks(spk, picks):
 # TODO: consider changing the array dim order to: trials, cells, times
 #       (mne-python-like)
 def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
-                               tri=None):
+                               tri=None, copy_cellinfo=True):
     '''Turn spike rate data to xarray.
 
     Parameters
@@ -57,6 +57,8 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         from the same trial (for example - spikes within trials when using
         spike-centered windows). Passing ``tri`` allows to copy the trial
         metadata correctly.
+    copy_cellinfo : bool
+        Whether to copy ``spike_epochs.cellinfo`` to xarray.
 
     Returns
     -------
@@ -91,10 +93,12 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         else:
             coords[col] = (dimname, spike_epochs.metadata[col].iloc[tri])
 
-    if cell_names is not None and spike_epochs.cellinfo is not None:
-        ch_idx = _deal_with_picks(spike_epochs, cell_names)
-        for col in spike_epochs.cellinfo.columns:
-            coords[col] = ('cell', spike_epochs.cellinfo[col].iloc[ch_idx])
+    if copy_cellinfo:
+        if cell_names is not None and spike_epochs.cellinfo is not None:
+            ch_idx = _deal_with_picks(spike_epochs, cell_names)
+            for col in spike_epochs.cellinfo.columns:
+                coords[col] = (
+                    'cell', spike_epochs.cellinfo[col].iloc[ch_idx])
 
     firing = xr.DataArray(frate, dims=dims, coords=coords,
                           name='firing rate', attrs=attrs)
@@ -151,7 +155,7 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
     lims = [0, len(time)]
     tri_is_ok = np.zeros(len(spk.trial[cell_idx]), dtype='bool')
 
-    n_tri = max(spk.trial[cell_idx])
+    n_tri = max(spk.trial[cell_idx]) + 1
     for tri_idx in range(n_tri):
         sel = spk.trial[cell_idx] == tri_idx
         if sel.any():

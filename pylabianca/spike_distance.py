@@ -83,7 +83,7 @@ def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
     cnt = cnt.transpose((1, 0, 2))
 
     # cut out spike-centered windows
-    windows, tri = spike_centered_windows(
+    windows = spike_centered_windows(
         spk, cell_idx, cnt, tms, sfreq, winlen=winlen)
 
     # correct autocorrelation if present:
@@ -98,7 +98,7 @@ def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
     time = np.arange(win_diff[0], win_diff[1] + 0.01 * t_per_smp,
                      step=t_per_smp)
     cell_names = [spk.cell_names[idx] for idx in picks]
-    xcorr = _turn_spike_rate_to_xarray(time, windows, spk, tri=tri,
+    xcorr = _turn_spike_rate_to_xarray(time, windows, spk, tri=windows.trial,
                                        cell_names=cell_names)
 
     return xcorr
@@ -153,8 +153,9 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
 
     cell_name = '{}-{}'.format(spk.cell_names[cell_idx1],
                                spk.cell_names[cell_idx2])
-    cch = _turn_spike_rate_to_xarray(lags, cch_list[None, :], spk,
-                                     cell_names=[cell_name])
+    cch = _turn_spike_rate_to_xarray(
+        lags, cch_list[None, :], spk, cell_names=[cell_name],
+        copy_cellinfo=False)
     return cch
 
 
