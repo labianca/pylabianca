@@ -711,6 +711,21 @@ class Spikes(object):
         from .viz import plot_waveform
         return plot_waveform(self, pick=pick, upsample=upsample, ax=ax)
 
+    def to_epochs(self, pad_timestamps=10_000):
+        '''Turn Spike object into one epoch SpikeEpochs representation.'''
+        min_stamp = (int(min([min(x) for x in self.timestamps]))
+                     - pad_timestamps)
+        max_stamp = (int(max([max(x) for x in self.timestamps]))
+                     + pad_timestamps)
+        stamp_diff = max_stamp - min_stamp
+        s_len = stamp_diff / self.sfreq
+
+        events_fake = np.array([[min_stamp, 0, 123]])
+        tmin, tmax = 0, s_len
+        spk_epochs = self.epoch(events_fake, event_id=123,
+                                tmin=tmin, tmax=tmax)
+        return spk_epochs
+
 
 def _check_waveforms(times, waveform):
     assert len(times) == len(waveform)
