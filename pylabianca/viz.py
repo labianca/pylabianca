@@ -333,3 +333,32 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                 p_txt = borsar.stats.format_pvalue()
 
             ax.text(text_x, text_y, p_txt)
+
+
+def align_axes_limits(axes=None, ylim=True, xlim=False):
+    '''Align the limits of all ``axes``.'''
+    if axes is None:
+        axes = plt.gcf().get_axes()
+
+    do_lim = dict(x=xlim, y=ylim)
+    limits = dict(x=[np.inf, -np.inf], y=[np.inf, -np.inf])
+    iter = (axes if isinstance(axes, (list, np.ndarray))
+            else axes.values() if isinstance(axes, dict) else None)
+
+    for ax in iter:
+        get_lim = dict(x=ax.get_xlim, y=ax.get_ylim)
+        for lim in ('x', 'y'):
+            if do_lim[lim]:
+                this_lim = get_lim[lim]()
+                if limits[lim][0] > this_lim[0]:
+                    limits[lim][0] = this_lim[0]
+                if limits[lim][1] < this_lim[1]:
+                    limits[lim][1] = this_lim[1]
+
+    iter = (axes if isinstance(axes, (list, np.ndarray))
+            else axes.values() if isinstance(axes, dict) else None)
+    for ax in iter:
+        set_lim = dict(x=ax.set_xlim, y=ax.set_ylim)
+        for lim in ('x', 'y'):
+            if do_lim[lim]:
+                set_lim[lim](limits[lim])
