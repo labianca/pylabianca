@@ -759,9 +759,9 @@ class Spikes(object):
                 (self.timestamps[picks[-1]], stamps))
 
             if self.waveform is not None:
-                wvfrm = self.waveform.pop(idx)
+                waveform = self.waveform.pop(idx)
                 self.waveform[picks[-1]] = np.concatenate(
-                    (self.waveform[picks[-1]], wvfrm))
+                    (self.waveform[picks[-1]], waveform))
 
         # sort spikes and waveforms
         ordering = np.argsort(self.timestamps[picks[-1]])
