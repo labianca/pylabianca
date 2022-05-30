@@ -108,7 +108,7 @@ class SpikeEpochs():
         return len(self.time)
 
     def pick_cells(self, picks=None, query=None):
-        '''Select cells by name or index. Operates inplace.
+        '''Select cells by name or index. Operates in-place.
 
         Parameters
         ----------
@@ -139,7 +139,7 @@ class SpikeEpochs():
         return self
 
     def crop(self, tmin=None, tmax=None):
-        '''Confine time range to specified limit. Operates inplace.
+        '''Confine time range to specified limit. Operates in-place.
 
         Parameters
         ----------
@@ -665,7 +665,7 @@ class Spikes(object):
 
     # TODO: refactor out common parts with SpikeEpochs.pick_cells
     def pick_cells(self, picks=None, query=None):
-        '''Select cells by name or index. Operates inplace.
+        '''Select cells by name or index. Operates in-place.
 
         Parameters
         ----------
