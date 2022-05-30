@@ -726,6 +726,57 @@ class Spikes(object):
                                 tmin=tmin, tmax=tmax)
         return spk_epochs
 
+    def merge(self, picks):
+        '''Merge spikes from multiple cells into one. Operates in-place.
+
+        Parameters
+        ----------
+        picks : list of int
+            Indices of cells to merge.
+
+        Returns
+        -------
+        spk : Spikes
+            Modified Spikes object. The return values is to allow for chaining,
+            as ``spk.merge(picks)`` operates in-place.
+        '''
+
+        picks = _deal_with_picks(self, picks)
+        picks = list(picks)
+        picks.sort()
+        picks = picks[::-1]
+
+        # pop timestamps in reverse order (so that indices are valid) and add
+        # pop also ch_names and waveform if present
+        for idx in picks[:-1]:
+            if isinstance(self.cell_names, list):
+                self.cell_names.pop(idx)
+            else:
+                np.delete(self.cell_names, idx, axis=0)
+
+            stamps = self.timestamps.pop(idx)
+            self.timestamps[picks[-1]] = np.concatenate(
+                (self.timestamps[picks[-1]], stamps))
+
+            if self.waveform is not None:
+                wvfrm = self.waveform.pop(idx)
+                self.waveform[picks[-1]] = np.concatenate(
+                    (self.waveform[picks[-1]], wvfrm))
+
+        # sort spikes and waveforms
+        ordering = np.argsort(self.timestamps[picks[-1]])
+        self.timestamps[picks[-1]] = self.timestamps[picks[-1]][ordering]
+        if self.waveform is not None:
+            self.waveform[picks[-1]] = self.waveform[picks[-1]][ordering]
+
+        if self.cellinfo is not None:
+            # drop all but the lowest index from cellinfo
+            # (agg info in cluster field?)
+            self.cellinfo = self.cellinfo.drop(
+                index=picks[:-1]).reset_index(drop=True)
+
+        return self
+
 
 def _check_waveforms(times, waveform):
     assert len(times) == len(waveform)
