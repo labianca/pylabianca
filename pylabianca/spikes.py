@@ -752,7 +752,7 @@ class Spikes(object):
             if isinstance(self.cell_names, list):
                 self.cell_names.pop(idx)
             else:
-                np.delete(self.cell_names, idx, axis=0)
+                self.cell_names = np.delete(self.cell_names, idx, axis=0)
 
             stamps = self.timestamps.pop(idx)
             self.timestamps[picks[-1]] = np.concatenate(
