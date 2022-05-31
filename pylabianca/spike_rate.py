@@ -313,7 +313,7 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     return df, frate
 
 
-def permutation_test(*arrays, paired=False, n_perm=2000):
+def permutation_test(*arrays, paired=False, n_perm=2000, progress=False):
     import sarna
 
     n_groups = len(arrays)
@@ -323,7 +323,7 @@ def permutation_test(*arrays, paired=False, n_perm=2000):
 
     _, dist = sarna.cluster._compute_threshold_via_permutations(
         arrays, paired=paired, tail=tail, stat_fun=stat_fun,
-        return_distribution=True, n_permutations=n_perm)
+        return_distribution=True, n_permutations=n_perm, progress=progress)
 
     stat = stat_fun(*arrays)
     if stat > 0:
