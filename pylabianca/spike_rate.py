@@ -172,7 +172,8 @@ def depth_of_selectivity(frate, by):
 
 
 def compute_selectivity_windows(spk, windows=None, compare='image',
-                                baseline=None, test='kruskal', progress=True):
+                                baseline=None, test='kruskal', n_perm=2000,
+                                progress=True):
     '''
     Compute selectivity for each cell in specific time windows.
 
@@ -191,6 +192,8 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     test : str
         Test to use for computing selectivity. Can be ``'kruskal'`` or
         ``'permut'``. Defaults to ``'kruskal'``.
+    n_perm : int
+        Number of permutations to use for permutation test.
     progress : bool | str
         Whether to show a progress bar. If string, it can be ``'text'`` for
         text progress bar or ``'notebook'`` for a notebook progress bar.
@@ -207,6 +210,7 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     from sarna.utils import progressbar
 
     use_test = kruskal if test == 'kruskal' else permutation_test
+    test_args = {'n_perm': n_perm} if test == 'permut' else {}
 
     if windows is None:
         windows = {'early': (0.1, 0.6), 'late': (0.6, 1.1)}
@@ -249,11 +253,11 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
             elif compare is not None:
                 data = [arr.values for label, arr in
                         frate[window][cell_idx].groupby(compare)]
-                stat, pvalue = use_test(*data)
+                stat, pvalue = use_test(*data, **test_args)
             elif compare is None and baseline is not None:
                 data = [frate[window][cell_idx].values,
                         baseline[cell_idx].values]
-                stat, pvalue = use_test(*data)
+                stat, pvalue = use_test(*data, **test_args)
 
             df[window].loc[cell_idx, f'{test}_stat'] = stat
             df[window].loc[cell_idx, f'{test}_pvalue'] = pvalue
@@ -309,7 +313,7 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     return df, frate
 
 
-def permutation_test(*arrays, paired=False, n_perm=10_000):
+def permutation_test(*arrays, paired=False, n_perm=2000):
     import sarna
 
     n_groups = len(arrays)
