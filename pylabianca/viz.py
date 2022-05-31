@@ -253,7 +253,29 @@ def plot_raster(spk, pick=0, groupby=None, ax=None):
 
 def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
                 min_pval=0.001):
-    '''PLot average spike rate and spike raster.'''
+    '''PLot average spike rate and spike raster.
+
+    spk : pylabianca.spikes.SpikeEpochs
+        Spike object to use.
+    frate : xarray.DataArray
+        Firing rate xarray in the format returned by ``spk.spike_rate()`` or
+        ``spk.spike_density()``.
+    groupby : str | None
+        How to group the plots. If None, no grouping is done.
+    df_clst : pandas.DataFrame | None
+        DataFrame with cluster time ranges and p values. If None, no cluster
+        information is shown.
+    pick : int | str
+        Name or index of the cell to plot.
+    min_pval : float
+        Minimum p-value of cluster to mark on the plot. Only used if
+        ``df_clst`` is not None.
+
+    Returns
+    -------
+    fig : matplotlib.Figure
+        Figure with the plots.
+    '''
     # select cell from frate
     if isinstance(pick, str):
         cell_name = pick
