@@ -211,7 +211,7 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     if windows is None:
         windows = {'early': (0.1, 0.6), 'late': (0.6, 1.1)}
 
-    columns = ['neuron', 'region', 'kruskal_stat', 'kruskal_pvalue', 'DoS']
+    columns = ['neuron', 'region', f'{test}_stat', f'{test}_pvalue', 'DoS']
     has_region = 'region' in spk.cellinfo
     if not has_region:
         columns.pop(1)
@@ -353,7 +353,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
         ``'trial'`` and ``'time'`` dimensions.
     spk : SpikeEpochs
         Spikes to use when calculating depth of sensitivity in cluster
-        timewindow.
+        time window.
     compare : str
         Dimension labels specified for ``'trial'`` dimension that constitutes
         categories to test selectivity for.
