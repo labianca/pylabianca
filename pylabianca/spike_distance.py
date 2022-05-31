@@ -167,7 +167,8 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
 #       alignments, high waveform similarity (?) - in case of ground ref this
 #       may happen...
 def drop_duplicated_units(spk, similarity, return_clusters=False,
-                          verbose=False, same_alignment_threshold=0.4):
+                          verbose=False, different_alignment_threshold=0.4,
+                          different_channel_threshold=0.4):
     # %% zasady
     # podobieństwo 1.0, ta sama elektroda -> duplikat, usuwamy dowolny
     #
@@ -192,7 +193,8 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
     drop = np.zeros(len(spk.timestamps), dtype='bool')
 
     # cluster by similarity over 0.3 threshold
-    adj = similarity >= 0.3
+    adj = similarity >= min(different_alignment_threshold,
+                            different_channel_threshold)
     suspicious = adj.any(axis=0) | adj.any(axis=1)
     suspicious_idx = np.where(suspicious)[0]
     adj_susp = adj[suspicious_idx[:, None], suspicious_idx[None, :]]
@@ -221,10 +223,10 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
 
         # 2. pairs with similarity >= 0.4, same channels, different alignment
         info = spk.cellinfo.loc[idxs, :]
-        if (simil_part >= same_alignment_threshold).any():
+        if (simil_part >= different_alignment_threshold).any():
             msg = ('Removed {}-{} pair - same channel, different alignment, '
                    'spike coincidence: {:.3f}.')
-            s1, s2 = np.where(simil_part > 0.3)
+            s1, s2 = np.where(simil_part > different_alignment_threshold)
             for ix in range(len(s1)):
                 ix1, ix2 = s1[ix], s2[ix]
                 same_chan = info.channel.iloc[ix1] == info.channel.iloc[ix2]
@@ -248,7 +250,7 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
 
         msg = ('Removed {}-{} pair - different channel, very similar waveform, '
                 'spike coincidence: {:.3f}, max waveform xcorr: {:.3f}.')
-        s1, s2 = np.where(simil_part > 0.3)
+        s1, s2 = np.where(simil_part >= different_channel_threshold)
         avg_wave = [spk.waveform[idx].mean(axis=0) for idx in idxs]
         for ix in range(len(s1)):
             ix1, ix2 = s1[ix], s2[ix]
@@ -270,7 +272,7 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
                 corr = corr / norm
                 corr_maxabs = np.abs(corr).max()
 
-                if corr_maxabs > 0.9:
+                if corr_maxabs > 0.99:
                     drop[idxs[drop_idx]] = True
 
                     if verbose:
