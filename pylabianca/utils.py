@@ -10,8 +10,13 @@ def _deal_with_picks(spk, picks):
         picks = np.arange(len(spk.cell_names))
     if isinstance(picks, (list, np.ndarray, pd.Series)):
         if isinstance(picks[0], str):
+            # list / array of names
             is_str = [isinstance(x, str) for x in picks[1:]]
             has_str = all(is_str) or len(picks) == 1
+        elif all([isinstance(picks[ix], (bool, np.bool_))
+                  for ix in range(len(picks))]):
+            # list / array of booleans
+            picks = np.where(picks)[0]
         elif isinstance(picks, pd.Series):
             picks = picks.values
     if not isinstance(picks, (list, np.ndarray, pd.Series)):
