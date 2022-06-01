@@ -2,8 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+# TODO - ! x_dim='auto' (infers which is the likely x dimension) !
+# TODO - ! also support mask !
+# TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
 # TODO - get y axis from xarray data name (?)
-# TODO - x_dim='auto' (infers which is the likely x dimension)
 # TODO - the info about "one other dimension" (that is reduced) seems to be no
 #        longer accurate
 def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
@@ -38,7 +40,7 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
         if len(frate.coords['cell'] == 1):
             frate = frate.isel(cell=0)
         else:
-            msg = ('Xarray contains more than one cell to plot - this is '
+            msg = ('DataArray contains more than one cell to plot - this is '
                     'not supported.')
             raise RuntimeError(msg)
 
@@ -121,6 +123,7 @@ def check_modify_progressbar(pbar, total=None):
 
 
 # TODO:
+# - [ ] ! fix x axis units !
 # - [ ] kind='line' ?
 # - [ ] datashader backend
 # - [ ] allow to plot multiple average waveforms as lines
