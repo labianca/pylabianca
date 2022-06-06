@@ -8,6 +8,7 @@ def _deal_with_picks(spk, picks):
     if picks is None:
         # pick all cells by default
         picks = np.arange(len(spk.cell_names))
+        return picks
     if isinstance(picks, (list, np.ndarray, pd.Series)):
         if isinstance(picks[0], str):
             # list / array of names
