@@ -313,7 +313,6 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     return df, frate
 
 
-# TODO: better check for paired ANOVA
 # TODO: move to borsar
 def permutation_test(*arrays, paired=False, n_perm=2000, progress=False):
     import sarna
@@ -328,17 +327,19 @@ def permutation_test(*arrays, paired=False, n_perm=2000, progress=False):
         return_distribution=True, n_permutations=n_perm, progress=progress)
 
     stat = stat_fun(*arrays)
-    if tail == 'both':
-        if stat > 0:
-            pval = (dist > stat).mean() * 2
-        elif stat < 0:
-            pval = (dist < stat).mean() * 2
-        else:
-            pval = (dist > stat).mean() * 2
-    elif tail == 'pos':
-        pval = (dist > stat).mean()
-    elif tail == 'neg':
-        pval = (dist < stat).mean()
+    if isinstance(stat, np.ndarray):
+        try:
+            stat = stat[0]
+        except IndexError:
+            stat = stat.item()
+
+    multip = 2 if tail == 'both' else 1
+    if tail == 'pos' or (tail == 'both' and stat > 0):
+        pval = (dist > stat).mean() * multip
+    elif tail == 'neg' or (tail == 'both' and stat < 0):
+        pval = (dist < stat).mean() * multip
+    elif tail == 'both' and stat == 0:
+        pval = (dist > stat).mean() * multip
 
     return stat, min(pval, 1)
 
