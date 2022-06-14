@@ -55,6 +55,15 @@ def np_unique(a, return_counts=False):
         return np_unique_wcounts_impl
 
 
+def numba_compare_times(spk, cell_idx1, cell_idx2):
+    times1 = (spk.timestamps[cell_idx1] / spk.sfreq).astype('float64')
+    times2 = (spk.timestamps[cell_idx2] / spk.sfreq).astype('float64')
+    distances = np.zeros(len(times1), dtype='float64')
+
+    res = _numba_compare_times(times1, times2, distances)
+    return res
+
+
 @numba.jit(nopython=True)
 def _numba_compare_times(times1, times2, distances):
     n_times1 = times1.shape[0]

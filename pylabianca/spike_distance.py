@@ -11,7 +11,7 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
 #       (could also use ``backend`` argument)
 # TODO: multiprocessing could be useful
 # TODO: the implementation and the API are suboptimal
-def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
+def compare_spike_times(spk, cell_idx1, cell_idx2, backend='numba', tol=None):
     '''Test concurrence of spike times for Spikes or SpikeEpochs.
 
     Parameters
@@ -24,19 +24,27 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
     cell_idx2 : int
         Index of the second cell to compare. Spikes of the first cell will
         be tested for concurrence with spikes coming from this cell.
+    backend : str
+        Backend to use for the computation. Currently only 'numba' is
+        supported.
     tol : float
         Concurrence tolerance in seconds. Spikes no further that this will be
-        deemed coocurring.
+        deemed co-occurring. Default is ``None``, which means no concurrence
+        thresholding will be applied and a distance matrix will be returned.
 
     Returns
     -------
-    float
-        Percentage of spikes from first cell that concur with spikes from the
-        second cell.
+    distance: float | array of float
+        If ``tol`` is ``None`` an array of time distances between closest
+        spikes of the two cells is returned. More precisely, for each spike
+        from cell 1 a distance to closest cell 2 spike is given. If ``tol`` is
+        not ``None`` then a percentage of spikes from first cell that concur
+        with spikes from the second cell is given.
     '''
     from .spikes import SpikeEpochs, Spikes
 
     if isinstance(spk, SpikeEpochs):
+        # TODO: rework this
         tri1, tms1 = spk.trial[cell_idx1], spk.time[cell_idx1]
         tri2, tms2 = spk.trial[cell_idx2], spk.time[cell_idx2]
 
@@ -53,11 +61,19 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, tol=0.002):
             if_match[idx] = match
         return if_match.mean()
     elif isinstance(spk, Spikes):
-        tms1 = spk.timestamps[cell_idx1] / spk.sfreq
-        tms2 = spk.timestamps[cell_idx2] / spk.sfreq
-        time_diffs = np.abs(tms1[:, None] - tms2[None, :])
-        closest_time1 = time_diffs.min(axis=1)
-        return (closest_time1 < tol).mean()
+        if backend == 'numba':
+            from ._numba import numba_compare_times
+            distances = numba_compare_times(spk, cell_idx1, cell_idx2)
+            if tol is not None:
+                distances = (distances < tol).mean()
+            return distances
+        else:
+            # TODO: rework this
+            tms1 = spk.timestamps[cell_idx1] / spk.sfreq
+            tms2 = spk.timestamps[cell_idx2] / spk.sfreq
+            time_diffs = np.abs(tms1[:, None] - tms2[None, :])
+            closest_time1 = time_diffs.min(axis=1)
+            return (closest_time1 < tol).mean()
 
 
 def numpy_compare_times(spk, cell_idx1, cell_idx2):
