@@ -305,7 +305,7 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
 
 # TODO: clean up
 def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
-                                 cluster_idx=0):
+                                 cluster_idx=0, drop=None):
     import matplotlib.pyplot as plt
 
     idxs = suspicious_idx[clusters[cluster_idx]]
@@ -313,7 +313,7 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
     n_cells = len(idxs)
     simil_part = similarity[idxs[:, None], idxs[None, :]]
 
-    fig, ax = plt.subplots(nrows=n_cells + 1, ncols=n_cells + 1)
+    _, ax = plt.subplots(nrows=n_cells + 1, ncols=n_cells + 1)
 
     for idx, cell_idx in enumerate(idxs):
         spk.plot_waveform(cell_idx, ax=ax[0, idx + 1])
@@ -322,7 +322,12 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
         info = spk.cellinfo.loc[cell_idx, :]
         n_spikes = len(spk.timestamps[cell_idx])
         title = f'{info.channel}, {info.alignment}\n{n_spikes} spikes'
-        ax[0, idx + 1].set_title(title)
+
+        if drop is None:
+            ax[0, idx + 1].set_title(title)
+        else:
+            color = 'red' if drop[cell_idx] else 'black'
+            ax[0, idx + 1].set_title(title, color=color)
 
     for this_ax in ax.ravel():
         this_ax.set_ylabel('')
@@ -334,6 +339,10 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
     max_val = simil_part.max()
     for row_idx in range(n_cells):
         for col_idx in range(n_cells):
+            if row_idx == col_idx:
+                ax[row_idx + 1, col_idx + 1].axis(False)
+                continue
+
             value = simil_part[row_idx, col_idx]
             val_perc = value / max_val
             txt_col = 'black' if val_perc > 0.5 else 'white'
