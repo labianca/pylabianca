@@ -349,6 +349,7 @@ def permutation_test(*arrays, paired=False, n_perm=2000, progress=False):
     return stat, min(pval, 1)
 
 
+# TODO: add njobs
 # TODO: refactor to separate cluster-based and cell selection
 # TODO: create more progress bars and pass to cluster_based_test
 def cluster_based_selectivity(frate, spk=None, compare='probe',
@@ -412,7 +413,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
         _, clusters, pval = cluster_based_test(
             fr_cell, compare=compare, cluster_entry_pval=cluster_entry_pval,
             paired=False, stat_fun=stat_fun, n_permutations=n_permutations,
-            n_stat_permutations=n_stat_permutations)
+            n_stat_permutations=n_stat_permutations, progress=False)
 
         # process clusters
         # TODO - separate function

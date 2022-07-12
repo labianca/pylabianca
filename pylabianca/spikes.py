@@ -492,7 +492,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 # TODO: move out to spike_rate or stats...
 def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                        paired=False, stat_fun=None, n_permutations=1_000,
-                       n_stat_permutations=0, tail=None, verbose=True):
+                       n_stat_permutations=0, tail=None, progress=True):
     '''Perform cluster-based tests on firing rate data.
 
     Performs cluster-based ANOVA on firing rate to test, for example,
@@ -537,7 +537,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         arrays, adjacency=None, stat_fun=stat_fun, threshold=None,
         p_threshold=cluster_entry_pval, paired=paired, tail=tail,
         n_permutations=n_permutations, n_stat_permutations=n_stat_permutations,
-        progress=True)
+        progress=progress)
 
     return stat, clusters, pval
 
