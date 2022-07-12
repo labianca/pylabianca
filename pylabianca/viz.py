@@ -356,7 +356,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
             if this_pval < min_pval:
                 p_txt = 'p < {:.3f}'.format(min_pval)
             else:
-                p_txt = borsar.stats.format_pvalue()
+                p_txt = borsar.stats.format_pvalue(this_pval)
 
             ax.text(text_x, text_y, p_txt)
 
