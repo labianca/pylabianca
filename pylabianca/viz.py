@@ -127,7 +127,7 @@ def check_modify_progressbar(pbar, total=None):
 # - [ ] kind='line' ?
 # - [ ] datashader backend
 # - [ ] allow to plot multiple average waveforms as lines
-def plot_waveform(spk, pick=0, upsample=False, ax=None):
+def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True):
     '''Plot waveform heatmap for one cell.
 
     Parameters
@@ -190,8 +190,9 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None):
     ax.imshow(hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
               extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
               aspect='auto')
-    ax.set_xlabel('Time (ms)', fontsize=14)
-    ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
+    if labels:
+        ax.set_xlabel('Time (ms)', fontsize=14)
+        ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
     return ax
 
 
