@@ -84,6 +84,22 @@ def numpy_compare_times(spk, cell_idx1, cell_idx2):
     return closest_time1
 
 
+def compute_spike_coincidence_matrix(spk, tol=0.002):
+    from tqdm import tqdm
+
+    n_cells = len(spk)
+    similarity = np.zeros((n_cells, n_cells))
+    for cell1 in tqdm(range(n_cells)):
+        for cell2 in range(n_cells):
+            if cell1 == cell2:
+                continue
+
+            simil = compare_spike_times(spk, cell1, cell2, tol=tol)
+            similarity[cell1, cell2] = simil
+
+    return similarity
+
+
 def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
                         kernel_winlen=0.025):
     from .spike_rate import _spike_density
@@ -175,6 +191,20 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
     return cch
 
 
+def find_coincidence_clusters(similarity, threshold=0.3):
+    import borsar
+
+    adj = similarity >= threshold
+    suspicious = adj.any(axis=0) | adj.any(axis=1)
+    suspicious_idx = np.where(suspicious)[0]
+    adj_susp = adj[suspicious_idx[:, None], suspicious_idx[None, :]]
+
+    fake_signal = np.ones(len(suspicious_idx))
+    clusters, counts = borsar.cluster.find_clusters(
+        fake_signal, 0.5, adjacency=adj_susp, backend='mne')
+    return suspicious_idx, clusters, counts
+
+
 # TODO: clean up zasady comments
 # TODO: clean up a bit, many indexing levels make it a bit confusing to read
 #       and modify
@@ -203,21 +233,14 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
     # różne kanały, >= 30% ko-spike'ów, wysoki peak kroskorelacji średnich
     # wavefromow -> wybierz ten, co ma więcej spike'ów
     import scipy
-    import borsar
 
     # init drop vector
     drop = np.zeros(len(spk.timestamps), dtype='bool')
 
     # cluster by similarity over 0.3 threshold
-    adj = similarity >= min(different_alignment_threshold,
-                            different_channel_threshold)
-    suspicious = adj.any(axis=0) | adj.any(axis=1)
-    suspicious_idx = np.where(suspicious)[0]
-    adj_susp = adj[suspicious_idx[:, None], suspicious_idx[None, :]]
-
-    fake_signal = np.ones(len(suspicious_idx))
-    clusters, counts = borsar.cluster.find_clusters(
-        fake_signal, 0.5, adjacency=adj_susp, backend='mne')
+    threshold = min(different_alignment_threshold, different_channel_threshold)
+    suspicious_idx, clusters, counts = find_coincidence_clusters(
+        similarity, threshold=threshold)
 
     # go through pairs within each cluster and apply selection rules
     for cluster_idx in range(len(clusters)):
@@ -305,7 +328,7 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
 
 # TODO: clean up
 def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
-                                 cluster_idx=0, drop=None):
+                                 cluster_idx=0, drop=None, figsize=(14, 9)):
     import matplotlib.pyplot as plt
 
     idxs = suspicious_idx[clusters[cluster_idx]]
@@ -313,7 +336,8 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
     n_cells = len(idxs)
     simil_part = similarity[idxs[:, None], idxs[None, :]]
 
-    _, ax = plt.subplots(nrows=n_cells + 1, ncols=n_cells + 1)
+    fig, ax = plt.subplots(nrows=n_cells + 1, ncols=n_cells + 1,
+                           figsize=figsize)
 
     for idx, cell_idx in enumerate(idxs):
         spk.plot_waveform(cell_idx, ax=ax[0, idx + 1])
@@ -353,3 +377,5 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
 
             color = plt.cm.viridis(val_perc)
             ax[row_idx + 1, col_idx + 1].set_facecolor(color)
+
+    return fig
