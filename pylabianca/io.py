@@ -8,9 +8,12 @@ import pandas as pd
 from .spikes import SpikeEpochs, Spikes
 
 
+# TODO - consider moving gammbur specific code to GammBur...
 def prepare_gammbur_metadata(df, trial_indices=None):
     '''Prepare behavioral data from GammBur.
-    Name columns appropriately and set their dtypes.
+
+    This function is specific to GammBur project. It names columns
+    appropriately and sets their dtypes.
     '''
     if isinstance(df, np.ndarray):
         df = pd.DataFrame(df)
@@ -65,6 +68,7 @@ def read_gammbur(subject_id=None, fname=None, kind='spikes', verbose=True):
 
 
 def find_file_name_gammbur(subject_id, data_dir='cleandata'):
+    """Find the GammBur file name for a given subject."""
     import sarna
 
     dropbox_dir = Path(sarna.proj.find_dropbox())
@@ -80,6 +84,7 @@ def find_file_name_gammbur(subject_id, data_dir='cleandata'):
 
 
 def read_raw_gammbur(subject_id=None, fname=None):
+    """Read raw GammBur spikes data."""
     if fname is None and subject_id is not None:
         fname = find_file_name_gammbur(subject_id, data_dir='cleandataraw')
     spk, events = read_raw_spikes(fname, data_name='ft_format')
@@ -150,9 +155,10 @@ def _read_lfp_gammbur(fname, verbose=True):
 
     if has_lfp:
         epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp')
-        tri_idx = _prepare_trial_inices(epochs, matfile['removed_tri_lfp'] - 1)
-        epochs.metadata = prepare_gammbur_metadata(epochs.metadata,
-                                                   trial_indices=tri_idx)
+        tri_idx = _prepare_trial_indices(
+            epochs, matfile['removed_tri_lfp'] - 1)
+        epochs.metadata = prepare_gammbur_metadata(
+            epochs.metadata, trial_indices=tri_idx)
         return epochs
     else:
         # given file does not contain lfp
@@ -207,7 +213,7 @@ def read_raw_spikes(fname, data_name='spikes'):
     return spk, events
 
 
-def _prepare_trial_inices(epochs, removed_idx):
+def _prepare_trial_indices(epochs, removed_idx):
     n_removed = len(removed_idx)
     n_all_tri = epochs.metadata.shape[0] + n_removed
     tri_idx = np.arange(n_all_tri)

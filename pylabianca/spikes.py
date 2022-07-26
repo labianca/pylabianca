@@ -496,7 +496,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     '''Perform cluster-based tests on firing rate data.
 
     Performs cluster-based ANOVA on firing rate to test, for example,
-    category-selectivity of the neurons. Currently t
+    category-selectivity of the neurons.
 
     Parameters
     ----------
