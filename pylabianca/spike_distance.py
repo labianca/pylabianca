@@ -11,7 +11,9 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
 #       (could also use ``backend`` argument)
 # TODO: multiprocessing could be useful
 # TODO: the implementation and the API are suboptimal
-def compare_spike_times(spk, cell_idx1, cell_idx2, backend='numba', tol=None):
+# TODO: remove the numpy backend?
+def compare_spike_times(spk, cell_idx1, cell_idx2, spk2=None, backend='numba',
+                        tol=None):
     '''Test concurrence of spike times for Spikes or SpikeEpochs.
 
     Parameters
@@ -30,7 +32,7 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, backend='numba', tol=None):
     tol : float
         Concurrence tolerance in seconds. Spikes no further that this will be
         deemed co-occurring. Default is ``None``, which means no concurrence
-        thresholding will be applied and a distance matrix will be returned.
+        threshold will be applied and a distance matrix will be returned.
 
     Returns
     -------
@@ -44,30 +46,23 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, backend='numba', tol=None):
     from .spikes import SpikeEpochs, Spikes
 
     if isinstance(spk, SpikeEpochs):
-        # TODO: rework this
-        tri1, tms1 = spk.trial[cell_idx1], spk.time[cell_idx1]
-        tri2, tms2 = spk.trial[cell_idx2], spk.time[cell_idx2]
-
-        n_spikes = len(tri1)
-        if_match = np.zeros(n_spikes, dtype='bool')
-        for idx in range(n_spikes):
-            this_time = tms1[idx]
-            this_tri = tri1[idx]
-            corresp_tri = np.where(tri2 == this_tri)[0]
-            match = False
-            if len(corresp_tri) > 0:
-                corresp_tm = tms2[corresp_tri]
-                match = (np.abs(corresp_tm - this_time) < tol).any()
-            if_match[idx] = match
-        return if_match.mean()
+        raise NotImplementedError('Sorry compare_spike_times does not work '
+                                  'with SpikeEpochs yet.')
     elif isinstance(spk, Spikes):
         if backend == 'numba':
             from ._numba import numba_compare_times
-            distances = numba_compare_times(spk, cell_idx1, cell_idx2)
+            distances = numba_compare_times(spk, cell_idx1, cell_idx2,
+                                            spk2=spk2)
             if tol is not None:
                 distances = (distances < tol).mean()
             return distances
         else:
+            if spk2 is not None:
+                raise NotImplementedError(
+                    'Sorry compare_spike_times does not support spk2 '
+                    'in the numpy backend.'
+                )
+
             # TODO: rework this
             tms1 = spk.timestamps[cell_idx1] / spk.sfreq
             tms2 = spk.timestamps[cell_idx2] / spk.sfreq
@@ -84,17 +79,19 @@ def numpy_compare_times(spk, cell_idx1, cell_idx2):
     return closest_time1
 
 
-def compute_spike_coincidence_matrix(spk, tol=0.002):
+def compute_spike_coincidence_matrix(spk, spk2=None, tol=0.002):
     from tqdm import tqdm
 
     n_cells = len(spk)
-    similarity = np.zeros((n_cells, n_cells))
+    n_cells2 = n_cells if spk2 is None else len(spk2)
+
+    similarity = np.zeros((n_cells, n_cells2))
     for cell1 in tqdm(range(n_cells)):
-        for cell2 in range(n_cells):
-            if cell1 == cell2:
+        for cell2 in range(n_cells2):
+            if spk2 is None and cell1 == cell2:
                 continue
 
-            simil = compare_spike_times(spk, cell1, cell2, tol=tol)
+            simil = compare_spike_times(spk, cell1, cell2, spk2=spk2, tol=tol)
             similarity[cell1, cell2] = simil
 
     return similarity
