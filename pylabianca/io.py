@@ -351,17 +351,29 @@ def read_combinato(path, label=None, alignment='both'):
 
 # TODO: add option to resample (and trim?) the waveforms
 # TODO: add option to read the standard osort format (``format='standard'``)
-def read_osort(path, waveform=True):
-    '''Read osort selected sorting results in mm format.
+def read_osort(path, waveform=True, channels='all', format='mm'):
+    '''Read osort sorting results.
 
     The mm format can be obtained using updateSORTINGresults_mm matlab
-    function.
+    function from _psy_screening (located in
+    ``psy_screenning-/helpers/sorting_utils``).
 
     Parameters
     ----------
     path : str
         Path to the directory with the ``.mat`` files obtained with
         ``updateSORTINGresults_mm``.
+    waveform : bool
+        Whether to also read the waveforms. Waveforms typically take the most
+        memory so it may be worth turning it off for fast reading. Defaults
+        to ``True``.
+    channels : str | list
+        Channels to read. Defaults to ``'all'``, which reads all channels.
+    format : str
+        Osort file format. Can be:
+        * ``'standard'`` - the default osort format
+        * ``'mm'`` - format with cleaned up variable names and with alignment
+            information
 
     Returns
     -------
@@ -371,52 +383,112 @@ def read_osort(path, waveform=True):
     from tqdm import tqdm
     from scipy.io import loadmat
 
-    files = [f for f in os.listdir(path)
-             if f.endswith('.mat') and 'mm_format' in f]
+    files = [f for f in os.listdir(path) if f.endswith('.mat')]
     files.sort()
 
-    cluster_id, alignment, threshold, channel = [list() for _ in range(4)]
+    # select files based on channels and format
+    if not channels == 'all':
+        if isinstance(channels, str):
+            channels = [channels]
+        channels_check = [ch + '_' for ch in channels]
+        check_channel = lambda f: any([ch in f for ch in channels_check])
+        files = [f for f in files if check_channel(f)]
+    if format == 'mm':
+        files = [f for f in files if 'mm_format' in f]
 
+    cluster_id, alignment, threshold, channel = [list() for _ in range(4)]
     timestamp = list()
     waveforms = list() if waveform else None
+    ignore_cluster = [0, 99999999]
 
-    # TEMP: older exporting function had a spelling error
-    correct_field = ['aligment', 'alignment']
-    var_names = None
-    read_vars = ['cluster_id', 'threshold', 'channel', 'timestamp']
-    if waveform:
-        read_vars.append('waveform')
+    if format == 'mm':
+        # TEMP FIX: older exporting function had a spelling error
+        correct_field = ['aligment', 'alignment']
+        var_names = None
+        read_vars = ['cluster_id', 'threshold', 'channel', 'timestamp']
+        if waveform:
+            read_vars.append('waveform')
+
+        translate = {var: var for var in read_vars}
+    else:
+        var_names = ['assignedNegative', 'newTimestampsNegative']
+        # var_names = ['assignedNegative', '', '', 'newTimestampsNegative']
+        if waveform:
+            var_names.append('newSpikesNegative')
+
+        translate = {'cluster_id': 'assignedNegative',
+                     'timestamp': 'newTimestampsNegative',
+                     'waveform': 'newSpikesNegative'}
+
+        # make sure path is a pathlib object
+        path = Path(path) if not isinstance(path, Path) else path
 
     for fname in tqdm(files):
         file_path = op.join(path, fname)
         data = loadmat(file_path, squeeze_me=False, variable_names=var_names)
 
-        # TEMP: older exporting function had a spelling error
-        if isinstance(correct_field, list):
+        if format == 'mm' and isinstance(correct_field, list):
+            # TEMP FIX: older exporting function had a spelling error
             correct_field = [field for field in correct_field
                              if field in data][0]
             var_names = read_vars + [correct_field]
 
-        cluster_id.append(data['cluster_id'].astype('int64'))
-        alignment.append([x[0][0] for x in data[correct_field]])
-        threshold.append(data['threshold'].astype('float32'))
-        channel.append([x[0][0] for x in data['channel']])
+        this_cluster_id = data[translate['cluster_id']].astype('int64')
+        if format == 'mm':
+            cluster_id.append(this_cluster_id)
+            channel.append([x[0][0] for x in data['channel']])
+            alignment.append([x[0][0] for x in data[correct_field]])
+            threshold.append(data['threshold'].astype('float32'))
 
-        # unpack to list (and then use .extend)
-        timestamp.extend([x[0][0] for x in data['timestamp']])
+            # unpack to list (and then use .extend)
+            timestamp.extend([x[0][0] for x in data['timestamp']])
 
-        # trim first X timesamples?
-        if waveform:
-            waveforms.extend([x[0] for x in data['waveform']])
+            # trim first X waveform timesamples (interpolation artifact) ?
+            if waveform:
+                waveforms.extend([x[0] for x in data['waveform']])
+        else:
+            # find cluster ids
+            cluster_ids = np.unique(this_cluster_id)
+            if ignore_cluster in cluster_ids:
+                msk = np.in1d(cluster_ids, ignore_cluster)
+                cluster_ids = cluster_ids[~msk]
+            cluster_id.append(cluster_ids)
+
+            # find channel
+            ch_name = fname.split('_')[0]
+            ch_name = ch_name.replace('CSC', '')
+
+            thresh = float(path.stem)
+            algn = path.parent.stem
+
+            # split timestamps (and waveforms) into units
+            this_timestamps = data[translate['timestamp']]
+            for clst_id in cluster_ids:
+                unit_msk = this_cluster_id == clst_id
+                timestamp.append(this_timestamps[unit_msk])
+
+                alignment.append(algn)
+                threshold.append(thresh)
+                channel.append(ch_name)
+
+                if waveform:
+                    # unit_msk is 1 x n_spikes so here we ignore the
+                    # singleton dimension
+                    waveforms.append(data[translate['waveform']][unit_msk[0]])
 
     cluster_id = np.concatenate(cluster_id)
-    alignment = np.concatenate(alignment)
-    threshold = np.concatenate(threshold)
-    channel = np.concatenate(channel)
+    if format == 'mm':
+        alignment = np.concatenate(alignment)
+        threshold = np.concatenate(threshold)
+        channel = np.concatenate(channel)
 
-    cellinfo = pd.DataFrame(dict(channel=channel, cluster=cluster_id[:, 0],
+        cluster_id = cluster_id[:, 0]
+        threshold = threshold[:, 0]
+
+    cellinfo = pd.DataFrame(dict(channel=channel,
+                                 cluster=cluster_id,
                                  alignment=alignment,
-                                 threshold=threshold[:, 0]))
+                                 threshold=threshold))
 
     return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveforms)
 
