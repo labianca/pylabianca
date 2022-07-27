@@ -351,7 +351,8 @@ def read_combinato(path, label=None, alignment='both'):
 
 # TODO: add option to resample (and trim?) the waveforms
 # TODO: add option to read the standard osort format (``format='standard'``)
-def read_osort(path, waveform=True, channels='all', format='mm'):
+def read_osort(path, waveform=True, channels='all', format='mm',
+               progress=True):
     '''Read osort sorting results.
 
     The mm format can be obtained using updateSORTINGresults_mm matlab
@@ -374,14 +375,17 @@ def read_osort(path, waveform=True, channels='all', format='mm'):
         * ``'standard'`` - the default osort format
         * ``'mm'`` - format with cleaned up variable names and with alignment
             information
+    progress : bool
+        Whether to show progress bar. Defaults to ``True``.
 
     Returns
     -------
     spk : pylabianca.spikes.Spikes
         Spikes object.
     '''
-    from tqdm import tqdm
     from scipy.io import loadmat
+    if progress:
+        from tqdm import tqdm
 
     files = [f for f in os.listdir(path) if f.endswith('.mat')]
     files.sort()
@@ -423,7 +427,8 @@ def read_osort(path, waveform=True, channels='all', format='mm'):
         # make sure path is a pathlib object
         path = Path(path) if not isinstance(path, Path) else path
 
-    for fname in tqdm(files):
+    iter_over = tqdm(files) if progress else files
+    for fname in iter_over:
         file_path = op.join(path, fname)
         data = loadmat(file_path, squeeze_me=False, variable_names=var_names)
 
