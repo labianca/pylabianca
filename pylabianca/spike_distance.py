@@ -79,14 +79,17 @@ def numpy_compare_times(spk, cell_idx1, cell_idx2):
     return closest_time1
 
 
-def compute_spike_coincidence_matrix(spk, spk2=None, tol=0.002):
-    from tqdm import tqdm
+def compute_spike_coincidence_matrix(spk, spk2=None, tol=0.002, progress=True):
+    if progress:
+        from tqdm import tqdm
 
     n_cells = len(spk)
     n_cells2 = n_cells if spk2 is None else len(spk2)
 
     similarity = np.zeros((n_cells, n_cells2))
-    for cell1 in tqdm(range(n_cells)):
+    iter_over = tqdm(range(n_cells)) if progress else range(n_cells)
+
+    for cell1 in iter_over:
         for cell2 in range(n_cells2):
             if spk2 is None and cell1 == cell2:
                 continue
