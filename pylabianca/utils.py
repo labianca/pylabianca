@@ -195,3 +195,76 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
     spike_centered = spike_centered.assign_coords(trial=('spike', tri))
 
     return spike_centered
+
+
+# TODO - if other sorters are used, alignment point (sample_idx) for the
+#        spike waveforms should be saved somewhere in spk
+def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50):
+    """Decide whether waveform polarity is positive, negative or unknown.
+
+    The decision is based on comparing baselined min and max average waveform
+    peak values. The value for the peak away from alignment point is calculated
+    from single spike waveforms to simulate alignment and reduce bias (30
+    samples around that peak are taken and min/max values for this time window).
+    The alignment point is expected where it is for osort - around sample 92.
+
+    Parameters
+    ----------
+    spk : pylabianca.Spikes
+        Spikes object to use.
+    cell_idx : int
+        Index of the cell whose waveform should be checked.
+    threshold : float
+        Threshold ratio for the minimum and maximum waveform peak values to
+        decide about polarity. Default is ``1.75``, which means that one of
+        the peaks (min or max) must be at least 1.75 times higher than the
+        other to decide on polarity. If given waveform does not pass this
+        test it is labelled as ``'unknown'``.
+    baseline_range : int
+        Number of first samples to use as baseline. Default is ``50``.
+
+    Returns
+    -------
+    unit_type : str
+        Polarity label for the waveform. Either ``'positive'``, ``'negative'``
+        or ``'unknown'``.
+    """
+
+    inv_threshold = 1 / threshold
+
+    # decide whether the waveform is pos or neg
+    avg_waveform = spk.waveform[cell_idx].mean(axis=0)
+    min_val_idx, max_val_idx = avg_waveform.argmin(), avg_waveform.argmax()
+    min_val, max_val = avg_waveform.min(), avg_waveform.max()
+
+    # the value not aligned to will be underestimated, correct for that ...
+    further_away = np.abs(np.array([min_val_idx, max_val_idx]) - 92).argmax()
+    operation = [np.min, np.max][further_away]
+    away_idx = [min_val_idx, max_val_idx][further_away]
+
+    # ... by estimating this value in a wider window
+    rng = slice(away_idx - 15, away_idx + 15)
+    slc = spk.waveform[cell_idx][:, rng]
+    this_val = operation(slc, axis=1).mean()
+
+    if further_away == 0:
+        min_val = this_val
+    else:
+        max_val = this_val
+
+    # the min and max values are baselined to further reduce bias
+    baseline = avg_waveform[:baseline_range].mean()
+    min_val -= baseline
+    max_val -= baseline
+
+    # based on min / max ratio a decision is made
+    prop = min_val / max_val
+
+    if np.abs(prop) > threshold:
+        unit_type = 'neg'
+    elif np.abs(prop) < inv_threshold:
+        unit_type = 'pos'
+    else:
+        unit_type = 'unknown'
+
+    return unit_type
