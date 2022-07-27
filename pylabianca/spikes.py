@@ -891,7 +891,7 @@ def _sort_spikes(spk, by=None, inplace=True):
     if not inplace:
         spk = spk.copy()
 
-    cellinfo_sorted = spk_concat_sorted.cellinfo.sort_values(
+    cellinfo_sorted = spk.cellinfo.sort_values(
         by=by, axis='index')
     cells_order = cellinfo_sorted.index.to_numpy()
     spk.pick_cells(cells_order)
