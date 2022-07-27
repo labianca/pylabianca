@@ -10,6 +10,8 @@ def _deal_with_picks(spk, picks):
         picks = np.arange(len(spk.cell_names))
         return picks
     if isinstance(picks, (list, np.ndarray, pd.Series)):
+        if len(picks) == 0:
+            raise ValueError('No cells selected.')
         if isinstance(picks[0], str):
             # list / array of names
             is_str = [isinstance(x, str) for x in picks[1:]]
@@ -198,7 +200,7 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
 
 
 # TODO - if other sorters are used, alignment point (sample_idx) for the
-#        spike waveforms should be saved somewhere in spk
+#        spike waveforms should be saved somewhere in spk and used here.
 def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50):
     """Decide whether waveform polarity is positive, negative or unknown.
 
