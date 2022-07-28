@@ -601,6 +601,37 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
     return events
 
 
+# TODO - make sure we can save and write more cellinfo columns
+#        (and unit names)
+def _convert_spk_to_mm_matlab_format(spk):
+    n_units = len(spk)
+
+    data = dict()
+    for fld in ['cluster_id', 'alignment', 'channel', 'threshold']:
+        col_name = fld.split('_')[0]
+
+        # extract values from dataframe column and make sure it is N x 1
+        data[fld] = spk.cellinfo.loc[:, col_name].values[:, None]
+
+    # other cellinfo columns
+
+    data['timestamp'] = np.empty((n_units, 1), dtype='object')
+    data['waveform'] = np.empty((n_units, 1), dtype='object')
+
+    for idx in range(n_units):
+        data['timestamp'][idx, 0] = spk.timestamps[idx]
+        data['waveform'][idx, 0] = spk.waveform[idx]
+
+    return data
+
+
+def _save_spk_to_mm_matlab_format(spk, path):
+    from scipy.io import savemat
+
+    data = _convert_spk_to_mm_matlab_format(spk)
+    savemat(path, data)
+
+
 def add_region_from_channels_table(spk, channel_info):
     '''Add brain region information to Spikes from channel info excel table.
 

@@ -815,6 +815,15 @@ class Spikes(object):
 
         return self
 
+    def to_matlab(self, path, format='osort_mm'):
+        '''Save Spikes object to a matlab file in the desired format.'''
+        assert format in ['fieldtrip', 'osort_mm'], 'Unknown format.'
+        if format == 'fieldtrip':
+            raise NotImplementedError('Sorry this is not implemented yet.')
+        elif format == 'osort_mm':
+            from .io import _save_spk_to_mm_matlab_format as write_spikes
+        write_spikes(self, path)
+
 
 def _check_waveforms(times, waveform):
     '''Safety checks for waveform data.'''
