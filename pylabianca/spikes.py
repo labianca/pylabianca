@@ -644,6 +644,9 @@ class Spikes(object):
                           cell_names=self.cell_names, cellinfo=self.cellinfo,
                           waveform=waveforms)
 
+        # TODO: this should be removed later on, as Spike metadata should not
+        #       be supported, metadata should be provided during or after
+        #       epoching
         if self.metadata is not None:
             if spk.n_trials == self.metadata.shape[0]:
                 spk.metadata = self.metadata
@@ -675,6 +678,11 @@ class Spikes(object):
         query : str | None
             Query for ``.cellinfo`` - to pick cells by their properties, not
             names or indices. Used only when ``picks`` is ``None``.
+
+        Returns
+        -------
+        spk : Spikes
+            Selected units in a Spikes object.
         '''
         if picks is None and query is None:
             return self
@@ -731,6 +739,11 @@ class Spikes(object):
             be a value to specify the upsampling factor.
         ax : matplotlib.Axes | None
             Axis to plot to. By default opens a new figure.
+
+        Returns
+        -------
+        ax : matplotlib.Axes
+            Axis with waveform heatmap.
         '''
         from .viz import plot_waveform
         return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
@@ -804,6 +817,7 @@ class Spikes(object):
 
 
 def _check_waveforms(times, waveform):
+    '''Safety checks for waveform data.'''
     assert len(times) == len(waveform)
     n_spikes_times = np.array([len(x) for x in times])
     n_spikes_waveform = np.array([x.shape[0] for x in waveform])
@@ -880,6 +894,7 @@ def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
 
 
 def _sort_spikes(spk, by=None, inplace=True):
+    '''Sort spikes by channel and cluster id or other columns in cellinfo.'''
     by = ['channel', 'cluster'] if by is None else by
 
     # the tests below were written by GitHub copilot entirely!
