@@ -706,8 +706,8 @@ class Spikes(object):
     def sort(self, by=None):
         '''Sort cells. Operates in-place.
 
-        The units are by default sorted by channel and cluster contained in
-        ``.cellinfo``.
+        The units are by default sorted by channel and cluster id information
+        contained in dataframe stored in ``.cellinfo`` attribute.
 
         Parameters
         ----------
@@ -903,7 +903,7 @@ def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
 
 
 def _sort_spikes(spk, by=None, inplace=True):
-    '''Sort spikes by channel and cluster id or other columns in cellinfo.'''
+    '''Sort units by channel and cluster id or other columns in cellinfo.'''
     by = ['channel', 'cluster'] if by is None else by
 
     # the tests below were written by GitHub copilot entirely!
