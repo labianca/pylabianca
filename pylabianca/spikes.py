@@ -821,8 +821,7 @@ def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
         If boolean: whether to sort the concatenated units. The units are then
         sorted by channel and cluster contained in ``.cellinfo``.
         If string or list of strings - name/names of ``.cellinfo`` columns to
-        sort by.
-        Defaults to ``True``.
+        sort by. Defaults to ``True``.
     relabel_cell_names : bool
         Whether to relabel cell names to correspond to cell index.
         Defaults to ``True``.
@@ -847,7 +846,7 @@ def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
     if has_cellinfo:
         cell_infos = [spk.cellinfo.copy()]
 
-    for spk_add in spk_list:
+    for spk_add in spk_list[1:]:
         # cell names
         spk.cell_names = np.concatenate(
             [spk.cell_names, spk_add.cell_names])
@@ -876,6 +875,8 @@ def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
         n_cells = len(spk)
         spk.cell_names = np.array(['cell{:03d}'.format(idx)
                                    for idx in range(n_cells)])
+
+    return spk
 
 
 def _sort_spikes(spk, by=None, inplace=True):
