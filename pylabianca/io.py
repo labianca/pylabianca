@@ -363,7 +363,8 @@ def read_osort(path, waveform=True, channels='all', format='mm',
     ----------
     path : str
         Path to the directory with the ``.mat`` files obtained with
-        ``updateSORTINGresults_mm``.
+        ``updateSORTINGresults_mm``. It can also be one file with all the units
+        in it.
     waveform : bool
         Whether to also read the waveforms. Waveforms typically take the most
         memory so it may be worth turning it off for fast reading. Defaults
@@ -387,18 +388,27 @@ def read_osort(path, waveform=True, channels='all', format='mm',
     if progress:
         from tqdm import tqdm
 
-    files = [f for f in os.listdir(path) if f.endswith('.mat')]
-    files.sort()
+    assert op.exists(path), 'Path/file does not exist.'
+    assert format in ['standard', 'mm'], 'Unknown format.'
+    one_file = not op.isdir(path)
 
-    # select files based on channels and format
-    if not channels == 'all':
-        if isinstance(channels, str):
-            channels = [channels]
-        channels_check = [ch + '_' for ch in channels]
-        check_channel = lambda f: any([ch in f for ch in channels_check])
-        files = [f for f in files if check_channel(f)]
-    if format == 'mm':
-        files = [f for f in files if 'mm_format' in f]
+    if not one_file:
+        files = [f for f in os.listdir(path) if f.endswith('.mat')]
+        files.sort()
+
+        # select files based on channels and format
+        if not channels == 'all':
+            if isinstance(channels, str):
+                channels = [channels]
+            channels_check = [ch + '_' for ch in channels]
+            check_channel = lambda f: any([ch in f for ch in channels_check])
+            files = [f for f in files if check_channel(f)]
+        if format == 'mm':
+            files = [f for f in files if 'mm_format' in f]
+    else:
+        full_path = Path(path)
+        path = full_path.parent
+        files = [full_path.name]
 
     cluster_id, alignment, threshold, channel = [list() for _ in range(4)]
     timestamp = list()
@@ -407,13 +417,15 @@ def read_osort(path, waveform=True, channels='all', format='mm',
 
     if format == 'mm':
         # TEMP FIX: older exporting function had a spelling error
-        correct_field = ['aligment', 'alignment']
+        correct_field = 'alignment' if one_file else ['aligment', 'alignment']
         var_names = None
         read_vars = ['cluster_id', 'threshold', 'channel', 'timestamp']
         if waveform:
             read_vars.append('waveform')
 
         translate = {var: var for var in read_vars}
+        if not one_file:
+            var_names = read_vars + [correct_field]
     else:
         var_names = ['assignedNegative', 'newTimestampsNegative']
         # var_names = ['assignedNegative', '', '', 'newTimestampsNegative']
