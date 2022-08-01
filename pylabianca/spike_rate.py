@@ -148,7 +148,7 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, kernel=None,
     return cnt_times, cnt
 
 
-def depth_of_selectivity(frate, by):
+def depth_of_selectivity(frate, by, zero_below=0.0001):
     '''Compute depth of selectivity for given category.
 
     Parameters
@@ -164,6 +164,11 @@ def depth_of_selectivity(frate, by):
     selectivity : xarray
         Xarray with depth of selectivity.
     '''
+    if zero_below > 0:
+        frate = frate.copy()
+        msk = frate.values < zero_below
+        frate.values[msk] = 0.
+
     avg_by_probe = frate.groupby(by).mean(dim='trial')
     n_categories = len(avg_by_probe.coords[by])
     r_max = avg_by_probe.max(by)
@@ -345,7 +350,9 @@ def permutation_test(*arrays, paired=False, n_perm=2000, progress=False):
     return stat, min(pval, 1)
 
 
+# TODO: add njobs
 # TODO: refactor to separate cluster-based and cell selection
+# TODO: create more progress bars and pass to cluster_based_test
 def cluster_based_selectivity(frate, spk=None, compare='probe',
                               cluster_entry_pval=0.05, n_permutations=1000,
                               n_stat_permutations=0, pbar='notebook',
@@ -407,7 +414,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
         _, clusters, pval = cluster_based_test(
             fr_cell, compare=compare, cluster_entry_pval=cluster_entry_pval,
             paired=False, stat_fun=stat_fun, n_permutations=n_permutations,
-            n_stat_permutations=n_stat_permutations)
+            n_stat_permutations=n_stat_permutations, progress=False)
 
         # process clusters
         # TODO - separate function
@@ -466,10 +473,10 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
                 else:
                     frate_avg = fr_cell.sel(time=slice(tmin, tmax)).mean(
                         dim='time')  # .sel(trial=frate.ifcorrect)
-                depth, prefferred = depth_of_selectivity(frate_avg, by=compare)
+                depth, preferred = depth_of_selectivity(frate_avg, by=compare)
 
                 # find preferred categories
-                perc_pref = prefferred / prefferred.max()
+                perc_pref = preferred / preferred.max()
                 pref_idx = np.where(perc_pref >= 0.75)[0]
                 perc_pref_sel = perc_pref.values[pref_idx].argsort()[::-1]
 

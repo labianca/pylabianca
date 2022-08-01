@@ -357,7 +357,7 @@ class SpikeEpochs():
                             metadata=new_metadata, cellinfo=new_cellinfo,
                             waveform=waveform)
 
-    def plot_waveform(self, pick=0, upsample=False, ax=None):
+    def plot_waveform(self, pick=0, upsample=False, ax=None, labels=True):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -372,7 +372,8 @@ class SpikeEpochs():
             Axis to plot to. By default opens a new figure.
         '''
         from .viz import plot_waveform
-        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax)
+        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
+                             labels=labels)
 
 
 def _epoch_spikes(timestamps, event_times, tmin, tmax):
@@ -491,11 +492,11 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 # TODO: move out to spike_rate or stats...
 def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                        paired=False, stat_fun=None, n_permutations=1_000,
-                       n_stat_permutations=0, tail=None, verbose=True):
+                       n_stat_permutations=0, tail=None, progress=True):
     '''Perform cluster-based tests on firing rate data.
 
     Performs cluster-based ANOVA on firing rate to test, for example,
-    category-selectivity of the neurons. Currently t
+    category-selectivity of the neurons.
 
     Parameters
     ----------
@@ -536,7 +537,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         arrays, adjacency=None, stat_fun=stat_fun, threshold=None,
         p_threshold=cluster_entry_pval, paired=paired, tail=tail,
         n_permutations=n_permutations, n_stat_permutations=n_stat_permutations,
-        progress=True)
+        progress=progress)
 
     return stat, clusters, pval
 
@@ -643,6 +644,9 @@ class Spikes(object):
                           cell_names=self.cell_names, cellinfo=self.cellinfo,
                           waveform=waveforms)
 
+        # TODO: this should be removed later on, as Spike metadata should not
+        #       be supported, metadata should be provided during or after
+        #       epoching
         if self.metadata is not None:
             if spk.n_trials == self.metadata.shape[0]:
                 spk.metadata = self.metadata
@@ -674,6 +678,11 @@ class Spikes(object):
         query : str | None
             Query for ``.cellinfo`` - to pick cells by their properties, not
             names or indices. Used only when ``picks`` is ``None``.
+
+        Returns
+        -------
+        spk : Spikes
+            Selected units in a Spikes object.
         '''
         if picks is None and query is None:
             return self
@@ -694,7 +703,30 @@ class Spikes(object):
 
         return self
 
-    def plot_waveform(self, pick=0, upsample=False, ax=None):
+    def sort(self, by=None):
+        '''Sort cells. Operates in-place.
+
+        The units are by default sorted by channel and cluster id information
+        contained in dataframe stored in ``.cellinfo`` attribute.
+
+        Parameters
+        ----------
+        by : str | list of str | None
+            If ``None`` (default) the units are sorted by channel and cluster
+            information contained in ``.cellinfo``.
+            If string or list of strings - name/names of ``.cellinfo`` columns
+            to sort by.
+            Defaults to ``None``.
+
+        Returns
+        -------
+        spk : Spikes
+            Sorted Spikes.
+        '''
+        self = _sort_spikes(self, by)
+        return self
+
+    def plot_waveform(self, pick=0, upsample=False, ax=None, labels=True):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -707,9 +739,15 @@ class Spikes(object):
             be a value to specify the upsampling factor.
         ax : matplotlib.Axes | None
             Axis to plot to. By default opens a new figure.
+
+        Returns
+        -------
+        ax : matplotlib.Axes
+            Axis with waveform heatmap.
         '''
         from .viz import plot_waveform
-        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax)
+        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
+                             labels=labels)
 
     def to_epochs(self, pad_timestamps=10_000):
         '''Turn Spike object into one epoch SpikeEpochs representation.'''
@@ -777,9 +815,110 @@ class Spikes(object):
 
         return self
 
+    def to_matlab(self, path, format='osort_mm'):
+        '''Save Spikes object to a matlab file in the desired format.'''
+        assert format in ['fieldtrip', 'osort_mm'], 'Unknown format.'
+        if format == 'fieldtrip':
+            raise NotImplementedError('Sorry this is not implemented yet.')
+        elif format == 'osort_mm':
+            from .io import _save_spk_to_mm_matlab_format as write_spikes
+        write_spikes(self, path)
+
 
 def _check_waveforms(times, waveform):
+    '''Safety checks for waveform data.'''
     assert len(times) == len(waveform)
     n_spikes_times = np.array([len(x) for x in times])
     n_spikes_waveform = np.array([x.shape[0] for x in waveform])
     assert (n_spikes_times == n_spikes_waveform).all()
+
+
+def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
+    '''Concatenate list of spike objects into one.
+
+    Parameters
+    ----------
+    spk_list : list of Spikes
+        List of Spikes objects to concatenate.
+    sort : bool | str | list of str
+        If boolean: whether to sort the concatenated units. The units are then
+        sorted by channel and cluster contained in ``.cellinfo``.
+        If string or list of strings - name/names of ``.cellinfo`` columns to
+        sort by. Defaults to ``True``.
+    relabel_cell_names : bool
+        Whether to relabel cell names to correspond to cell index.
+        Defaults to ``True``.
+
+    Returns
+    -------
+    spk : Spikes
+        Concatenated spikes object.
+    '''
+    assert len(spk_list) > 0
+    for spk in spk_list:
+        assert isinstance(spk, Spikes), ('Not all elements in spk_list are '
+                                         'Spikes objects.')
+
+    if len(spk_list) == 1:
+        return spk_list[0]
+
+    spk = spk_list[0].copy()
+    has_cellinfo = spk.cellinfo is not None
+    has_waveform = spk.waveform is not None
+
+    if has_cellinfo:
+        cell_infos = [spk.cellinfo.copy()]
+
+    for spk_add in spk_list[1:]:
+        # cell names
+        spk.cell_names = np.concatenate(
+            [spk.cell_names, spk_add.cell_names])
+
+        # timestamps
+        spk.timestamps.extend(spk_add.timestamps)
+
+        # cellinfo
+        if has_cellinfo:
+            cell_infos.append(spk_add.cellinfo)
+
+        # waveform
+        if has_waveform:
+            spk.waveform.extend(spk_add.waveform)
+
+        # metadata - only for SpikeEpochs
+        # this attrib should not be present in Spikes
+
+    if has_cellinfo:
+        spk.cellinfo = pd.concat(cell_infos).reset_index(drop=True)
+
+    if sort:
+        spk = spk.sort() if isinstance(sort, bool) else spk.sort(by=sort)
+
+    if relabel_cell_names:
+        n_cells = len(spk)
+        spk.cell_names = np.array(['cell{:03d}'.format(idx)
+                                   for idx in range(n_cells)])
+
+    return spk
+
+
+def _sort_spikes(spk, by=None, inplace=True):
+    '''Sort units by channel and cluster id or other columns in cellinfo.'''
+    by = ['channel', 'cluster'] if by is None else by
+
+    # the tests below were written by GitHub copilot entirely!
+    if isinstance(by, str):
+        by = [by]
+    assert isinstance(by, list)
+    assert all([isinstance(x, str) for x in by])
+    assert all([x in spk.cellinfo.columns for x in by])
+
+    if not inplace:
+        spk = spk.copy()
+
+    cellinfo_sorted = spk.cellinfo.sort_values(
+        by=by, axis='index')
+    cells_order = cellinfo_sorted.index.to_numpy()
+    spk.pick_cells(cells_order)
+
+    return spk

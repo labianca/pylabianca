@@ -11,7 +11,9 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
 #       (could also use ``backend`` argument)
 # TODO: multiprocessing could be useful
 # TODO: the implementation and the API are suboptimal
-def compare_spike_times(spk, cell_idx1, cell_idx2, backend='numba', tol=None):
+# TODO: remove the numpy backend?
+def compare_spike_times(spk, cell_idx1, cell_idx2, spk2=None, backend='numba',
+                        tol=None):
     '''Test concurrence of spike times for Spikes or SpikeEpochs.
 
     Parameters
@@ -30,7 +32,7 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, backend='numba', tol=None):
     tol : float
         Concurrence tolerance in seconds. Spikes no further that this will be
         deemed co-occurring. Default is ``None``, which means no concurrence
-        thresholding will be applied and a distance matrix will be returned.
+        threshold will be applied and a distance matrix will be returned.
 
     Returns
     -------
@@ -44,30 +46,23 @@ def compare_spike_times(spk, cell_idx1, cell_idx2, backend='numba', tol=None):
     from .spikes import SpikeEpochs, Spikes
 
     if isinstance(spk, SpikeEpochs):
-        # TODO: rework this
-        tri1, tms1 = spk.trial[cell_idx1], spk.time[cell_idx1]
-        tri2, tms2 = spk.trial[cell_idx2], spk.time[cell_idx2]
-
-        n_spikes = len(tri1)
-        if_match = np.zeros(n_spikes, dtype='bool')
-        for idx in range(n_spikes):
-            this_time = tms1[idx]
-            this_tri = tri1[idx]
-            corresp_tri = np.where(tri2 == this_tri)[0]
-            match = False
-            if len(corresp_tri) > 0:
-                corresp_tm = tms2[corresp_tri]
-                match = (np.abs(corresp_tm - this_time) < tol).any()
-            if_match[idx] = match
-        return if_match.mean()
+        raise NotImplementedError('Sorry compare_spike_times does not work '
+                                  'with SpikeEpochs yet.')
     elif isinstance(spk, Spikes):
         if backend == 'numba':
             from ._numba import numba_compare_times
-            distances = numba_compare_times(spk, cell_idx1, cell_idx2)
+            distances = numba_compare_times(spk, cell_idx1, cell_idx2,
+                                            spk2=spk2)
             if tol is not None:
                 distances = (distances < tol).mean()
             return distances
         else:
+            if spk2 is not None:
+                raise NotImplementedError(
+                    'Sorry compare_spike_times does not support spk2 '
+                    'in the numpy backend.'
+                )
+
             # TODO: rework this
             tms1 = spk.timestamps[cell_idx1] / spk.sfreq
             tms2 = spk.timestamps[cell_idx2] / spk.sfreq
@@ -82,6 +77,27 @@ def numpy_compare_times(spk, cell_idx1, cell_idx2):
     time_diffs = np.abs(tms1[:, None] - tms2[None, :])
     closest_time1 = time_diffs.min(axis=1)
     return closest_time1
+
+
+def compute_spike_coincidence_matrix(spk, spk2=None, tol=0.002, progress=True):
+    if progress:
+        from tqdm import tqdm
+
+    n_cells = len(spk)
+    n_cells2 = n_cells if spk2 is None else len(spk2)
+
+    similarity = np.zeros((n_cells, n_cells2))
+    iter_over = tqdm(range(n_cells)) if progress else range(n_cells)
+
+    for cell1 in iter_over:
+        for cell2 in range(n_cells2):
+            if spk2 is None and cell1 == cell2:
+                continue
+
+            simil = compare_spike_times(spk, cell1, cell2, spk2=spk2, tol=tol)
+            similarity[cell1, cell2] = simil
+
+    return similarity
 
 
 def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
@@ -175,6 +191,20 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
     return cch
 
 
+def find_coincidence_clusters(similarity, threshold=0.3):
+    import borsar
+
+    adj = similarity >= threshold
+    suspicious = adj.any(axis=0) | adj.any(axis=1)
+    suspicious_idx = np.where(suspicious)[0]
+    adj_susp = adj[suspicious_idx[:, None], suspicious_idx[None, :]]
+
+    fake_signal = np.ones(len(suspicious_idx))
+    clusters, counts = borsar.cluster.find_clusters(
+        fake_signal, 0.5, adjacency=adj_susp, backend='mne')
+    return suspicious_idx, clusters, counts
+
+
 # TODO: clean up zasady comments
 # TODO: clean up a bit, many indexing levels make it a bit confusing to read
 #       and modify
@@ -203,21 +233,14 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
     # różne kanały, >= 30% ko-spike'ów, wysoki peak kroskorelacji średnich
     # wavefromow -> wybierz ten, co ma więcej spike'ów
     import scipy
-    import borsar
 
     # init drop vector
     drop = np.zeros(len(spk.timestamps), dtype='bool')
 
     # cluster by similarity over 0.3 threshold
-    adj = similarity >= min(different_alignment_threshold,
-                            different_channel_threshold)
-    suspicious = adj.any(axis=0) | adj.any(axis=1)
-    suspicious_idx = np.where(suspicious)[0]
-    adj_susp = adj[suspicious_idx[:, None], suspicious_idx[None, :]]
-
-    fake_signal = np.ones(len(suspicious_idx))
-    clusters, counts = borsar.cluster.find_clusters(
-        fake_signal, 0.5, adjacency=adj_susp, backend='mne')
+    threshold = min(different_alignment_threshold, different_channel_threshold)
+    suspicious_idx, clusters, counts = find_coincidence_clusters(
+        similarity, threshold=threshold)
 
     # go through pairs within each cluster and apply selection rules
     for cluster_idx in range(len(clusters)):
@@ -305,7 +328,7 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
 
 # TODO: clean up
 def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
-                                 cluster_idx=0, drop=None):
+                                 cluster_idx=0, drop=None, figsize=(14, 9)):
     import matplotlib.pyplot as plt
 
     idxs = suspicious_idx[clusters[cluster_idx]]
@@ -313,7 +336,8 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
     n_cells = len(idxs)
     simil_part = similarity[idxs[:, None], idxs[None, :]]
 
-    _, ax = plt.subplots(nrows=n_cells + 1, ncols=n_cells + 1)
+    fig, ax = plt.subplots(nrows=n_cells + 1, ncols=n_cells + 1,
+                           figsize=figsize)
 
     for idx, cell_idx in enumerate(idxs):
         spk.plot_waveform(cell_idx, ax=ax[0, idx + 1])
@@ -353,3 +377,5 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
 
             color = plt.cm.viridis(val_perc)
             ax[row_idx + 1, col_idx + 1].set_facecolor(color)
+
+    return fig
