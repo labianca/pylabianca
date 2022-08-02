@@ -424,7 +424,7 @@ def read_osort(path, waveform=True, channels='all', format='mm',
             read_vars.append('waveform')
 
         translate = {var: var for var in read_vars}
-        if not one_file:
+        if one_file:
             var_names = read_vars + [correct_field]
     else:
         var_names = ['assignedNegative', 'newTimestampsNegative']
