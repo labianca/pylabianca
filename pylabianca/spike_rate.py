@@ -4,6 +4,7 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
 
 
 
+# CONSIDER wintype 'rectangular' vs 'gaussian'
 def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
                        tmax=None, backend='numpy'):
     '''Calculate spike rate with a running or static window.
