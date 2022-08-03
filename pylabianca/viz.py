@@ -134,7 +134,7 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True):
     ----------
     spk : pylabianca.spikes.Spikes | pylabianca.spikes.SpikeEpochs
         Spike object to use.
-    pick : int
+    pick : int | str
         Cell index to plot waveform for.
     upsample : bool | float
         Whether to upsample the waveform (defaults to ``False``). If
@@ -142,12 +142,19 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True):
         be a value to specify the upsampling factor.
     ax : matplotlib.Axes | None
         Axis to plot to. By default opens a new figure.
+    labels : bool
+        Whether to add labels to the axes.
+    y_bins : int
+        How many bins to use for the y axis.
 
     Returns
     -------
     ax : matplotlib.Axes
         Axis with the waveform plot.
     '''
+    from pylabianca.utils import _deal_with_picks
+
+    pick = _deal_with_picks(spk, pick)[0]
     n_spikes, n_samples = spk.waveform[pick].shape
     waveform = spk.waveform[pick]
     if upsample:
