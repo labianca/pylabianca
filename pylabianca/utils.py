@@ -201,7 +201,8 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
 
 # TODO - if other sorters are used, alignment point (sample_idx) for the
 #        spike waveforms should be saved somewhere in spk and used here.
-def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50):
+def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50,
+                            rich_output=False):
     """Decide whether waveform polarity is positive, negative or unknown.
 
     The decision is based on comparing baselined min and max average waveform
@@ -224,12 +225,23 @@ def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50):
         test it is labelled as ``'unknown'``.
     baseline_range : int
         Number of first samples to use as baseline. Default is ``50``.
+    rich_output : bool
+        If True, return a dictionary with the following fields:
+        * 'type' : 'positive' or 'negative' or 'unknown'
+        * 'min_peak' : minimum peak value
+        * 'max_peak' : maximum peak value
+        * 'min_idx' : index of the minimum peak
+        * 'max_idx' : index of the maximum peak
+        * 'align_idx' : index of the alignment point
+        * 'align_sign' : polarity of the alignment point (-1 or 1)
 
     Returns
     -------
-    unit_type : str
+    unit_type : str | dict
         Polarity label for the waveform. Either ``'positive'``, ``'negative'``
-        or ``'unknown'``.
+        or ``'unknown'``. If ``rich_output`` is True, a dictionary with
+        multiple fields is returned (see description of ``rich_output``
+        argument).
     """
 
     inv_threshold = 1 / threshold
@@ -269,4 +281,13 @@ def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50):
     else:
         unit_type = 'unknown'
 
-    return unit_type
+    if not rich_output:
+        return unit_type
+    else:
+        align_which = 1 - further_away
+        align_idx = [min_val_idx, max_val_idx][align_which]
+        align_sign = [-1, 1][align_which]
+        output = {'type': unit_type, 'min_peak': min_val, 'max_peak': max_val,
+                  'min_idx': min_val_idx, 'max_idx': max_val_idx,
+                  'align_idx': align_idx, 'align_sign': align_sign}
+        return output
