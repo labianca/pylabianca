@@ -174,15 +174,27 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True):
 
     x_coords = np.tile(np.arange(n_samples), (n_spikes, 1))
 
-    # assume default combinato times
+    # assume default osort times
     sfreq = 32_000
-    sample_time = 1000 / sfreq
-    time_edges = [-19 * sample_time,
-                  (n_samples / upsample - 20) * sample_time]
+    # sample_time = 1000 / sfreq  (combinato)
+    sample_time = 1000 / sfreq / 4  # (assume 4x upsampling)
+    sample_edge = -94  # -19 for combinato
+    time_edges = [sample_edge * sample_time,
+                  (n_samples / upsample + (sample_edge - 1)) * sample_time]
 
-    hist, xbins, ybins = np.histogram2d(x_coords.ravel(),
-                                        waveform.ravel(),
-                                        bins=[n_samples, 100])
+    xs = x_coords.ravel()
+    ys = waveform.ravel()
+    nan_mask = np.isnan(ys)
+    if nan_mask.any():
+        range = [[np.nanmin(xs), np.nanmax(xs)],
+                 [np.nanmin(ys), np.nanmax(ys)]]
+        xs = xs[~nan_mask]
+        ys = ys[~nan_mask]
+    else:
+        range = None
+
+    hist, xbins, ybins = np.histogram2d(xs, ys, bins=[n_samples, y_bins],
+                                        range=range)
 
     max_alpha = np.percentile(hist[hist > 0], 45)
     max_lim = np.percentile(hist[hist > 0], 99)
