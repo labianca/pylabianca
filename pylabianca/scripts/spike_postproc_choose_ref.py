@@ -31,6 +31,8 @@ coincidence_threshold = 0.3
 # classify it as a reference cluster
 min_ref_channels = 4
 
+# weights
+# -------
 # weights used in calculating the final score (unit with best score is chosen)
 # isi - % inter spike intervals < 3 ms (lower is better)
 # fr  - firing rate
@@ -98,7 +100,7 @@ def plot_scores(spk_sel, score):
     return ax['a'].figure
 
 
-print('Calculating FR, SNR and ISI...')
+print('Calculating FR, SNR, ISI, STD and DNS...')
 fr = [len(tms) for tms in spk.timestamps]
 fr_prc = turn_to_percentiles(fr)
 
