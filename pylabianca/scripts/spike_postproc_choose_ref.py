@@ -10,7 +10,8 @@ import os.path as op
 import numpy as np
 from matplotlib import pyplot as plt
 import scipy
-from tqdm import tqdm
+from scipy.stats import rankdata
+
 import pylabianca as pln
 
 
@@ -21,8 +22,19 @@ import pylabianca as pln
 #          for it, which could lead to offsets and bad results)
 # - [ ] accept not mm format
 
-# alignment sample index - should true for all our osort files
-algn_smpl = 94
+# SETTINGS
+# --------
+
+# the directory with sorting results - that is after manual curation and
+# export using updateSORTINGresults_mm matlab function located in
+# psy_screenning-\helpers\sorting_utils)
+data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8'
+            r'l1O\switchorder\derivatives\sorting\sub-W02\ses-main\sub-'
+            r'W02_ses-main_task-switchorder_run-01_sorter-osort_norm-False')
+save_fig_dir = (r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\ref_test'
+                r's\sub-W02_test01')
+
+
 
 # minimum coincidence threshold for coincidence cluster formation
 coincidence_threshold = 0.3
@@ -46,24 +58,16 @@ min_ref_channels = 4
 #       and thus make this value closer to the density we see in the figures)
 weights = {'isi': 0.15, 'fr': 0.35, 'snr': 0.0, 'std': 0.0, 'dns': 0.5}
 
+# alignment sample index - should true for all our osort files
+algn_smpl = 94
 
-data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8'
-            r'l1O\switchorder\derivatives\sorting\sub-W02\ses-main\sub-'
-            r'W02_ses-main_task-switchorder_run-01_sorter-osort_norm-False')
-save_fig_dir = r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\ref_tests\sub-W02_test01'
 
-# %%
+# %% MAIN SCRIPT
+
 # read the file
 print('Reading files - including all waveforms...')
 spk = pln.io.read_osort(data_dir, waveform=True, format='mm')
 print('done.')
-
-# calculate for every neuron:
-
-# 0. FR (n spikes)
-# 1. SNR at alignment
-# 2. ISI < threshold
-# 3. similarity matrix
 
 
 def turn_to_percentiles(arr):
@@ -95,10 +99,14 @@ def plot_scores(spk_sel, score):
     for ix in range(len(spk_sel)):
         spk_sel.plot_waveform(ix, ax=ax[letters[ix]], labels=False)
         ax[letters[ix]].set_title(f'{len(spk_sel.timestamps[ix])} spikes')
-    
+
     ax['a'].set_ylabel('Weighted score', fontsize=14)
     return ax['a'].figure
 
+
+# calculate measures
+# ------------------
+# isi, fr, snr, std, dns
 
 print('Calculating FR, SNR, ISI, STD and DNS...')
 fr = [len(tms) for tms in spk.timestamps]
@@ -122,11 +130,11 @@ for ix in range(n_spikes):
     isi_val = np.diff(spk_epo.time[ix])
     prop_below_3ms = (isi_val < 0.003).mean()
     isi[ix] = prop_below_3ms
-    
+
     # STD
     avg_std = np.std(spk.waveform[ix], axis=0).mean()
     std[ix] = avg_std
-    
+
     # DNS
     hist, xbins, ybins, time_edges = (
         pln.viz._calculate_waveform_density_image(
@@ -143,7 +151,10 @@ dns_prc = turn_to_percentiles(dns)
 
 print('Done.')
 
+
 # compute coincidence
+# -------------------
+# or read from disk if already computed
 import h5io
 
 fname = 'coincidence.hdf5'
@@ -154,7 +165,7 @@ if not has_simil:
     print('Calculating similarity matrix, this can take a few minutes...')
     similarity = pln.spike_distance.compute_spike_coincidence_matrix(spk)
     print('done.')
-    
+
     # save to disk
     h5io.write_hdf5(op.join(data_dir, fname), similarity, overwrite=True)
 else:
@@ -167,7 +178,8 @@ suspicious_idx, clusters, counts = (
     )
 )
 
-# detect likely REF clusters and process
+# detect likely REF clusters and select units
+# -------------------------------------------
 check_clst_idx = np.where(counts >= min_ref_channels)[0]
 
 for cluster_idx in check_clst_idx:
@@ -176,7 +188,7 @@ for cluster_idx in check_clst_idx:
     channels = spk.cellinfo.loc[cell_idx, 'channel'].unique()
     if len(channels) < min_ref_channels:
         continue
-    
+
     # get percentile scores
     score = (snr_prc[cell_idx] * weights['snr']
              + fr_prc[cell_idx] * weights['fr']
@@ -185,33 +197,33 @@ for cluster_idx in check_clst_idx:
              + dns_prc[cell_idx] * weights['dns'])
 
     # scores from within-cluster ranks
-    fr_ranks = scipy.stats.rankdata(np.array(fr)[cell_idx])
-    snr_ranks = scipy.stats.rankdata(snr[cell_idx])
-    isi_ranks = scipy.stats.rankdata(1 - isi[cell_idx])
-    std_ranks = scipy.stats.rankdata(1 - std[cell_idx])
-    dns_ranks = scipy.stats.rankdata(dns[cell_idx])
-    
+    fr_ranks = rankdata(np.array(fr)[cell_idx])
+    snr_ranks = rankdata(snr[cell_idx])
+    isi_ranks = rankdata(1 - isi[cell_idx])
+    std_ranks = rankdata(1 - std[cell_idx])
+    dns_ranks = rankdata(dns[cell_idx])
+
     score_ranks = (snr_ranks * weights['snr'] +
                    fr_ranks  * weights['fr'] +
                    isi_ranks * weights['isi'] +
                    std_ranks * weights['std'] +
                    dns_ranks * weights['dns'])
-    
-    # save_plots
+
+    # produce and save plots
+    # ----------------------
     fname = f'cluster_{cluster_idx:02g}_01_coincid.png'
     fig = pln.spike_distance.plot_high_similarity_cluster(
         spk, similarity, clusters, suspicious_idx, cluster_idx=cluster_idx)
     fig.savefig(op.join(save_fig_dir, fname), dpi=300)
     plt.close(fig)
 
-    # save fig scores
     spk_sel = spk.copy().pick_cells(cell_idx)
-    
+
     fname = f'cluster_{cluster_idx:02g}_02_score_percentiles.png'
     fig = plot_scores(spk_sel, score)
     fig.savefig(op.join(save_fig_dir, fname), dpi=300)
     plt.close(fig)
-    
+
     fname = f'cluster_{cluster_idx:02g}_03_score_within_cluster_ranks.png'
     fig = plot_scores(spk_sel, score_ranks)
     fig.savefig(op.join(save_fig_dir, fname), dpi=300)
@@ -231,5 +243,3 @@ for cluster_idx in ignored_clst_idx:
     plt.close(fig)
 
 print('All done.')
-# %%
-
