@@ -153,6 +153,31 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
     ax : matplotlib.Axes
         Axis with the waveform plot.
     '''
+
+    hist, _, ybins, time_edges = _calculate_waveform_density_image(
+        spk, pick, upsample, y_bins
+    )
+    max_alpha = np.percentile(hist[hist > 0], 45)
+    max_lim = np.percentile(hist[hist > 0], 99)
+
+    alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
+    alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
+    alpha_sum[alpha_sum > 1] = 1
+
+    if ax is None:
+        _, ax = plt.subplots()
+
+    ax.imshow(hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
+              extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
+              aspect='auto')
+    if labels:
+        ax.set_xlabel('Time (ms)', fontsize=14)
+        ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
+    return ax
+
+
+def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
+                                      density=True):
     from pylabianca.utils import _deal_with_picks
 
     pick = _deal_with_picks(spk, pick)[0]
@@ -195,25 +220,9 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
         range = None
 
     hist, xbins, ybins = np.histogram2d(xs, ys, bins=[n_samples, y_bins],
-                                        range=range)
+                                        range=range, density=density)
 
-    max_alpha = np.percentile(hist[hist > 0], 45)
-    max_lim = np.percentile(hist[hist > 0], 99)
-
-    alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
-    alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
-    alpha_sum[alpha_sum > 1] = 1
-
-    if ax is None:
-        _, ax = plt.subplots()
-
-    ax.imshow(hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
-              extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
-              aspect='auto')
-    if labels:
-        ax.set_xlabel('Time (ms)', fontsize=14)
-        ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
-    return ax
+    return hist, xbins, ybins, time_edges
 
 
 # TODO: add order=False for groupby?

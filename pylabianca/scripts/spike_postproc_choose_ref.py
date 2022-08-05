@@ -14,20 +14,48 @@ from tqdm import tqdm
 import pylabianca as pln
 
 
+# TODO:
+# - [ ] compute coicidence only for 8-channel packs
+#       (but detecting 8-packs on exported spikes may be sometimes difficult
+#        - when there are no spikes for first channel, there will be no file
+#          for it, which could lead to offsets and bad results)
+# - [ ] accept not mm format
+
+# alignment sample index - should true for all our osort files
 algn_smpl = 94
-min_ref_channels = 4
+
+# minimum coincidence threshold for coincidence cluster formation
 coincidence_threshold = 0.3
 
-data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6'
-            r'lN9XZ8l1O\switchorder\derivatives\sorting\sub-U06\ses'
-            r'-main\sub-U06_ses-main_task-switchorder_run-01_sorter'
-             '-osort_norm-False')
-save_fig_dir = r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\test_figs'
+# minimum number of different-channel units in a coincidence cluster to
+# classify it as a reference cluster
+min_ref_channels = 4
+
+# weights
+# -------
+# weights used in calculating the final score (unit with best score is chosen)
+# isi - % inter spike intervals < 3 ms (lower is better)
+# fr  - firing rate
+# snr - signal to noise ratio (mean / std) at alignment point
+# std - standard deviation calculated separately for each waveform sample
+#       and then averaged (lower is better)
+# dns - average "perceptual" waveform density (for each time sample 20 best
+#       pixels from waveform density are chosen and averaged; these values
+#       are then averaged across the whole waveform; the values are divided
+#       by maximum density to de-bias against waveforms with little spikes
+#       and thus make this value closer to the density we see in the figures)
+weights = {'isi': 0.15, 'fr': 0.35, 'snr': 0.0, 'std': 0.0, 'dns': 0.5}
+
+
+data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8'
+            r'l1O\switchorder\derivatives\sorting\sub-W02\ses-main\sub-'
+            r'W02_ses-main_task-switchorder_run-01_sorter-osort_norm-False')
+save_fig_dir = r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\ref_tests\sub-W02_test01'
 
 # %%
 # read the file
 print('Reading files - including all waveforms...')
-spk = pln.io.read_osort(data_dir, waveform=True)
+spk = pln.io.read_osort(data_dir, waveform=True, format='mm')
 print('done.')
 
 # calculate for every neuron:
@@ -45,8 +73,10 @@ def turn_to_percentiles(arr):
 
 
 def plot_scores(spk_sel, score):
+    from string import ascii_letters
+
     n_uni = len(spk_sel)
-    letters = 'bcdefghijklmn'[:n_uni]
+    letters = ascii_letters[1:n_uni + 1]
     ax = plt.figure(constrained_layout=True, figsize=(12, 6)).subplot_mosaic(
         'a' * n_uni + '\n' + letters,
          gridspec_kw={'height_ratios': [3, 1]}
@@ -70,7 +100,7 @@ def plot_scores(spk_sel, score):
     return ax['a'].figure
 
 
-print('Calculating FR, SNR and ISI...')
+print('Calculating FR, SNR, ISI, STD and DNS...')
 fr = [len(tms) for tms in spk.timestamps]
 fr_prc = turn_to_percentiles(fr)
 
@@ -79,6 +109,8 @@ spk_epo = spk.to_epochs()
 
 snr = np.zeros(n_spikes, dtype='float')
 isi = np.zeros(n_spikes, dtype='float')
+std = np.zeros(n_spikes, dtype='float')
+dns = np.zeros(n_spikes, dtype='float')
 
 for ix in range(n_spikes):
     # SNR
@@ -90,9 +122,24 @@ for ix in range(n_spikes):
     isi_val = np.diff(spk_epo.time[ix])
     prop_below_3ms = (isi_val < 0.003).mean()
     isi[ix] = prop_below_3ms
+    
+    # STD
+    avg_std = np.std(spk.waveform[ix], axis=0).mean()
+    std[ix] = avg_std
+    
+    # DNS
+    hist, xbins, ybins, time_edges = (
+        pln.viz._calculate_waveform_density_image(
+            spk, ix, False, 100)
+    )
+    hist_sort = np.sort(hist)[:, ::-1]
+    vals = (hist_sort[:, :20] / hist_sort.max()).mean(axis=-1)
+    dns[ix] = vals.mean()
 
 snr_prc = turn_to_percentiles(snr)
 isi_prc = turn_to_percentiles(isi)
+std_prc = turn_to_percentiles(std)
+dns_prc = turn_to_percentiles(dns)
 
 print('Done.')
 
@@ -124,25 +171,31 @@ suspicious_idx, clusters, counts = (
 check_clst_idx = np.where(counts >= min_ref_channels)[0]
 
 for cluster_idx in check_clst_idx:
-    print('Processing cluster {cluster_idx}...')
+    print(f'Processing cluster {cluster_idx}...')
     cell_idx = suspicious_idx[clusters[cluster_idx]]
     channels = spk.cellinfo.loc[cell_idx, 'channel'].unique()
     if len(channels) < min_ref_channels:
         continue
     
     # get percentile scores
-    score = (snr_prc[cell_idx] * 0.6
-             + fr_prc[cell_idx] * 0.2
-             + (1 - isi_prc[cell_idx]) * 0.2)
+    score = (snr_prc[cell_idx] * weights['snr']
+             + fr_prc[cell_idx] * weights['fr']
+             + (1 - isi_prc[cell_idx]) * weights['isi']
+             + (1 - std_prc[cell_idx]) * weights['std']
+             + dns_prc[cell_idx] * weights['dns'])
 
     # scores from within-cluster ranks
     fr_ranks = scipy.stats.rankdata(np.array(fr)[cell_idx])
-    snr_ranks = scipy.stats.rankdata(np.array(snr)[cell_idx])
-    isi_ranks = scipy.stats.rankdata(1 - np.array(isi)[cell_idx])
+    snr_ranks = scipy.stats.rankdata(snr[cell_idx])
+    isi_ranks = scipy.stats.rankdata(1 - isi[cell_idx])
+    std_ranks = scipy.stats.rankdata(1 - std[cell_idx])
+    dns_ranks = scipy.stats.rankdata(dns[cell_idx])
     
-    score_ranks = (snr_ranks * 0.6 +
-                   fr_ranks  * 0.2 +
-                   isi_ranks * 0.2)
+    score_ranks = (snr_ranks * weights['snr'] +
+                   fr_ranks  * weights['fr'] +
+                   isi_ranks * weights['isi'] +
+                   std_ranks * weights['std'] +
+                   dns_ranks * weights['dns'])
     
     # save_plots
     fname = f'cluster_{cluster_idx:02g}_01_coincid.png'
