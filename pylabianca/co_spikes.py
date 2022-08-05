@@ -1,9 +1,7 @@
 import numpy as np
-from scipy.signal import correlate, correlation_lags
-from tqdm.notebook import tqdm
 
-import borsar
 from . import utils, viz
+
 
 def xcorr(x, y, maxlag=None):
     '''Compute un-normalized cross-correlation for required max lag.
@@ -26,14 +24,19 @@ def xcorr(x, y, maxlag=None):
     corr : numpy.ndarray
         1d array of crosscorrelations.
     '''
+    from scipy.signal import correlate, correlation_lags
+
     corr = correlate(x, y)
     lags = correlation_lags(len(x), len(y))
 
     if maxlag is not None:
-        rng = borsar.utils.find_range(lags, [-maxlag, maxlag])
+        from borsar.utils import find_range
+
+        rng = find_range(lags, [-maxlag, maxlag])
         corr, lags = corr[rng], lags[rng]
 
     return lags, corr
+
 
 def shuffled_spike_xcorr(spk, cell_idx1, cell_idx2, sfreq=500,
                          gauss_winlen=0.025, max_lag=0.1, pbar=True,
