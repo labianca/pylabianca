@@ -1,42 +1,41 @@
-name: mne
+name: pylabianca
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - h5py=3.3.0=nompi_py39hf27771d_100
-  - hdf5=1.10.6=nompi_h5268f04_1114
-  - matplotlib=3.4.2=py39hcbf5309_0
-  - matplotlib-base=3.4.2=py39h581301d_0
-  - matplotlib-inline=0.1.2=pyhd8ed1ab_2
-  - mkl=2020.4=hb70f87d_311
-  - numba=0.53.1=py39hb8cd55e_1
-  - numpy=1.21.1=py39h6635163_0
-  - numpydoc=1.1.0=pyhd3eb1b0_1
-  - pandas=1.3.1=py39h2e25243_0
-  - pip=21.2.3=pyhd8ed1ab_0
-  - pooch=1.4.0=pyhd8ed1ab_0
-  - python=3.9.6=h7840368_1_cpython
-  - scikit-learn=0.24.2=py39he931e04_1
-  - scipy=1.7.1=py39hc0c34ad_0
-  - seaborn=0.11.2=pyhd3eb1b0_0
-  - setuptools=49.6.0=py39hcbf5309_3
-  - six=1.16.0=pyh6c4a22f_0
-  - spyder=5.0.5=py39haa95532_2
-  - spyder-kernels=2.0.5=py39haa95532_0
-  - tqdm=4.62.0=pyhd8ed1ab_0
-  - xarray=0.19.0=pyhd3eb1b0_1
-  - xlrd=2.0.1=pyhd8ed1ab_3
-  - yaml=0.2.5=he774522_0
+  - h5py=3.3.0
+  - hdf5=1.10.6
+  - matplotlib=3.4.2
+  - matplotlib-base=3.4.2
+  - matplotlib-inline=0.1.2
+  - mkl=2020.4
+  - numba=0.53.1
+  - numpy=1.21.1
+  - numpydoc=1.1.0
+  - pandas=1.3.1
+  - pip=21.2.3
+  - python=3.9.6
+  - scikit-learn
+  - scipy=1.7.1
+  - seaborn=0.11.2
+  - setuptools=49.6.0
+  - six=1.16.0
+  - spyder=5.0.5
+  - spyder-kernels=2.0.5
+  - tqdm=4.62.0
+  - xarray=0.19.0
+  - xlrd=2.0.1
+  - yaml=0.2.5
   - pip:
+    - mne
     - elephant==0.10.0
     - h5io==0.1.7
     - h5netcdf==0.11.0
     - neo==0.10.0
-    - outdated==0.2.1
-    - packaging==21.3
-    - pandas-flavor==0.3.0
     - patsy==0.5.2
     - pingouin==0.5.1
     - quantities==0.12.5
     - statsmodels==0.13.2
-prefix: C:\Users\mmagnuski\anaconda3\envs\mne
+    - -e git+https://github.com/labianca/pylabianca.git#egg=pylabianca
+    - -e git+https://github.com/mmagnuski/borsar.git#egg=borsar
+    - -e git+https://github.com/mmagnuski/sarna.git#egg=sarna
