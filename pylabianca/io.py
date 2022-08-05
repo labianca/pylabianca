@@ -349,8 +349,6 @@ def read_combinato(path, label=None, alignment='both'):
     return spikes
 
 
-# TODO: add option to resample (and trim?) the waveforms
-# TODO: add option to read the standard osort format (``format='standard'``)
 def read_osort(path, waveform=True, channels='all', format='mm',
                progress=True):
     '''Read osort sorting results.
@@ -439,10 +437,24 @@ def read_osort(path, waveform=True, channels='all', format='mm',
         # make sure path is a pathlib object
         path = Path(path) if not isinstance(path, Path) else path
 
+        # check if threshold and alignment can be read from the path
+        try:
+            thresh_str = path.stem
+            thresh = float(thresh_str)
+        except:
+            thresh = np.nan
+
+        try:
+            algn = path.parent.stem
+            assert algn in ['min', 'max', 'mixed']
+        except:
+            algn = 'unknown'
+
     iter_over = tqdm(files) if progress else files
     for fname in iter_over:
         file_path = op.join(path, fname)
         data = loadmat(file_path, squeeze_me=False, variable_names=var_names)
+        this_cluster_id = data[translate['cluster_id']].astype('int64')
 
         if format == 'mm' and isinstance(correct_field, list):
             # TEMP FIX: older exporting function had a spelling error
@@ -450,7 +462,6 @@ def read_osort(path, waveform=True, channels='all', format='mm',
                              if field in data][0]
             var_names = read_vars + [correct_field]
 
-        this_cluster_id = data[translate['cluster_id']].astype('int64')
         if format == 'mm':
             cluster_id.append(this_cluster_id)
             channel.append([x[0][0] for x in data['channel']])
@@ -474,9 +485,6 @@ def read_osort(path, waveform=True, channels='all', format='mm',
             # find channel
             ch_name = fname.split('_')[0]
             ch_name = ch_name.replace('CSC', '')
-
-            thresh = float(path.stem)
-            algn = path.parent.stem
 
             # split timestamps (and waveforms) into units
             this_timestamps = data[translate['timestamp']]
@@ -507,6 +515,8 @@ def read_osort(path, waveform=True, channels='all', format='mm',
                                  alignment=alignment,
                                  threshold=threshold))
 
+    # the sfreq here refers to timestamp frequency, not the sampling frequency
+    # of the signal
     return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveforms)
 
 
