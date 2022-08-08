@@ -66,7 +66,7 @@ algn_smpl = 94
 
 # read the file
 print('Reading files - including all waveforms...')
-spk = pln.io.read_osort(data_dir, waveform=True, format='mm')
+spk = pln.io.read_osort(data_dir, waveform=True, format='standard')
 print('done.')
 
 
