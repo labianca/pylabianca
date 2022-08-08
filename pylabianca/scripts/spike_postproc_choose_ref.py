@@ -28,13 +28,11 @@ import pylabianca as pln
 # the directory with sorting results - that is after manual curation and
 # export using updateSORTINGresults_mm matlab function located in
 # psy_screenning-\helpers\sorting_utils)
-data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8'
-            r'l1O\switchorder\derivatives\sorting\sub-W02\ses-main\sub-'
-            r'W02_ses-main_task-switchorder_run-01_sorter-osort_norm-False')
-save_fig_dir = (r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\ref_test'
-                r's\sub-W02_test01')
+data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1O\switchorder\derivatives\sorting\sub-W02\ses-main\sub-W02_ses-main_task-switchorder_run-01_sorter-osort_norm-False_format-standard')
+save_fig_dir = (r'D:\Dropbox\PROJ\Labianka\sorting\ref_tests\sub-W02_test02')
 
-
+# data format - standard or mm (depends on how you exported the curated units)
+data_format = 'standard'
 
 # minimum coincidence threshold for coincidence cluster formation
 coincidence_threshold = 0.3
@@ -66,7 +64,7 @@ algn_smpl = 94
 
 # read the file
 print('Reading files - including all waveforms...')
-spk = pln.io.read_osort(data_dir, waveform=True, format='standard')
+spk = pln.io.read_osort(data_dir, waveform=True, format=data_format)
 print('done.')
 
 
