@@ -90,7 +90,7 @@ def plot_scores(spk_sel, score):
     ax['a'].plot(score, marker='o')
 
     # plot best score in red
-    best_idx = score.argmax()
+    best_idx = np.nanargmax(score)
     ax['a'].plot(best_idx, score[best_idx], marker='o', markersize=18,
                  markerfacecolor='r')
 
