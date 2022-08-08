@@ -39,4 +39,16 @@ save_fig_dir = r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\ref_tests\sub-
 Note that you need the `r` before the string (like above) so that backslashes are treated literally (so that `'\n'` does not mean new line for example).
 
 ### IV. Investigate script outputs
-Currently `spike_postproc_choose_ref.py` does not save modified data, only generates figures to check if the reference selection it performs makes sense. Go to the `save_fig_dir` to see the generated figures.
+Once you've run the script you should see similar output produced on the screen successively:
+<img src="img/04_refsel_script_output.PNG" style="max-width:700px;width:70%">
+
+Currently `spike_postproc_choose_ref.py` does not save modified data, only generates figures to check if the reference selection it performs makes sense. Go to the `save_fig_dir` to see the generated figures. The contents of the directory should look similar to this:
+<img src="img/05_figures_folder.PNG" style="max-width:700px;width:70%">
+
+The first folder "ignored_clusters" contains coincidence clusters that were ignored as they did not reach `min_ref_channels` threshold. Then each processed cluster is shown with three images:
+* `cluster_xx_01_coincid.png` (where `xx` is the cluster number) - presents coincidence matrix between units in the cluster.
+* `cluster_xx_02_score_percentiles.png` shows which unit would have been picked using percentile method.
+* `cluster_xx_03_score_within_cluster_ranks.png` shows which unit would have been picked using within-cluster ranks method.
+
+Both methods should give similar results, but they may point to different units sometimes.<br />
+Currently high weight is attributed to waveform density - a measue that should prefer waveforms with nice concentration of many spikes - so in many cases units with many spikes will be preferred. Take a look if there are any tricky cases where the script chooses units that are not good. 
