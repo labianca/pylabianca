@@ -17,12 +17,15 @@ If you don't know where pylabianca package is located, you can follow these step
    `import pylabianca as pln`
 3. The import should not raise any errors. Then you can write:
    `pln.__file__`
-   This will display the location of the main pylabianca file and thus - the package directory.
+   This will display the location of the main pylabianca file and thus - the package directory.<br />
+<img src="img/02_find_pylabianca_location.PNG" style="max-width:750px;width:75%">
 
 ### II. How to open and run the script
 There are many ways to open/run a python script, but I explain below how to do it from Spyder, as it should be the easiest:
-1. Open the script using `File -> Open` menu.
-2. Click on the green arrow (or `F5`) to run the script.
+1. Open the script using `File -> Open` menu.<br />
+   <img src="img/02_open_file.PNG" style="max-width:200px;width:20%">
+3. Click on the green arrow (or `F5`) to run the script.<br />
+   <img src="img/03_run_file.PNG" style="max-width:300px;width:40%">
 
 Of course, before running the script you would like to change the paths and sometimes other parameters, see next section.
 
