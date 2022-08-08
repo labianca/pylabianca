@@ -3,11 +3,11 @@
 This document assumes that you've followed the "Setting up python environment" instructions from pylabianca repository.
 
 To run the reference unit selection script you need to:
-1. know where the pylabianca package was downloaded to (by default it will be in src subdirectory in the folder where the environment.yml file was located). If you don't remember the folder - take a look at section I to see how to find it using python.
+1. know where the pylabianca package was downloaded to (by default it will be in src subdirectory in the folder where the `environment.yml` file was located). If you don't remember the folder - take a look at section `I` to see how to find it using python.
 2. know the directory where you have your exported units (`.mat` files with spike info after curation)
 
-First you need to open the script. It is located in pylabianca package directory:
-`pylabianca\pylabianca\scripts`
+First you need to open the script. It is located in pylabianca package directory:<br />
+`pylabianca\pylabianca\scripts`<br />
 See next section to see how to find pylabianca package directory. You can also download the script from our pylabianca github repository (in the same way you downloaded the environment file).
 
 ### I. How to find pylabianca package location?
@@ -28,7 +28,7 @@ Of course, before running the script you would like to change the paths and some
 
 ### III. `spike_postproc_choose_ref.py` - parameters
 From line 25 to line 62 you should find the settings section of the script. All the settings are described
-in the script. You have to change `data_dir` and `save_fig_dir` variables.
+in the script. You have to change `data_dir` and `save_fig_dir` variables.<br />
 You can wrap these variables into multiple lines as currently in the script, or just copy respective paths and paste into one line, for example:
 ```python
 save_fig_dir = r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\ref_tests\sub-W02_test01'
