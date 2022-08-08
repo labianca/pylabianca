@@ -411,7 +411,7 @@ def read_osort(path, waveform=True, channels='all', format='mm',
     cluster_id, alignment, threshold, channel = [list() for _ in range(4)]
     timestamp = list()
     waveforms = list() if waveform else None
-    ignore_cluster = [0, 99999999]
+    ignore_cluster = [0, 1, 99999999]
 
     if format == 'mm':
         # TEMP FIX: older exporting function had a spelling error
@@ -477,8 +477,8 @@ def read_osort(path, waveform=True, channels='all', format='mm',
         else:
             # find cluster ids
             cluster_ids = np.unique(this_cluster_id)
-            if ignore_cluster in cluster_ids:
-                msk = np.in1d(cluster_ids, ignore_cluster)
+            msk = np.in1d(cluster_ids, ignore_cluster)
+            if msk.any():
                 cluster_ids = cluster_ids[~msk]
             cluster_id.append(cluster_ids)
 
