@@ -568,11 +568,12 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
             ncs_path = op.join(path, first_timestamp_from)
             ncs = ni.neuralynx_io.load_ncs(ncs_path)
             first_sample = ncs['time'][0].astype('int64')
+            last_sample = ncs['time'][-1].astype('int64')
             del ncs
 
         # prepare dataframe
         columns = ['start', 'duration', 'type', 'trigger', 'timestamp']
-        if first_timestamp_from:
+        if not first_timestamp_from:
             columns.pop(2)
 
         indices = np.arange(0, n_events + (1 if first_timestamp_from else 0))
@@ -588,7 +589,7 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
             events.loc[0, 'timestamp'] = first_sample
             start, end = 1, n_events
         else:
-            start,end = 0, n_events - 1
+            start, end = 0, n_events - 1
 
         # the rest is just copying data to the dataframe
         starts = (event_timestamps - first_sample) / 1e6
@@ -600,7 +601,15 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
         if first_timestamp_from:
             events.loc[start:end, 'type'] = 'trigger'
 
+            # last timestamp
+            events.loc[end + 1, 'start'] = (last_sample - first_sample) / 1e6
+            events.loc[end + 1, 'duration'] = 'n/a'
+            events.loc[end + 1, 'type'] = 'end'
+            events.loc[end + 1, 'trigger'] = -1
+            events.loc[end + 1, 'timestamp'] = last_sample
+
         events= events.infer_objects()
+
     elif format == 'mne':
         events = np.zeros((n_events, 3), dtype='int64')
         events[:, 0] = event_timestamps
