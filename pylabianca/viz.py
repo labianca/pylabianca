@@ -286,7 +286,7 @@ def plot_raster(spk, pick=0, groupby=None, ax=None):
 
 def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
                 min_pval=0.001):
-    '''PLot average spike rate and spike raster.
+    '''Plot average spike rate and spike raster.
 
     spk : pylabianca.spikes.SpikeEpochs
         Spike object to use.
