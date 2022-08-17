@@ -57,7 +57,7 @@ min_ref_channels = 4
 #       and thus make this value closer to the density we see in the figures)
 weights = {'isi': 0.15, 'fr': 0.35, 'snr': 0.0, 'std': 0.0, 'dns': 0.5}
 
-# alignment sample index - should true for all our osort files
+# alignment sample index - 94 should be true for all our osort files
 algn_smpl = 94
 
 
