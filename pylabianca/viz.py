@@ -177,7 +177,7 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
 
 
 def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
-                                      density=True):
+                                      density=True, y_range=None):
     from pylabianca.utils import _deal_with_picks
 
     pick = _deal_with_picks(spk, pick)[0]
@@ -218,6 +218,12 @@ def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
         ys = ys[~nan_mask]
     else:
         range = None
+
+    if y_range is not None:
+        if nan_mask.any():
+            range[1] = y_range
+        else:
+            range = [[np.min(xs), np.max(xs)], y_range]
 
     hist, xbins, ybins = np.histogram2d(xs, ys, bins=[n_samples, y_bins],
                                         range=range, density=density)
@@ -417,3 +423,50 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
         for lim in ('x', 'y'):
             if do_lim[lim]:
                 set_lim[lim](limits[lim])
+
+
+# TODO - move this to separate submodule .waveform
+def calculate_perceptual_waveform_density(spk, cell_idx):
+    # get waveform 2d histogram image
+    hist, xbins, ybins, time_edges = (
+        _calculate_waveform_density_image(
+            spk, cell_idx, False, 100)
+    )
+
+    # correct y range
+    # TODO: would be cheaper to calculate the range in the function above
+    sm = hist.sum(axis=0)
+    msk = sm < 1e-6
+    n_smp = len(msk)
+
+    start_ix, end_ix = 0, n_smp
+
+    if msk[0]:
+        # trim from front
+        for ix in range(n_smp):
+            if not msk[ix]:
+                break
+        start_ix = ix
+
+    if msk[-1]:
+        # trim from back
+        for ix in range(-1, -n_smp, -1):
+            if not msk[ix]:
+                break
+        end_ix = ix
+
+    # create the 2d hist image with corrected y range
+    y_range = [ybins[start_ix], ybins[end_ix]]
+    hist, xbins, ybins, time_edges = (
+        _calculate_waveform_density_image(
+            spk, cell_idx, False, 100, y_range=y_range)
+    )
+
+    # calculate dns
+    # TODO: a better way would be to calculate mean from a spatial window
+    #       around max, not the top N values
+    hist_sort = np.sort(hist)[:, ::-1]
+    vals = (hist_sort[:, :15] / hist_sort.max()).mean(axis=-1)
+    dns = vals.mean()
+
+    return dns

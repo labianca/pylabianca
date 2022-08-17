@@ -20,7 +20,7 @@ import pylabianca as pln
 #       (but detecting 8-packs on exported spikes may be sometimes difficult
 #        - when there are no spikes for first channel, there will be no file
 #          for it, which could lead to offsets and bad results)
-# - [ ] accept not mm format
+# - [x] accept not mm format
 
 # SETTINGS
 # --------
@@ -28,8 +28,9 @@ import pylabianca as pln
 # the directory with sorting results - that is after manual curation and
 # export using updateSORTINGresults_mm matlab function located in
 # psy_screenning-\helpers\sorting_utils)
-data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1O\switchorder\derivatives\sorting\sub-W02\ses-main\sub-W02_ses-main_task-switchorder_run-01_sorter-osort_norm-False_format-standard')
-save_fig_dir = (r'D:\Dropbox\PROJ\Labianka\sorting\ref_tests\sub-W02_test02')
+data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1O\switchorder\derivatives\sorting\sub-U06\ses-main\sub-U06_ses-main_task-switchorder_run-01_sorter-osort_norm-False')
+save_fig = True
+save_fig_dir = (r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\ref_tests\sub-U06')
 
 # data format - standard or mm (depends on how you exported the curated units)
 data_format = 'standard'
@@ -134,13 +135,7 @@ for ix in range(n_spikes):
     std[ix] = avg_std
 
     # DNS
-    hist, xbins, ybins, time_edges = (
-        pln.viz._calculate_waveform_density_image(
-            spk, ix, False, 100)
-    )
-    hist_sort = np.sort(hist)[:, ::-1]
-    vals = (hist_sort[:, :20] / hist_sort.max()).mean(axis=-1)
-    dns[ix] = vals.mean()
+    dns[ix] = pln.viz.calculate_perceptual_waveform_density(spk, ix)
 
 snr_prc = turn_to_percentiles(snr)
 isi_prc = turn_to_percentiles(isi)
@@ -179,6 +174,8 @@ suspicious_idx, clusters, counts = (
 # detect likely REF clusters and select units
 # -------------------------------------------
 check_clst_idx = np.where(counts >= min_ref_channels)[0]
+drop = np.zeros(len(spk), dtype='bool')
+drop_perc = drop.copy()
 
 for cluster_idx in check_clst_idx:
     print(f'Processing cluster {cluster_idx}...')
@@ -207,37 +204,55 @@ for cluster_idx in check_clst_idx:
                    std_ranks * weights['std'] +
                    dns_ranks * weights['dns'])
 
+    # save drop cells info according to percentiles and ranks
+    save_idx = cell_idx.copy()
+    save_idx_perc = np.delete(save_idx, score.argmax())
+    save_idx_ranks = np.delete(save_idx, score_ranks.argmax())
+    drop[save_idx_perc] = True
+    drop_perc[save_idx_ranks] = True
+
     # produce and save plots
     # ----------------------
-    fname = f'cluster_{cluster_idx:02g}_01_coincid.png'
-    fig = pln.spike_distance.plot_high_similarity_cluster(
-        spk, similarity, clusters, suspicious_idx, cluster_idx=cluster_idx)
-    fig.savefig(op.join(save_fig_dir, fname), dpi=300)
-    plt.close(fig)
+    if save_fig:
+        fname = f'cluster_{cluster_idx:02g}_01_coincid.png'
+        fig = pln.spike_distance.plot_high_similarity_cluster(
+            spk, similarity, clusters, suspicious_idx, cluster_idx=cluster_idx)
+        fig.savefig(op.join(save_fig_dir, fname), dpi=300)
+        plt.close(fig)
 
-    spk_sel = spk.copy().pick_cells(cell_idx)
+        spk_sel = spk.copy().pick_cells(cell_idx)
 
-    fname = f'cluster_{cluster_idx:02g}_02_score_percentiles.png'
-    fig = plot_scores(spk_sel, score)
-    fig.savefig(op.join(save_fig_dir, fname), dpi=300)
-    plt.close(fig)
+        fname = f'cluster_{cluster_idx:02g}_02_score_percentiles.png'
+        fig = plot_scores(spk_sel, score)
+        fig.savefig(op.join(save_fig_dir, fname), dpi=300)
+        plt.close(fig)
 
-    fname = f'cluster_{cluster_idx:02g}_03_score_within_cluster_ranks.png'
-    fig = plot_scores(spk_sel, score_ranks)
-    fig.savefig(op.join(save_fig_dir, fname), dpi=300)
-    plt.close(fig)
+        fname = f'cluster_{cluster_idx:02g}_03_score_within_cluster_ranks.png'
+        fig = plot_scores(spk_sel, score_ranks)
+        fig.savefig(op.join(save_fig_dir, fname), dpi=300)
+        plt.close(fig)
 
-print('Plotting ignored clusters...')
-ignored_clst_idx = np.where(counts < min_ref_channels)[0]
+if save_fig:
+    print('Plotting ignored clusters...')
+    ignored_clst_idx = np.where(counts < min_ref_channels)[0]
 
-if len(ignored_clst_idx) > 0:
-    os.mkdir(op.join(save_fig_dir, 'ignored_clusters'))
+    if len(ignored_clst_idx) > 0:
+        ignored_dir = op.join(save_fig_dir, 'ignored_clusters')
+        if not op.isdir(ignored_dir):
+            os.mkdir(ignored_dir)
 
-for cluster_idx in ignored_clst_idx:
-    fname = f'cluster_{cluster_idx:02g}_01_coincid.png'
-    fig = pln.spike_distance.plot_high_similarity_cluster(
-        spk, similarity, clusters, suspicious_idx, cluster_idx=cluster_idx)
-    fig.savefig(op.join(save_fig_dir, 'ignored_clusters', fname), dpi=300)
-    plt.close(fig)
+    for cluster_idx in ignored_clst_idx:
+        fname = f'cluster_{cluster_idx:02g}_01_coincid.png'
+        fig = pln.spike_distance.plot_high_similarity_cluster(
+            spk, similarity, clusters, suspicious_idx, cluster_idx=cluster_idx)
+        fig.savefig(op.join(save_fig_dir, 'ignored_clusters', fname), dpi=300)
+        plt.close(fig)
 
 print('All done.')
+
+# %%
+import h5io
+
+drop_save_dir = r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1O\switchorder\derivatives\sorting\sub-U06\ses-main'
+drop_fname = r'sub-U06_ses-main_task-switchorder_run-01_sorter-osort_norm-False_drop.hdf5'
+h5io.write_hdf5(op.join(drop_save_dir, drop_fname), drop)
