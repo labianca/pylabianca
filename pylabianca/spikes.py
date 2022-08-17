@@ -231,6 +231,27 @@ class SpikeEpochs():
             cell_names=self.cell_names[picks])
         return xarr
 
+    def n_spikes(self, per_epoch=False):
+        """Calculate number of spikes per cell (per epoch).
+
+        Parameters
+        ----------
+        per_epoch: bool
+            Whether to calculate number of spikes per cell splitting between
+            epochs. If ``True`` the output is a ``cell x epochs`` xarray with
+            additional trial info from ``.metadata`` attribute. Defaults to
+            ``False``.
+
+        Returns
+        -------
+        n_spikes : numpy.array | xarray.DataArray
+            Number of spikes per cell. If ``per_epoch=False`` the output is
+            a numpy array of spike numbers for consecutive cells. If
+            ``per_epoch`` is ``True`` the output is a ``cell x epochs`` xarray
+            with additional trial info from ``.metadata`` attribute.
+        """
+        return _n_spikes(self, per_epoch=per_epoch)
+
     # TODO:
     # - [ ] use `group` from sarna in looping through trials
     #       for faster execution...
@@ -703,6 +724,16 @@ class Spikes(object):
 
         return self
 
+    def n_spikes(self):
+        """Calculate number of spikes per cell.
+
+        Returns
+        -------
+        n_spikes : numpy.array
+            Number of spikes per cell.
+        """
+        return _n_spikes(self)
+
     def sort(self, by=None):
         '''Sort cells. Operates in-place.
 
@@ -922,3 +953,26 @@ def _sort_spikes(spk, by=None, inplace=True):
     spk.pick_cells(cells_order)
 
     return spk
+
+
+def _n_spikes(spk, per_epoch=False):
+    if not per_epoch:
+        if isinstance(spk, Spikes):
+            return np.array([len(x) for x in spk.timestamps])
+        elif isinstance(spk, SpikeEpochs):
+            return np.array([len(x) for x in spk.time])
+        else:
+            raise TypeError("`spk` has to be an instance of Spikes or"
+                            f"SpikeEpochs, got {type(spk)}.")
+
+    else:
+        if not isinstance(spk, SpikeEpochs):
+            raise TypeError("When `per_epoch=True`, `spk` has to be an "
+                            f"instance of SpikeEpochs, got {type(spk)}.")
+        tmin, tmax = spk.time_limits
+        winlen = tmax - tmin
+
+        # FIX: this normalizes per second, we don't want that in n_spikes
+        frate = compute_spike_rate(spk, step=False, tmin=tmin, tmax=tmax)
+        n_spk = (frate.values * winlen).astype('int')
+        return n_spk
