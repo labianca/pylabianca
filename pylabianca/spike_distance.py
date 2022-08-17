@@ -327,6 +327,7 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
 
 
 # TODO: clean up
+# TODO: move to viz
 def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
                                  cluster_idx=0, drop=None, figsize=(14, 9)):
     import matplotlib.pyplot as plt
@@ -345,7 +346,8 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
 
         info = spk.cellinfo.loc[cell_idx, :]
         n_spikes = len(spk.timestamps[cell_idx])
-        title = f'{info.channel}, {info.alignment}\n{n_spikes} spikes'
+        title = (f'{info.channel}\ncluster {info.cluster}\nalignment {info.alignment}, '
+                 f'\n{n_spikes} spikes')
 
         if drop is None:
             ax[0, idx + 1].set_title(title)
