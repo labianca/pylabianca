@@ -177,6 +177,7 @@ def depth_of_selectivity(frate, by, zero_below=0.0001):
     return selectivity, avg_by_probe
 
 
+# TODO: could use njobs!
 def compute_selectivity_windows(spk, windows=None, compare='image',
                                 baseline=None, test='kruskal', n_perm=2000,
                                 progress=True):
@@ -309,10 +310,12 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
                 df[window].loc[cell_idx, 'FR_condition'] = average_fr
                 df[window].loc[cell_idx, 'nFR_condition'] = average_fr / base_fr
             pbar.update(1)
+    pbar.close()
 
     for window in windows.keys():
         df[window] = df[window].infer_objects()
         if compare is not None:
+            # TODO: not sure if this is the right way to do in all cases
             df[window].loc[:, 'preferred'] = (
                 df[window]['preferred'].astype('int'))
 
