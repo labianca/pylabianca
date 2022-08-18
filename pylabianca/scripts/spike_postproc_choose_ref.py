@@ -11,19 +11,27 @@ import numpy as np
 from matplotlib import pyplot as plt
 import scipy
 from scipy.stats import rankdata
+from tqdm import tqdm
 
 import pylabianca as pln
 
 
 # TODO:
-# - [ ] compute coicidence only for 8-channel packs
+# - [x] compute coicidence only for 8-channel packs
 #       (but detecting 8-packs on exported spikes may be sometimes difficult
 #        - when there are no spikes for first channel, there will be no file
 #          for it, which could lead to offsets and bad results)
-# - [x] accept not mm format
 
 # SETTINGS
 # --------
+
+# first channel
+# to calculate coincidence only in 8-channel packs, you have to specify
+# the first channel - in case you did not select any units from the first
+# channel
+# if you leave it as None, the first channel will be estimated from
+# selected units, which may be incorrect
+first_channel = 64
 
 # the directory with sorting results - that is after manual curation and
 # export using updateSORTINGresults_mm matlab function located in
@@ -68,6 +76,12 @@ print('Reading files - including all waveforms...')
 spk = pln.io.read_osort(data_dir, waveform=True, format=data_format)
 print('done.')
 
+# remove units with no spikes
+n_spikes = spk.n_spikes()
+no_spikes = n_spikes == 0
+if (no_spikes).any():
+    spk.pick_cells(~no_spikes)
+
 
 def turn_to_percentiles(arr):
     percentiles = np.vectorize(
@@ -103,6 +117,26 @@ def plot_scores(spk_sel, score):
     return ax['a'].figure
 
 
+# check channel packs
+# -------------------
+channels = spk.cellinfo.channel.unique()
+channel_number = np.sort([int(ch[1:]) for ch in channels])
+
+if first_channel is None:
+    print('Estimating first channel from selected units.')
+    first_channel = channel_number[0]
+    print('Lowest channel number:', first_channel)
+
+n_packs = int(np.ceil((channel_number[-1] - first_channel) / 8))
+first_pack_channel = first_channel + np.arange(0, n_packs) * 8
+
+# find which units belong to which pack
+unit_channel = spk.cellinfo.channel.str.slice(1).astype('int')
+
+units_in_pack = [np.where(np.in1d(unit_channel, frst + np.arange(8)))[0]
+                 for frst in first_pack_channel]
+
+
 # calculate measures
 # ------------------
 # isi, fr, snr, std, dns
@@ -119,7 +153,7 @@ isi = np.zeros(n_spikes, dtype='float')
 std = np.zeros(n_spikes, dtype='float')
 dns = np.zeros(n_spikes, dtype='float')
 
-for ix in range(n_spikes):
+for ix in tqdm(range(n_spikes)):
     # SNR
     waveform_ampl = np.mean(spk.waveform[ix][:, algn_smpl], axis=0)
     waveform_std = np.std(spk.waveform[ix][:, algn_smpl], axis=0)
@@ -150,109 +184,129 @@ print('Done.')
 # or read from disk if already computed
 import h5io
 
-fname = 'coincidence.hdf5'
+fname = 'coincidence_per_pack.hdf5'
 files = os.listdir(data_dir)
 has_simil = fname in files
 
 if not has_simil:
     print('Calculating similarity matrix, this can take a few minutes...')
-    similarity = pln.spike_distance.compute_spike_coincidence_matrix(spk)
+    similarity_per_pack = list()
+
+    for pack_idx in units_in_pack:
+        if len(pack_idx) < 2:
+            similarity_per_pack.append(None)
+        else:
+            this_spk = spk.copy().pick_cells(pack_idx)
+            similarity = pln.spike_distance.compute_spike_coincidence_matrix(
+                this_spk)
+            similarity_per_pack.append(similarity)
+
     print('done.')
 
     # save to disk
-    h5io.write_hdf5(op.join(data_dir, fname), similarity, overwrite=True)
+    h5io.write_hdf5(op.join(data_dir, fname), similarity_per_pack,
+                    overwrite=True)
 else:
-    similarity = h5io.read_hdf5(op.join(data_dir, fname))
+    similarity_per_pack = h5io.read_hdf5(op.join(data_dir, fname))
 
-suspicious_idx, clusters, counts = (
-    pln.spike_distance.find_coincidence_clusters(
-        similarity,
-        threshold=coincidence_threshold
-    )
-)
 
-# detect likely REF clusters and select units
-# -------------------------------------------
-check_clst_idx = np.where(counts >= min_ref_channels)[0]
 drop = np.zeros(len(spk), dtype='bool')
 drop_perc = drop.copy()
+for pack_idx, (pack_units_idx, simil) in enumerate(
+        zip(units_in_pack, similarity_per_pack)):
 
-for cluster_idx in check_clst_idx:
-    print(f'Processing cluster {cluster_idx}...')
-    cell_idx = suspicious_idx[clusters[cluster_idx]]
-    channels = spk.cellinfo.loc[cell_idx, 'channel'].unique()
-    if len(channels) < min_ref_channels:
+    if simil is None:
         continue
 
-    # get percentile scores
-    score = (snr_prc[cell_idx] * weights['snr']
-             + fr_prc[cell_idx] * weights['fr']
-             + (1 - isi_prc[cell_idx]) * weights['isi']
-             + (1 - std_prc[cell_idx]) * weights['std']
-             + dns_prc[cell_idx] * weights['dns'])
+    spk_pack = spk.copy().pick_cells(pack_units_idx)
+    suspicious_idx, clusters, counts = (
+        pln.spike_distance.find_coincidence_clusters(
+            simil,
+            threshold=coincidence_threshold
+        )
+    )
 
-    # scores from within-cluster ranks
-    fr_ranks = rankdata(np.array(fr)[cell_idx])
-    snr_ranks = rankdata(snr[cell_idx])
-    isi_ranks = rankdata(1 - isi[cell_idx])
-    std_ranks = rankdata(1 - std[cell_idx])
-    dns_ranks = rankdata(dns[cell_idx])
+    # detect likely REF clusters and select units
+    # -------------------------------------------
+    check_clst_idx = np.where(counts >= min_ref_channels)[0]
 
-    score_ranks = (snr_ranks * weights['snr'] +
-                   fr_ranks  * weights['fr'] +
-                   isi_ranks * weights['isi'] +
-                   std_ranks * weights['std'] +
-                   dns_ranks * weights['dns'])
+    for cluster_idx in check_clst_idx:
+        print(f'Processing cluster {cluster_idx}...')
+        cell_idx = pack_units_idx[suspicious_idx[clusters[cluster_idx]]]
+        channels = spk.cellinfo.loc[cell_idx, 'channel'].unique()
+        if len(channels) < min_ref_channels:
+            continue
 
-    # save drop cells info according to percentiles and ranks
-    save_idx = cell_idx.copy()
-    save_idx_perc = np.delete(save_idx, score.argmax())
-    save_idx_ranks = np.delete(save_idx, score_ranks.argmax())
-    drop[save_idx_perc] = True
-    drop_perc[save_idx_ranks] = True
+        # get percentile scores
+        score = (snr_prc[cell_idx] * weights['snr']
+                 + fr_prc[cell_idx] * weights['fr']
+                 + (1 - isi_prc[cell_idx]) * weights['isi']
+                 + (1 - std_prc[cell_idx]) * weights['std']
+                 + dns_prc[cell_idx] * weights['dns'])
 
-    # produce and save plots
-    # ----------------------
+        # scores from within-cluster ranks
+        fr_ranks = rankdata(np.array(fr)[cell_idx])
+        snr_ranks = rankdata(snr[cell_idx])
+        isi_ranks = rankdata(1 - isi[cell_idx])
+        std_ranks = rankdata(1 - std[cell_idx])
+        dns_ranks = rankdata(dns[cell_idx])
+
+        score_ranks = (snr_ranks * weights['snr'] +
+                       fr_ranks  * weights['fr'] +
+                       isi_ranks * weights['isi'] +
+                       std_ranks * weights['std'] +
+                       dns_ranks * weights['dns'])
+
+        # save drop cells info according to percentiles and ranks
+        save_idx = cell_idx.copy()
+        save_idx_perc = np.delete(save_idx, score.argmax())
+        save_idx_ranks = np.delete(save_idx, score_ranks.argmax())
+        drop[save_idx_perc] = True
+        drop_perc[save_idx_ranks] = True
+
+        # produce and save plots
+        # ----------------------
+        if save_fig:
+            fname = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}_01_coincid.png'
+            fig = pln.spike_distance.plot_high_similarity_cluster(
+                spk_pack, simil, clusters, suspicious_idx,
+                cluster_idx=cluster_idx)
+            fig.savefig(op.join(save_fig_dir, fname), dpi=300)
+            plt.close(fig)
+
+            spk_sel = spk.copy().pick_cells(cell_idx)
+            fname = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}_02_score_percentiles.png'
+            fig = plot_scores(spk_sel, score)
+            fig.savefig(op.join(save_fig_dir, fname), dpi=300)
+            plt.close(fig)
+
+            fname = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}_03_score_within_cluster_ranks.png'
+            fig = plot_scores(spk_sel, score_ranks)
+            fig.savefig(op.join(save_fig_dir, fname), dpi=300)
+            plt.close(fig)
+
     if save_fig:
-        fname = f'cluster_{cluster_idx:02g}_01_coincid.png'
-        fig = pln.spike_distance.plot_high_similarity_cluster(
-            spk, similarity, clusters, suspicious_idx, cluster_idx=cluster_idx)
-        fig.savefig(op.join(save_fig_dir, fname), dpi=300)
-        plt.close(fig)
+        print('Plotting ignored clusters...')
+        ignored_clst_idx = np.where(counts < min_ref_channels)[0]
 
-        spk_sel = spk.copy().pick_cells(cell_idx)
+        if len(ignored_clst_idx) > 0:
+            ignored_dir = op.join(save_fig_dir, 'ignored_clusters')
+            if not op.isdir(ignored_dir):
+                os.mkdir(ignored_dir)
 
-        fname = f'cluster_{cluster_idx:02g}_02_score_percentiles.png'
-        fig = plot_scores(spk_sel, score)
-        fig.savefig(op.join(save_fig_dir, fname), dpi=300)
-        plt.close(fig)
+        for cluster_idx in ignored_clst_idx:
+            fname = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}_01_coincid.png'
+            fig = pln.spike_distance.plot_high_similarity_cluster(
+                spk_pack, simil, clusters, suspicious_idx,
+                cluster_idx=cluster_idx)
+            fig.savefig(op.join(save_fig_dir, 'ignored_clusters', fname), dpi=300)
+            plt.close(fig)
 
-        fname = f'cluster_{cluster_idx:02g}_03_score_within_cluster_ranks.png'
-        fig = plot_scores(spk_sel, score_ranks)
-        fig.savefig(op.join(save_fig_dir, fname), dpi=300)
-        plt.close(fig)
-
-if save_fig:
-    print('Plotting ignored clusters...')
-    ignored_clst_idx = np.where(counts < min_ref_channels)[0]
-
-    if len(ignored_clst_idx) > 0:
-        ignored_dir = op.join(save_fig_dir, 'ignored_clusters')
-        if not op.isdir(ignored_dir):
-            os.mkdir(ignored_dir)
-
-    for cluster_idx in ignored_clst_idx:
-        fname = f'cluster_{cluster_idx:02g}_01_coincid.png'
-        fig = pln.spike_distance.plot_high_similarity_cluster(
-            spk, similarity, clusters, suspicious_idx, cluster_idx=cluster_idx)
-        fig.savefig(op.join(save_fig_dir, 'ignored_clusters', fname), dpi=300)
-        plt.close(fig)
-
-print('All done.')
+    print('All done.')
 
 # %%
-import h5io
+# import h5io
 
-drop_save_dir = r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1O\switchorder\derivatives\sorting\sub-U06\ses-main'
-drop_fname = r'sub-U06_ses-main_task-switchorder_run-01_sorter-osort_norm-False_drop.hdf5'
-h5io.write_hdf5(op.join(drop_save_dir, drop_fname), drop)
+# drop_save_dir = r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1O\switchorder\derivatives\sorting\sub-W02\ses-main'
+# drop_fname = r'sub-W02_ses-main_task-switchorder_run-01_sorter-osort_norm-False_drop.hdf5'
+# h5io.write_hdf5(op.join(drop_save_dir, drop_fname), drop)
