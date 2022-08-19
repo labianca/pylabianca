@@ -53,7 +53,7 @@ coincidence_threshold = 0.3
 
 # minimum number of different-channel units in a coincidence cluster to
 # classify it as a reference cluster
-min_ref_channels = 4
+min_ref_channels = 3
 
 # weights
 # -------
