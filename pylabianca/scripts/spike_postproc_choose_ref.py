@@ -118,6 +118,7 @@ def plot_scores(spk_sel, score):
     for ix in range(len(spk_sel)):
         spk_sel.plot_waveform(ix, ax=ax[letters[ix]], labels=False)
         ax[letters[ix]].set_title(f'{len(spk_sel.timestamps[ix])} spikes')
+        ax[letters[ix]].set(yticks=[], xticks=[])
 
     ax['a'].set_ylabel('Weighted score', fontsize=14)
     return ax['a'].figure
@@ -253,15 +254,23 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
 
         # get, rank and weight measures
         # -----------------------------
-        measures_sel = (
+        measures_sel = np.stack(
+            [measures[name][cell_idx]
+             for name in ['nspikes', 'snr', 'dns']
+             ] +
+            [(1 - measures_prc[name][cell_idx])
+             for name in ['isi', 'std']],
+            axis=1
+        )
+        measures_perc_sel = np.stack(
             [measures_prc[name][cell_idx]
              for name in ['nspikes', 'snr', 'dns']
              ] +
             [(1 - measures_prc[name][cell_idx])
              for name in ['isi', 'std']]
-        )
-        measures_sel = np.stack(measures_sel, axis=0)
-        score = (measures_sel * weights_sel).sum(axis=1)
+        , axis=1)
+
+        score = (measures_perc_sel * weights_sel).sum(axis=1)
         ranks = np.stack(
             [rankdata(measures_sel[:, ix])
              for ix in range(5)]
@@ -288,7 +297,7 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
         for ix, measure_name in enumerate(reordered_names):
             this_df.loc[:, measure_name] = measures_sel[:, ix]
 
-        this_df.append(df_list)
+        df_list.append(this_df)
 
         # produce and save plots
         # ----------------------
@@ -330,7 +339,10 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
 
 print('Saving dataframe to figures location...')
 df = pd.concat(df_list).reset_index(drop=True)
+df = df.loc[:, df_columns]
+df.loc[:, 'nspikes'] = df.nspikes.astype('int')
 df.to_csv(op.join(save_fig_dir, 'table.tsv'), sep='\t')
+
 print('All done.')
 
 # %%
