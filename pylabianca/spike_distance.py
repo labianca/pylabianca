@@ -326,10 +326,39 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
         return drop, clusters, counts, suspicious_idx
 
 
-# TODO: clean up
+
 # TODO: move to viz
 def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
                                  cluster_idx=0, drop=None, figsize=(14, 9)):
+    '''Plot similarity matrix with waveforms in top column and leftmost rows.
+
+    Parameters
+    ----------
+    spk : Spikes | SpikeEpochs
+        Object containing spikes.
+    similarity : numpy.array
+        Numpy array with coincidence similarity.
+    clusters : list of numpy.array
+        List of boolean arrays - where each array identifies cluster members
+        with ``True`` values.
+    suspicious_idx : numpy.array
+        Array of indices mapping from elements in clusters to indices of
+        units in ``spk`` (FIXME - better description).
+    cluster_idx : int
+        Which cluster to plot. Defaults to ``0`` (the first cluster).
+    drop : numpy.array | None
+        Boolean array specifying which units will be dropped. Optional,
+        is used to color unit titles, defaults to ``None``, when the titles are
+        not colored in red.
+    figsize : tuple
+        Two-element tuple specifying the size of the figure (in inches, as
+        matploltib likes it).
+
+    Returns
+    -------
+    fig : matplotlib.Figure
+        Figure object.
+    '''
     import matplotlib.pyplot as plt
 
     idxs = suspicious_idx[clusters[cluster_idx]]
