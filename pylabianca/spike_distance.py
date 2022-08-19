@@ -369,20 +369,24 @@ def plot_high_similarity_cluster(spk, similarity, clusters, suspicious_idx,
     fig, ax = plt.subplots(nrows=n_cells + 1, ncols=n_cells + 1,
                            figsize=figsize)
 
+    title_fontsize = (12 if n_cells < 9 else 10 if n_cells < 13
+                      else 8 if n_cells < 17 else 5)
+
     for idx, cell_idx in enumerate(idxs):
         spk.plot_waveform(cell_idx, ax=ax[0, idx + 1])
         spk.plot_waveform(cell_idx, ax=ax[idx + 1, 0])
 
         info = spk.cellinfo.loc[cell_idx, :]
         n_spikes = len(spk.timestamps[cell_idx])
-        title = (f'{info.channel}\ncluster {info.cluster}\nalignment {info.alignment}, '
+        alg_txt = (f'\n{info.alignment}'
+                   if not info.alignment == 'unknown'
+                   else '')
+        title = (f'{info.channel}\ncluster {info.cluster}' + alg_txt +
                  f'\n{n_spikes} spikes')
+        color = (('red' if drop[cell_idx] else 'black') if drop is not None
+                 else 'black')
 
-        if drop is None:
-            ax[0, idx + 1].set_title(title)
-        else:
-            color = 'red' if drop[cell_idx] else 'black'
-            ax[0, idx + 1].set_title(title, color=color)
+        ax[0, idx + 1].set_title(title, color=color, fontsize=title_fontsize)
 
     for this_ax in ax.ravel():
         this_ax.set_ylabel('')
