@@ -28,11 +28,13 @@ import pylabianca as pln
 # the directory with sorting results - that is after manual curation and
 # export using updateSORTINGresults_mm matlab function located in
 # psy_screenning-\helpers\sorting_utils)
-data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1O\switchorder\derivatives\sorting\sub-U06\ses-main\sub-U06_ses-main_task-switchorder_run-01_sorter-osort_norm-False')
-save_fig = True
-save_fig_dir = (r'C:\Users\mmagnuski\Dropbox\PROJ\Labianka\sorting\ref_tests\sub-U06')
+data_dir = (r'D:\Dropbox\PROJ\Labianka\sorting\Kasia_debug\sub-U03_ses-main_task-retrocue_run-01_ieeg')
 
-# data format - standard or mm (depends on how you exported the curated units)
+# whether to plot figures and where to save them
+save_fig = True
+save_fig_dir = (r'D:\Dropbox\PROJ\Labianka\sorting\Kasia_debug\figures')
+
+# data format - 'standard' or 'mm' (depends on how you exported the curated units)
 data_format = 'standard'
 
 # minimum coincidence threshold for coincidence cluster formation
@@ -115,9 +117,7 @@ n_spikes = len(spk)
 spk_epo = spk.to_epochs()
 
 snr = np.zeros(n_spikes, dtype='float')
-isi = np.zeros(n_spikes, dtype='float')
-std = np.zeros(n_spikes, dtype='float')
-dns = np.zeros(n_spikes, dtype='float')
+isi, std, dns = snr.copy(), snr.copy(), snr.copy()
 
 for ix in range(n_spikes):
     # SNR
