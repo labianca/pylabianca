@@ -7,11 +7,14 @@ Created on Tue Mar 29 15:21:13 2022
 import os
 import os.path as op
 
-import numpy as np
-from matplotlib import pyplot as plt
 import scipy
+import numpy as np
+import pandas as pd
+from matplotlib import pyplot as plt
+
 from scipy.stats import rankdata
 from tqdm import tqdm
+import h5io
 
 import pylabianca as pln
 
@@ -56,7 +59,7 @@ min_ref_channels = 4
 # -------
 # weights used in calculating the final score (unit with best score is chosen)
 # isi - % inter spike intervals < 3 ms (lower is better)
-# fr  - firing rate
+# nspikes  - number of spikes
 # snr - signal to noise ratio (mean / std) at alignment point
 # std - standard deviation calculated separately for each waveform sample
 #       and then averaged (lower is better)
@@ -65,7 +68,7 @@ min_ref_channels = 4
 #       are then averaged across the whole waveform; the values are divided
 #       by maximum density to de-bias against waveforms with little spikes
 #       and thus make this value closer to the density we see in the figures)
-weights = {'isi': 0.15, 'fr': 0.35, 'snr': 0.0, 'std': 0.0, 'dns': 0.5}
+weights = {'isi': 0.15, 'nspikes': 0.35, 'snr': 0.0, 'std': 0.0, 'dns': 0.5}
 
 # alignment sample index - 94 should be true for all our osort files
 algn_smpl = 94
@@ -83,6 +86,7 @@ n_spikes = spk.n_spikes()
 no_spikes = n_spikes == 0
 if (no_spikes).any():
     spk.pick_cells(~no_spikes)
+    n_spikes = n_spikes[~no_spikes]
 
 
 def turn_to_percentiles(arr):
@@ -144,49 +148,50 @@ units_in_pack = [np.where(np.in1d(unit_channel, frst + np.arange(8)))[0]
 # isi, fr, snr, std, dns
 
 print('Calculating FR, SNR, ISI, STD and DNS...')
-fr = [len(tms) for tms in spk.timestamps]
-fr_prc = turn_to_percentiles(fr)
 
-n_spikes = len(spk)
+n_cells = len(spk)
 spk_epo = spk.to_epochs()
 
-snr = np.zeros(n_spikes, dtype='float')
-isi, std, dns = snr.copy(), snr.copy(), snr.copy()
+measure_names = ['nspikes', 'snr', 'isi', 'std', 'dns']
+measures = {name: np.zeros(n_cells, dtype='float')
+            for name in measure_names}
+measures['nspikes'] = n_spikes
 
-for ix in tqdm(range(n_spikes)):
+for ix in tqdm(range(n_cells)):
     # SNR
     waveform_ampl = np.mean(spk.waveform[ix][:, algn_smpl], axis=0)
     waveform_std = np.std(spk.waveform[ix][:, algn_smpl], axis=0)
-    snr[ix] = np.abs(waveform_ampl) / waveform_std
+    measures['snr'][ix] = np.abs(waveform_ampl) / waveform_std
 
     # ISI
     isi_val = np.diff(spk_epo.time[ix])
     prop_below_3ms = (isi_val < 0.003).mean()
-    isi[ix] = prop_below_3ms
+    measures['isi'][ix] = prop_below_3ms
 
     # STD
     avg_std = np.std(spk.waveform[ix], axis=0).mean()
-    std[ix] = avg_std
+    measures['std'][ix] = avg_std
 
     # DNS
-    dns[ix] = pln.viz.calculate_perceptual_waveform_density(spk, ix)
+    measures['dns'][ix] = pln.viz.calculate_perceptual_waveform_density(
+        spk, ix)
 
-snr_prc = turn_to_percentiles(snr)
-isi_prc = turn_to_percentiles(isi)
-std_prc = turn_to_percentiles(std)
-dns_prc = turn_to_percentiles(dns)
-
+measures_prc = {name: turn_to_percentiles(measures[name])
+                for name in measure_names}
 print('Done.')
 
 
 # compute coincidence
 # -------------------
 # or read from disk if already computed
-import h5io
 
 fname = 'coincidence_per_pack.hdf5'
 files = os.listdir(data_dir)
 has_simil = fname in files
+
+group_idx = 0
+df_columns=['pack', 'group', 'channel', 'cluster', 'nspikes',
+            'snr', 'isi', 'std', 'dns']
 
 if not has_simil:
     print('Calculating similarity matrix, this can take a few minutes...')
@@ -212,6 +217,13 @@ else:
 
 drop = np.zeros(len(spk), dtype='bool')
 drop_perc = drop.copy()
+df_list = list()
+
+reordered_names = ['nspikes', 'snr', 'dns', 'isi', 'std']
+weights_sel = np.array(
+    [weights[name] for name in reordered_names]
+)[None, :]
+
 for pack_idx, (pack_units_idx, simil) in enumerate(
         zip(units_in_pack, similarity_per_pack)):
 
@@ -237,25 +249,24 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
         if len(channels) < min_ref_channels:
             continue
 
-        # get percentile scores
-        score = (snr_prc[cell_idx] * weights['snr']
-                 + fr_prc[cell_idx] * weights['fr']
-                 + (1 - isi_prc[cell_idx]) * weights['isi']
-                 + (1 - std_prc[cell_idx]) * weights['std']
-                 + dns_prc[cell_idx] * weights['dns'])
+        group_idx += 1
 
-        # scores from within-cluster ranks
-        fr_ranks = rankdata(np.array(fr)[cell_idx])
-        snr_ranks = rankdata(snr[cell_idx])
-        isi_ranks = rankdata(1 - isi[cell_idx])
-        std_ranks = rankdata(1 - std[cell_idx])
-        dns_ranks = rankdata(dns[cell_idx])
-
-        score_ranks = (snr_ranks * weights['snr'] +
-                       fr_ranks  * weights['fr'] +
-                       isi_ranks * weights['isi'] +
-                       std_ranks * weights['std'] +
-                       dns_ranks * weights['dns'])
+        # get, rank and weight measures
+        # -----------------------------
+        measures_sel = (
+            [measures_prc[name][cell_idx]
+             for name in ['nspikes', 'snr', 'dns']
+             ] +
+            [(1 - measures_prc[name][cell_idx])
+             for name in ['isi', 'std']]
+        )
+        measures_sel = np.stack(measures_sel, axis=0)
+        score = (measures_sel * weights_sel).sum(axis=1)
+        ranks = np.stack(
+            [rankdata(measures_sel[:, ix])
+             for ix in range(5)]
+        , axis=1)
+        score_ranks = (ranks * weights_sel).sum(axis=1)
 
         # save drop cells info according to percentiles and ranks
         save_idx = cell_idx.copy()
@@ -263,6 +274,21 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
         save_idx_ranks = np.delete(save_idx, score_ranks.argmax())
         drop[save_idx_perc] = True
         drop_perc[save_idx_ranks] = True
+
+        # fill in the dataframe
+        # ---------------------
+        this_df = (
+            spk.cellinfo.loc[cell_idx, ['channel', 'cluster']]
+            .reset_index(drop=True)
+        )
+        this_df.loc[:, 'group'] = group_idx
+        this_df.loc[:, 'pack'] = pack_idx + 1
+
+        # add measures
+        for ix, measure_name in enumerate(reordered_names):
+            this_df.loc[:, measure_name] = measures_sel[:, ix]
+
+        this_df.append(df_list)
 
         # produce and save plots
         # ----------------------
@@ -302,7 +328,10 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
             fig.savefig(op.join(save_fig_dir, 'ignored_clusters', fname), dpi=300)
             plt.close(fig)
 
-    print('All done.')
+print('Saving dataframe to figures location...')
+df = pd.concat(df_list).reset_index(drop=True)
+df.to_csv(op.join(save_fig_dir, 'table.tsv'), sep='\t')
+print('All done.')
 
 # %%
 # import h5io
