@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # TODO - the info about "one other dimension" (that is reduced) seems to be no
 #        longer accurate
 def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
-                    x_dim='time'):
+                    x_dim='time', legend_pos=None):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -73,7 +73,8 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
 
     ax.set_ylabel('Spike rate (Hz)', fontsize=14)
     if groupby is not None:
-        ax.legend(title=f'{groupby}:')
+        pos = 'best' if legend_pos is None else legend_pos
+        ax.legend(title=f'{groupby}:', loc=pos)
 
     add_txt = '' if groupby is None else f' grouped by {groupby}'
     ttl = 'Firing rate' + add_txt
