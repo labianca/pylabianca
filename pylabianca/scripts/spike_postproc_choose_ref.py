@@ -19,12 +19,6 @@ import h5io
 import pylabianca as pln
 
 
-# TODO:
-# - [x] compute coicidence only for 8-channel packs
-#       (but detecting 8-packs on exported spikes may be sometimes difficult
-#        - when there are no spikes for first channel, there will be no file
-#          for it, which could lead to offsets and bad results)
-
 # SETTINGS
 # --------
 
@@ -302,7 +296,8 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
         # produce and save plots
         # ----------------------
         if save_fig:
-            fname = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}_01_coincid.png'
+            fname_base = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}'
+            fname = fname_base + '_01_coincid.png'
             fig = pln.spike_distance.plot_high_similarity_cluster(
                 spk_pack, simil, clusters, suspicious_idx,
                 cluster_idx=cluster_idx)
@@ -310,12 +305,12 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
             plt.close(fig)
 
             spk_sel = spk.copy().pick_cells(cell_idx)
-            fname = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}_02_score_percentiles.png'
+            fname = fname_base + '_02_score_percentiles.png'
             fig = plot_scores(spk_sel, score)
             fig.savefig(op.join(save_fig_dir, fname), dpi=300)
             plt.close(fig)
 
-            fname = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}_03_score_within_cluster_ranks.png'
+            fname = fname_base + '_03_score_within_cluster_ranks.png'
             fig = plot_scores(spk_sel, score_ranks)
             fig.savefig(op.join(save_fig_dir, fname), dpi=300)
             plt.close(fig)
@@ -330,11 +325,13 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
                 os.mkdir(ignored_dir)
 
         for cluster_idx in ignored_clst_idx:
-            fname = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}_01_coincid.png'
+            fname_base = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}'
+            fname = fname_base + '_01_coincid.png'
             fig = pln.spike_distance.plot_high_similarity_cluster(
                 spk_pack, simil, clusters, suspicious_idx,
                 cluster_idx=cluster_idx)
-            fig.savefig(op.join(save_fig_dir, 'ignored_clusters', fname), dpi=300)
+            fig.savefig(op.join(save_fig_dir, 'ignored_clusters', fname),
+                        dpi=300)
             plt.close(fig)
 
 print('Saving dataframe to figures location...')
