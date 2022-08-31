@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # TODO - the info about "one other dimension" (that is reduced) seems to be no
 #        longer accurate
 def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
-                    x_dim='time', legend_pos=None):
+                    x_dim='time', legend=True, legend_pos=None):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -26,6 +26,11 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
         does not perform grouping.
     ax : matplotlib.Axes | None
         Axis to plot into. The default is ``None`` which creates an new axis.
+    legend : bool
+        Whether to plot the legend.
+    legend_pos : str | None
+        Legend position (standard matplotlib names like "upper left"). Defaults
+        to ``None`` which uses ``'best'`` position.
 
     Returns
     -------
@@ -72,7 +77,7 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
         ax.set_xlabel('Time (s)', fontsize=14)
 
     ax.set_ylabel('Spike rate (Hz)', fontsize=14)
-    if groupby is not None:
+    if groupby is not None and legend:
         pos = 'best' if legend_pos is None else legend_pos
         ax.legend(title=f'{groupby}:', loc=pos)
 
@@ -126,7 +131,7 @@ def check_modify_progressbar(pbar, total=None):
 # TODO:
 # - [ ] ! fix x axis units !
 # - [ ] kind='line' ?
-# - [ ] datashader backend
+# - [ ] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
 def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
                   y_bins=100):
@@ -179,6 +184,7 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
 
 def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
                                       density=True, y_range=None):
+    '''Helps in calculating 2d density histogram of the waveforms.'''
     from pylabianca.utils import _deal_with_picks
 
     pick = _deal_with_picks(spk, pick)[0]
