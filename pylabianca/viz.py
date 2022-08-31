@@ -363,9 +363,43 @@ def _create_mask_from_window_str(window, frate):
     return mask
 
 
+# consider moving to sarna?
+# TODO: could infer x coords from plot (if lines are already present)
 def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
-                   min_pval=0.001):
-    '''FIXME: add docstring.'''
+                   min_pval=0.001, bottom_extend=True):
+    '''Highlight significant clusters along the last array dimension.
+
+    Parameters
+    ----------
+    arr : xarray.DataArray
+        Data array. Used only for axis coordinates.
+    clusters : list of np.array
+        List of boolean arrays, where each array cointains cluster membership
+        information (which points along the last array dimension contribute
+        to the given cluster).
+    pvals : list-like
+        List or array of cluster p values.
+    p_threshold : float
+        Alpha significance threshold. Clusters with p value below this
+        threshold will be shown.
+    ax : matplotlib.Axes | None
+        Axis to plot to. Optional, defaults to ``None`` - which creates the
+        axis automatically.
+    min_pval : float
+        Minimum meaningful p value. P values below this value will be displayed
+        as this value. This is to avoid p = 0, which can result in the cluster
+        based permutation test, when no cluster from the null distribution had
+        stronger summary statistic than the observed cluster. ``min_pval`` is
+        best defined as ``1 / n_permutations``.
+    bottom_extend : bool
+        Whether to exend the lower limits of y axis when adding bottom
+        significance bars. Defaults to ``True``.
+
+    Returns
+    -------
+    ax : matplotlib.Axes
+        Axis with the plot.
+    '''
     import sarna
 
     if ax is None:
@@ -381,15 +415,17 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 
         ylm = ax.get_ylim()
         y_rng = np.diff(ylm)[0]
-        text_y = ylm[1] - 0.01 * y_rng
+        text_y = ylm[1] - 0.05 * y_rng
         ax.set_ylim([ylm[0], ylm[1] + 0.1 * y_rng])
 
         sig_idx = np.where(pvals_significant)[0]
         x_coords = arr.coords[last_dim].values
 
         sig_clusters = [clusters[ix] for ix in sig_idx]
-        sarna.viz.highlight(x_coords, sig_clusters,
-                            bottom_bar=True, axis=ax)
+        sarna.viz.highlight(
+            x_coords, sig_clusters, axis=ax,
+            bottom_bar=True,  bottom_extend=bottom_extend
+        )
 
         for ix in sig_idx:
             this_pval = pvals[ix]
@@ -401,6 +437,8 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                 p_txt = borsar.stats.format_pvalue(this_pval)
 
             ax.text(text_x, text_y, p_txt)
+
+    return ax
 
 
 def align_axes_limits(axes=None, ylim=True, xlim=False):
