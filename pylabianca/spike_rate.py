@@ -412,26 +412,100 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
     stat_fun = sarna.cluster._find_stat_fun(n_groups=n_groups, paired=paired,
                                             tail=tail)
 
-    _, dist = sarna.cluster._compute_threshold_via_permutations(
+    thresh, dist = sarna.cluster._compute_threshold_via_permutations(
         arrays, paired=paired, tail=tail, stat_fun=stat_fun,
-        return_distribution=True, n_permutations=n_perm, progress=progress)
+        return_distribution=True, n_permutations=n_perm, progress=progress,
+        n_jobs=n_jobs)
 
     stat = stat_fun(*arrays)
-    if isinstance(stat, np.ndarray):
-        try:
-            stat = stat[0]
-        except IndexError:
-            stat = stat.item()
 
-    multip = 2 if tail == 'both' else 1
-    if tail == 'pos' or (tail == 'both' and stat > 0):
-        pval = (dist > stat).mean() * multip
-    elif tail == 'neg' or (tail == 'both' and stat < 0):
-        pval = (dist < stat).mean() * multip
-    elif tail == 'both' and stat == 0:
-        pval = (dist > stat).mean() * multip
+    # this does not make sense for > 1d,
+    # maybe it didn't make sense for 1d too?
+    # if isinstance(stat, np.ndarray):
+    #     try:
+    #         stat = stat[0]
+    #     except IndexError:
+    #         stat = stat.item()
 
-    return stat, min(pval, 1)
+    if return_pvalue:
+        multip = 2 if tail == 'both' else 1
+        # if tail == 'pos':
+        #     pval = [(dist > stat).mean() for dis * multip
+        # elif tail == 'neg' or (tail == 'both' and stat < 0):
+        #     pval = (dist < stat).mean() * multip
+        # elif tail == 'both' and stat == 0:
+        #     pval = (dist > stat).mean() * multip
+        # pval[pval > 1.] = 1.
+        raise NotImplementedError
+
+    if return_distribution:
+        out = dict()
+        out['stat'] = stat
+        out['thresh'] = thresh
+        out['dist'] = dist
+
+        if return_pvalue:
+            out['pval'] = pval
+
+        return out
+    else:
+        if return_pvalue:
+            return stat, pval
+        else:
+            return stat
+
+
+# TODO: auto-infer paired from xarray
+def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
+                       paired=False, stat_fun=None, n_permutations=1_000,
+                       n_stat_permutations=0, tail=None, progress=True):
+    '''Perform cluster-based tests on firing rate data.
+
+    Performs cluster-based test (ANOVA or t test, depending on the data) on
+    firing rate to test, for example, category-selectivity of the neurons.
+
+    Parameters
+    ----------
+    frate : xarray.DataArray
+        Xarray with spike rate  or spike density containing
+        observations as the first dimension (for example trials for
+        between-trials analysis or cells for between-cells analysis).
+        If you have both cells and trials then the cell should already be
+        selected, via ``frate.isel(cell=0)`` for example or the trials
+        dimension should be averaged (for example ``frate.mean(dim='trial')``).
+    compare : str
+        Dimension labels specified for ``'trial'`` dimension that constitutes
+        categories to test selectivity for.
+    cluster_entry_pval : float
+        p value used as a cluster-entry threshold. The default is ``0.05``.
+    paired : bool
+        Whether a paired (repeated measures) or unpaired test should be used.
+
+    Returns
+    -------
+    stats : numpy.ndarray
+        Anova F statistics for every timepoint.
+    clusters : list of numpy.ndarray
+        List of cluster memberships.
+    pval : numpy.ndarray
+        List of p values from anova.
+    '''
+    from sarna.cluster import permutation_cluster_test_array
+
+    # TODO: check if theres is a condition dimension (if so -> paired)
+    arrays = [arr.values for _, arr in frate.groupby(compare)]
+
+    if tail is None:
+        n_groups = len(arrays)
+        tail = 'both' if n_groups == 2 else 'pos'
+
+    stat, clusters, pval = permutation_cluster_test_array(
+        arrays, adjacency=None, stat_fun=stat_fun, threshold=None,
+        p_threshold=cluster_entry_pval, paired=paired, tail=tail,
+        n_permutations=n_permutations, n_stat_permutations=n_stat_permutations,
+        progress=progress)
+
+    return stat, clusters, pval
 
 
 # TODO: add njobs

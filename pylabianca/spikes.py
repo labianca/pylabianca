@@ -508,61 +508,6 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     return times, trials_raw
 
 
-# TODO: change to use sarna.cluster.permutation_cluster_test_array !
-# TODO: auto-infer paired from xarray
-# TODO: move out to spike_rate or stats...
-def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
-                       paired=False, stat_fun=None, n_permutations=1_000,
-                       n_stat_permutations=0, tail=None, progress=True):
-    '''Perform cluster-based tests on firing rate data.
-
-    Performs cluster-based ANOVA on firing rate to test, for example,
-    category-selectivity of the neurons.
-
-    Parameters
-    ----------
-    frate : xarray.DataArray
-        Xarray with spike rate  or spike density containing
-        observations as the first dimension (for example trials for
-        between-trials analysis or cells for between-cells analysis).
-        If you have both cells and trials then the cell should already be
-        selected, via ``frate.isel(cell=0)`` for example or the trials
-        dimension should be averaged (for example ``frate.mean(dim='trial')``).
-    compare : str
-        Dimension labels specified for ``'trial'`` dimension that constitutes
-        categories to test selectivity for.
-    cluster_entry_pval : float
-        p value used as a cluster-entry threshold. The default is ``0.05``.
-    paired : bool
-        Whether a paired (repeated measures) or unpaired test should be used.
-
-    Returns
-    -------
-    stats : numpy.ndarray
-        Anova F statistics for every timepoint.
-    clusters : list of numpy.ndarray
-        List of cluster memberships.
-    pval : numpy.ndarray
-        List of p values from anova.
-    '''
-    from sarna.cluster import permutation_cluster_test_array
-
-    # TODO: check if theres is a condition dimension (if so -> paired)
-    arrays = [arr.values for _, arr in frate.groupby(compare)]
-
-    if tail is None:
-        n_groups = len(arrays)
-        tail = 'both' if n_groups == 2 else 'pos'
-
-    stat, clusters, pval = permutation_cluster_test_array(
-        arrays, adjacency=None, stat_fun=stat_fun, threshold=None,
-        p_threshold=cluster_entry_pval, paired=paired, tail=tail,
-        n_permutations=n_permutations, n_stat_permutations=n_stat_permutations,
-        progress=progress)
-
-    return stat, clusters, pval
-
-
 class Spikes(object):
     def __init__(self, timestamps, sfreq, cell_names=None, metadata=None,
                  cellinfo=None, waveform=None):
