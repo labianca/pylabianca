@@ -322,8 +322,89 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
     return df, frate
 
 
+# should return: matrix of selectivity for each permutation
+def compute_selectivity_continuous(frate, compare='image', n_perm=500,
+                                   n_jobs=1, min_Hz=0.1):
+    '''
+    Compute population selectivity for specific experimental category.
+
+    Parameters
+    ----------
+    fr : xarray.DataArray
+        Firing rate of the neurons.
+    compare : str
+        Metadata category to compare. Defaults to ``'image'``.
+    n_perm : int
+        Number of permutations to use for permutation test.
+    n_jobs : int
+        Number of parallel jobs. No parallel computation is done when
+        ``n_jobs=1`` (default).
+    min_Hz : 0.1 | bool
+        Minimum spiking rate threshold (in Hz). Cells below this threshold will
+        be ignored.
+
+    Returns
+    -------
+    selectivity : dict of pandas.DataFrame
+        Dictionary of dataframes with selectivity for each cell. Each
+        dictionary key and each dataframe corresponds to a time window of given
+        name.
+    '''
+    import xarray as xr
+
+    # select cells
+    if min_Hz:
+        msk = frate.mean(dim=('trial', 'time')) >= min_Hz
+        frate = frate.sel(cell=msk)
+    else:
+        frate = frate.transpose('trial', 'cell', 'time')
+
+    # permutations
+    # ------------
+    arrs = [arr for _, arr in frate.groupby(compare)]
+    results = permutation_test(
+        *arrs, paired=False, n_perm=n_perm,
+        return_pvalue=False, return_distribution=True, n_jobs=n_jobs)
+
+    # turn to xarray
+    # --------------
+    cells = frate.cell.values
+    if 'subject' in frate.attrs:
+        subj = frate.attrs['subject']
+        cells = ['_'.join([subj, x]) for x in cells]
+
+    # perm
+    dims = ['perm', 'cell', 'time']
+    coords = {'perm': np.arange(n_perm) + 1,
+              'time': frate.time,
+              'cell': cells}
+    results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
+                                   coords=coords, name='t value')
+
+    # stat
+    coords = {k: coords[k] for k in dims[1:]}
+    results['stat'] = xr.DataArray(
+        data=results['stat'], dims=dims[1:], coords=coords, name='t value')
+
+    # thresh
+    results['thresh'] = np.stack(results['thresh'], axis=0)
+    dims2 = ['tail', 'cell', 'time']
+    coords.update({'tail': ['pos', 'neg']})
+    results['thresh'] = xr.DataArray(
+        data=results['thresh'], dims=dims2, coords=coords, name='t value')
+
+    # add cell coords
+    for key in results.keys():
+        coords = {coord: ('cell', frate.coords[coord].values)
+                  for coord in ['region', 'region2', 'channel', 'cluster']}
+        results[key] = results[key].assign_coords(coords)
+
+    return results
+
+
 # TODO: move to borsar
-def permutation_test(*arrays, paired=False, n_perm=2000, progress=False):
+def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
+                     return_pvalue=True, return_distribution=True, n_jobs=1):
     import sarna
 
     n_groups = len(arrays)
