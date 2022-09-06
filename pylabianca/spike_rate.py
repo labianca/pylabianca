@@ -330,7 +330,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     Parameters
     ----------
-    fr : xarray.DataArray
+    frate : xarray.DataArray
         Firing rate of the neurons.
     compare : str
         Metadata category to compare. Defaults to ``'image'``.
@@ -429,6 +429,16 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
 
     if return_pvalue:
         multip = 2 if tail == 'both' else 1
+
+        if not isinstance(stat, np.ndarray):
+            if tail == 'pos' or tail == 'both' and stat >= 0:
+                pval = (dist >= stat).mean() * multip
+            elif tail == 'neg' or tail == 'both' and stat < 0:
+                pval = (dist <= stat).mean() * multip
+
+            if pval > 1.:
+                pval = 1.
+
         # if tail == 'pos':
         #     pval = [(dist > stat).mean() for dis * multip
         # elif tail == 'neg' or (tail == 'both' and stat < 0):
@@ -436,7 +446,8 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
         # elif tail == 'both' and stat == 0:
         #     pval = (dist > stat).mean() * multip
         # pval[pval > 1.] = 1.
-        raise NotImplementedError
+        else:
+            raise NotImplementedError
 
     if return_distribution:
         out = dict()
