@@ -356,8 +356,8 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     if min_Hz:
         msk = frate.mean(dim=('trial', 'time')) >= min_Hz
         frate = frate.sel(cell=msk)
-    else:
-        frate = frate.transpose('trial', 'cell', 'time')
+
+    frate = frate.transpose('trial', 'cell', 'time')
 
     # permutations
     # ------------
@@ -428,26 +428,33 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
     #         stat = stat.item()
 
     if return_pvalue:
-        multip = 2 if tail == 'both' else 1
+        multiply_p = 2 if tail == 'both' else 1
 
         if not isinstance(stat, np.ndarray):
             if tail == 'pos' or tail == 'both' and stat >= 0:
-                pval = (dist >= stat).mean() * multip
+                pval = (dist >= stat).mean() * multiply_p
             elif tail == 'neg' or tail == 'both' and stat < 0:
-                pval = (dist <= stat).mean() * multip
+                pval = (dist <= stat).mean() * multiply_p
 
             if pval > 1.:
                 pval = 1.
-
-        # if tail == 'pos':
-        #     pval = [(dist > stat).mean() for dis * multip
-        # elif tail == 'neg' or (tail == 'both' and stat < 0):
-        #     pval = (dist < stat).mean() * multip
-        # elif tail == 'both' and stat == 0:
-        #     pval = (dist > stat).mean() * multip
-        # pval[pval > 1.] = 1.
         else:
-            raise NotImplementedError
+            if tail == 'pos':
+                pval = (dist >= stat[None, :]).mean(axis=0)
+            elif tail == 'neg':
+                pval = (dist <= stat[None, :]).mean(axis=0)
+            elif tail == 'both':
+                is_pos = stat >= 0
+                pval = np.zeros(stat.shape)
+                pval[is_pos] = (dist[:, is_pos] >= stat[None, is_pos]
+                                .mean(axis=0))
+                pval[~is_pos] = (dist[:, ~is_pos] <= stat[None, ~is_pos]
+                                .mean(axis=0))
+                pval *= multiply_p
+
+                above_one = pval > 1.
+                if above_one.any():
+                    pval[above_one] = 1.
 
     if return_distribution:
         out = dict()
