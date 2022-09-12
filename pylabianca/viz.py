@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 # TODO - the info about "one other dimension" (that is reduced) seems to be no
 #        longer accurate
 def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
-                    x_dim='time', legend=True, legend_pos=None):
+                    x_dim='time', legend=True, legend_pos=None, colors=None):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -31,6 +31,10 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
     legend_pos : str | None
         Legend position (standard matplotlib names like "upper left"). Defaults
         to ``None`` which uses ``'best'`` position.
+    colors : list of arrays | dictionary of arrays | None
+        List of RGB arrays to use as colors for condition groups. Can also be
+        a dictionary linking condition names / values and RBG arrays. Default
+        is ``None`` which
 
     Returns
     -------
@@ -52,26 +56,50 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
     # compute mean, std and n
     if groupby is not None:
         frate = frate.groupby(groupby)
+
+    # calculate standard error of the mean
     avg = frate.mean(dim=reduce_dim)
     std = frate.std(dim=reduce_dim)
     n = frate.count(dim=reduce_dim)
-
-    # calculate standard error of the mean
     std_err = std / np.sqrt(n)
     ci_low = avg - std_err
     ci_high = avg + std_err
+
+    # handle colors
+    if colors is not None:
+        if groupby is not None:
+            group_names = avg.coords[groupby].values
+            n_groups = len(group_names)
+        else:
+            n_groups = 1
+            group_names = ['base']
+
+        assert len(colors) == n_groups
+        if isinstance(colors, list):
+            assert all(isinstance(x, (list, np.ndarray)) for x in colors)
+            colors = {group: color for group, color in zip(group_names, colors)}
+        else:
+            assert all(name in colors.keys() for name in group_names)
+            assert all(isinstance(x, (list, np.ndarray))
+                       for x in colors.values())
 
     # plot each line with error interval
     if groupby is not None:
         sel = {groupby: 0}
         for val in avg.coords[groupby]:
-            sel[groupby] = val.item()
-            lines = avg.sel(**sel).plot(label=val.item(), ax=ax)
+            val = val.item()
+            sel[groupby] = val
+
+            add_arg = {'color': colors[val]} if colors is not None else dict()
+            lines = avg.sel(**sel).plot(label=val, ax=ax, **add_arg)
             ax.fill_between(avg.coords[x_dim], ci_low.sel(**sel),
-                            ci_high.sel(**sel), alpha=0.3)
+                            ci_high.sel(**sel), alpha=0.3, linewidth=0,
+                            **add_arg)
     else:
-        lines = avg.plot(ax=ax)
-        ax.fill_between(avg.coords[x_dim], ci_low, ci_high, alpha=0.3)
+        add_arg = {'color': colors['base']} if colors is not None else dict()
+        lines = avg.plot(ax=ax, **add_arg)
+        ax.fill_between(avg.coords[x_dim], ci_low, ci_high, linewidth=0,
+                        alpha=0.3, **add_arg)
 
     if x_dim == 'time':
         ax.set_xlabel('Time (s)', fontsize=14)
