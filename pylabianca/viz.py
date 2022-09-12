@@ -394,7 +394,8 @@ def _create_mask_from_window_str(window, frate):
 # consider moving to sarna?
 # TODO: could infer x coords from plot (if lines are already present)
 def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
-                   min_pval=0.001, bottom_extend=True):
+                   min_pval=0.001, bottom_extend=True, pval_text=True,
+                   text_props=None):
     '''Highlight significant clusters along the last array dimension.
 
     Parameters
@@ -420,7 +421,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         stronger summary statistic than the observed cluster. ``min_pval`` is
         best defined as ``1 / n_permutations``.
     bottom_extend : bool
-        Whether to exend the lower limits of y axis when adding bottom
+        Whether to extend the lower limits of y axis when adding bottom
         significance bars. Defaults to ``True``.
 
     Returns
@@ -430,21 +431,32 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     '''
     import sarna
 
+    if text_props is None and pval_text:
+        text_props = dict(boxstyle='round', facecolor='white', alpha=0.75,
+                          edgecolor='gray')
+
     if ax is None:
         ax = plt.gca()
 
     if pvals is None:
         return
+
     pvals_significant = pvals < p_threshold
     last_dim = arr.dims[-1]
+    extend_textbox_x = 4
+
+    clusters_x_sorting = np.argsort([np.where(x)[0][0] for x in clusters])
 
     if pvals_significant.any():
         import borsar
 
         ylm = ax.get_ylim()
         y_rng = np.diff(ylm)[0]
-        text_y = ylm[1] - 0.05 * y_rng
-        ax.set_ylim([ylm[0], ylm[1] + 0.1 * y_rng])
+
+        # TODO: better estimate text y pos from textbox?
+        y_step = 0.075 * y_rng
+        text_y = ylm[1] - y_step
+        ax.set_ylim([ylm[0], ylm[1] + 2 * y_step])
 
         sig_idx = np.where(pvals_significant)[0]
         x_coords = arr.coords[last_dim].values
@@ -455,16 +467,39 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
             bottom_bar=True,  bottom_extend=bottom_extend
         )
 
-        for ix in sig_idx:
+        texts = list()
+        for ix in clusters_x_sorting:
+            if not pvals_significant[ix]:
+                continue
+
             this_pval = pvals[ix]
-            text_x = x_coords[clusters[ix]][0]
+            text_x = np.mean(x_coords[clusters[ix]])
 
             if this_pval < min_pval:
                 p_txt = 'p < {:.3f}'.format(min_pval)
             else:
                 p_txt = borsar.stats.format_pvalue(this_pval)
 
-            ax.text(text_x, text_y, p_txt)
+            this_text = ax.text(
+                text_x, text_y, p_txt,
+                bbox=text_props, horizontalalignment='center'
+            )
+            textbox = this_text.get_window_extent()
+            textbox.set_points(
+                np.array([
+                    [textbox.x0 - extend_textbox_x, textbox.y0],
+                    [textbox.x1 + extend_textbox_x, textbox.y1]
+                ])
+            )
+
+            if len(texts) > 0:
+                while textbox.count_overlaps(texts):
+                    x, y = this_text.get_position()
+                    this_text.set_position((x, y - y_step))
+                    textbox = this_text.get_window_extent()
+            texts.append(textbox)
+
+
 
     return ax
 
