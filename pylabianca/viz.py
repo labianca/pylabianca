@@ -484,7 +484,12 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                 text_x, text_y, p_txt,
                 bbox=text_props, horizontalalignment='center'
             )
-            textbox = this_text.get_window_extent()
+            try:
+                textbox = this_text.get_window_extent()
+            except RuntimeError:
+                ax.figure.canvas.draw()
+                textbox = this_text.get_window_extent()
+
             textbox.set_points(
                 np.array([
                     [textbox.x0 - extend_textbox_x, textbox.y0],
