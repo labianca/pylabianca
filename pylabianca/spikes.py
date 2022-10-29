@@ -138,6 +138,19 @@ class SpikeEpochs():
 
         return self
 
+    def drop_cells(self, picks):
+        '''Drop cells by index. Operates in-place.
+
+        Parameters
+        ----------
+        picks : int | str | listlike of int
+            Cell  indices to drop.
+        '''
+        all_idx = np.arange(len(self))
+        is_dropped = np.in1d(all_idx, picks)
+        retain_idx = np.where(~is_dropped)[0]
+        return self.pick_cells(retain_idx)
+
     def crop(self, tmin=None, tmax=None):
         '''Confine time range to specified limit. Operates in-place.
 
@@ -668,6 +681,20 @@ class Spikes(object):
             self.waveform = [self.waveform[ix] for ix in picks]
 
         return self
+
+    # TODO: DRY with SpikeEpochs
+    def drop_cells(self, picks):
+        '''Drop cells by index. Operates in-place.
+
+        Parameters
+        ----------
+        picks : int | str | listlike of int
+            Cell  indices to drop.
+        '''
+        all_idx = np.arange(len(self))
+        is_dropped = np.in1d(all_idx, picks)
+        retain_idx = np.where(~is_dropped)[0]
+        return self.pick_cells(retain_idx)
 
     def n_spikes(self):
         """Calculate number of spikes per cell.
