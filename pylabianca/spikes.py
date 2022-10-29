@@ -935,7 +935,7 @@ def _n_spikes(spk, per_epoch=False):
             return np.array([len(x) for x in spk.time])
         else:
             raise TypeError("`spk` has to be an instance of Spikes or"
-                            f"SpikeEpochs, got {type(spk)}.")
+                            f" SpikeEpochs, got {type(spk)}.")
 
     else:
         if not isinstance(spk, SpikeEpochs):
