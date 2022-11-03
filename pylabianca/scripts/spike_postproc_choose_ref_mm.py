@@ -31,9 +31,10 @@ import switchorder as swo
 # SETTINGS
 # --------
 
-subject = 'sub-U05'
+subject = 'sub-U06'
 sorter, norm = 'osort', False
 bids_dir = swo.find_switchorder()
+
 dir_fname = (f'{subject}_ses-main_task-switchorder_run-01_'
              f'sorter-{sorter}_norm-{norm}')
 data_dir = op.join(bids_dir, 'derivatives', 'sorting', subject, 'ses-main',
@@ -60,7 +61,7 @@ coincidence_threshold = 0.1
 
 # minimum number of different-channel units in a coincidence cluster to
 # classify it as a reference cluster
-min_ref_channels = 2
+min_ref_channels = 1
 
 # weights
 # -------
@@ -410,10 +411,28 @@ df.to_csv(op.join(save_fig_dir, 'table.tsv'), sep='\t')
 
 print('All done.')
 
-# %%
+# %% write _drop.txt file
+# for switchorder the file is read when using switchorder.read_spk() and unit
+# rejections are applied
+fname = data_dir + '_drop.txt'
 
+lines_to_write = list()
+channels_with_drops = np.unique(df.channel.values)
+
+for chan in channels_with_drops:
+    df_sel = df.query(f'channel == "{chan}"')
+    msk = df_sel.loc[:, 'drop'].values
+    if msk.any():
+        clusters = df_sel.loc[msk, 'cluster'].values.tolist()
+        line = f'{chan}, {clusters}\n'
+        lines_to_write.append(line)
+        
+with open(fname, 'w') as file:
+    file.writelines(lines_to_write)
 
 # %% draw given cluster as graph
+import networkx as nx
+
 pack_idx = 6
 cluster_idx = 0
 
@@ -431,9 +450,7 @@ suspicious_idx, clusters, counts = (
 idx = suspicious_idx[clusters[cluster_idx]]
 simil_clst = simil[idx][:, idx]
 
-# %%
-import networkx as nx
-
+# construct graph
 G = nx.DiGraph()
 
 n_units = simil_clst.shape[0]
@@ -443,30 +460,8 @@ for idx1 in range(n_units):
         if fromto > coincidence_threshold:
             G.add_edges_from([(idx1, idx2)], weight=fromto)
 
-# %%
+# plot
 pos = nx.spring_layout(G, k=1)
 weights = [G[u][v]['weight'] for u,v in G.edges()]
 nx.draw_networkx(G, pos, arrows=True, width=weights)
 
-# %%
-val_map = {'A': 1.0,
-                   'D': 0.5714285714285714,
-                              'H': 0.0}
-
-values = [val_map.get(node, 0.45) for node in G.nodes()]
-edge_labels=dict([((u,v,),d['weight'])
-                 for u,v,d in G.edges(data=True)])
-red_edges = [('C','D'),('D','A')]
-edge_colors = ['black' if not edge in red_edges else 'red' for edge in G.edges()]
-
-pos=nx.spring_layout(G)
-nx.draw_networkx_edge_labels(G,pos,edge_labels=edge_labels)
-nx.draw(G,pos, node_color = values, node_size=1500,edge_color=edge_colors,edge_cmap=plt.cm.Reds)
-pylab.show()
-
-# %%
-# import h5io
-
-# drop_save_dir = r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1O\switchorder\derivatives\sorting\sub-W02\ses-main'
-# drop_fname = r'sub-W02_ses-main_task-switchorder_run-01_sorter-osort_norm-False_drop.hdf5'
-# h5io.write_hdf5(op.join(drop_save_dir, drop_fname), drop)
