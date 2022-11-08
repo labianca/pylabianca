@@ -31,7 +31,7 @@ import switchorder as swo
 # SETTINGS
 # --------
 
-subject = 'sub-U06'
+subject = 'sub-W03'
 sorter, norm = 'osort', False
 bids_dir = swo.find_switchorder()
 
@@ -42,19 +42,11 @@ data_dir = op.join(bids_dir, 'derivatives', 'sorting', subject, 'ses-main',
 save_fig_dir = op.join(bids_dir, 'derivatives', 'sel_ref', subject,
                        'ses-main')
 
-# first channel
-# to calculate coincidence only in 8-channel packs, you have to specify
-# the first channel - in case you did not select any units from the first
-# channel
-# if you leave it as None, the first channel will be estimated from
-# selected units, which may be incorrect
-first_channel = 129
-
 # whether to plot figures and where to save them
 save_fig = True
 
 # data format - 'standard' or 'mm' (depends on how you exported the curated units)
-data_format = 'standard'
+data_format = 'mm'
 
 # minimum coincidence threshold for coincidence cluster formation
 coincidence_threshold = 0.1
@@ -83,6 +75,16 @@ algn_smpl = 94
 
 
 # %% MAIN SCRIPT
+
+# TODO - add check that highest channel number is in a pack
+
+if not op.exists(save_fig_dir):
+    from pathlib import Path
+    parent_path = Path(save_fig_dir).parent
+    if not op.exists(parent_path):
+        os.mkdir(parent_path)
+    os.mkdir(save_fig_dir)
+
 
 # read the file
 print('Reading files - including all waveforms...')
@@ -134,22 +136,27 @@ def plot_scores(spk_sel, score):
 
 # check channel packs
 # -------------------
+channel_info = swo.read_channel_info(subject)
+
 channels = spk.cellinfo.channel.unique()
 channel_number = np.sort([int(ch[1:]) for ch in channels])
 
 if first_channel is None:
-    print('Estimating first channel from selected units.')
-    first_channel = channel_number[0]
-    print('Lowest channel number:', first_channel)
-
-n_packs = int(np.ceil((channel_number[-1] - first_channel) / 8))
-first_pack_channel = first_channel + np.arange(0, n_packs) * 8
+    first_channel = channel_number.min()
+    msk = channel_info['channel start'] <= first_channel
+    first_channel = channel_info.loc[msk, 'channel start'].max()
+    first_row_idx = np.where(
+        channel_info.loc[:, 'channel start'] == first_channel)[0][0]
 
 # find which units belong to which pack
-unit_channel = spk.cellinfo.channel.str.slice(1).astype('int')
+packs = list()
+for _, row in channel_info_sel.iterrows():
+    this_pack = np.arange(row['channel start'], row['channel end'] + 1)
+    packs.append(this_pack)
 
-units_in_pack = [np.where(np.in1d(unit_channel, frst + np.arange(8)))[0]
-                 for frst in first_pack_channel]
+unit_channel = spk.cellinfo.channel.str.slice(1).astype('int')
+units_in_pack = [np.where(np.in1d(unit_channel, pack))[0]
+                 for pack in packs]
 
 
 # calculate measures
@@ -203,6 +210,7 @@ df_columns=['pack', 'group', 'subgroup', 'channel', 'cluster', 'nspikes',
             'snr', 'isi', 'std', 'dns', 'drop']
 
 if not has_simil:
+    # turn to function
     print('Calculating similarity matrix, this can take a few minutes...')
     similarity_per_pack = list()
 
@@ -222,6 +230,7 @@ if not has_simil:
                     overwrite=True)
 else:
     similarity_per_pack = h5io.read_hdf5(op.join(data_dir, fname))
+    # add safety checks
 
 
 # drop = np.zeros(len(spk), dtype='bool')
@@ -433,8 +442,9 @@ with open(fname, 'w') as file:
 # %% draw given cluster as graph
 import networkx as nx
 
-pack_idx = 6
+pack_idx = 4
 cluster_idx = 0
+plot_edge_threshold = 0.2 # coincidence_threshold
 
 pack_units_idx = units_in_pack[pack_idx]
 simil = similarity_per_pack[pack_idx]
@@ -457,11 +467,13 @@ n_units = simil_clst.shape[0]
 for idx1 in range(n_units):
     for idx2 in range(n_units):
         fromto = simil_clst[idx1, idx2]
-        if fromto > coincidence_threshold:
+        if fromto > plot_edge_threshold:
             G.add_edges_from([(idx1, idx2)], weight=fromto)
 
 # plot
-pos = nx.spring_layout(G, k=1)
+pos = nx.spring_layout(G, k=1.5)
 weights = [G[u][v]['weight'] for u,v in G.edges()]
 nx.draw_networkx(G, pos, arrows=True, width=weights)
 
+# %%
+spk = swo.read_spk(subject, waveform=False, norm=norm)
