@@ -23,15 +23,16 @@ import switchorder as swo
 # ----
 # This is a modified version of the official spke_postproc_choose_ref script
 # the modification is to match the way mmagnuski files are read:
+# the data are read from BIDS structure, so only subject name is needed
+# channel "packs" are no longer assumed to be 8-channel (this is not true for
+# some Wrocław files), they are read from channel description files
 # first the spikes from selected osort units, then merge info from accompanying
-# text file, then dropped cells (I sometimes drop cells before running this
-# script if by incorrectly merging units they lead to too many units
-# clustered in one similarity group)
+# text file,
 
 # SETTINGS
 # --------
 
-subject = 'sub-W03'
+subject = 'sub-W02'
 sorter, norm = 'osort', False
 bids_dir = swo.find_switchorder()
 
@@ -141,12 +142,12 @@ channel_info = swo.read_channel_info(subject)
 channels = spk.cellinfo.channel.unique()
 channel_number = np.sort([int(ch[1:]) for ch in channels])
 
-if first_channel is None:
-    first_channel = channel_number.min()
-    msk = channel_info['channel start'] <= first_channel
-    first_channel = channel_info.loc[msk, 'channel start'].max()
-    first_row_idx = np.where(
-        channel_info.loc[:, 'channel start'] == first_channel)[0][0]
+first_channel = channel_number.min()
+msk = channel_info['channel start'] <= first_channel
+first_channel = channel_info.loc[msk, 'channel start'].max()
+first_row_idx = np.where(
+    channel_info.loc[:, 'channel start'] == first_channel)[0][0]
+channel_info_sel = channel_info.loc[first_row_idx:, :]
 
 # find which units belong to which pack
 packs = list()
@@ -442,9 +443,9 @@ with open(fname, 'w') as file:
 # %% draw given cluster as graph
 import networkx as nx
 
-pack_idx = 4
+pack_idx = 2
 cluster_idx = 0
-plot_edge_threshold = 0.2 # coincidence_threshold
+plot_edge_threshold = 0. # coincidence_threshold
 
 pack_units_idx = units_in_pack[pack_idx]
 simil = similarity_per_pack[pack_idx]
@@ -470,7 +471,8 @@ for idx1 in range(n_units):
         if fromto > plot_edge_threshold:
             G.add_edges_from([(idx1, idx2)], weight=fromto)
 
-# plot
+
+# plot'
 pos = nx.spring_layout(G, k=1.5)
 weights = [G[u][v]['weight'] for u,v in G.edges()]
 nx.draw_networkx(G, pos, arrows=True, width=weights)
