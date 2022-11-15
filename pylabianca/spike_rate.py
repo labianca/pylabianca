@@ -324,7 +324,7 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
 
 # should return: matrix of selectivity for each permutation
 def compute_selectivity_continuous(frate, compare='image', n_perm=500,
-                                   n_jobs=1, min_Hz=0.1):
+                                   n_jobs=1, min_Hz=False):
     '''
     Compute population selectivity for specific experimental category.
 
