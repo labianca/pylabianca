@@ -753,7 +753,7 @@ class Spikes(object):
                              labels=labels)
 
     def to_epochs(self, pad_timestamps=10_000):
-        '''Turn Spike object into one epoch SpikeEpochs representation.'''
+        '''Turn Spike object into one-epoch SpikeEpochs representation.'''
         min_stamp = (int(min([min(x) for x in self.timestamps]))
                      - pad_timestamps)
         max_stamp = (int(max([max(x) for x in self.timestamps]))
@@ -928,6 +928,7 @@ def _sort_spikes(spk, by=None, inplace=True):
 
 
 def _n_spikes(spk, per_epoch=False):
+    """Calculate number of spikes."""
     if not per_epoch:
         if isinstance(spk, Spikes):
             return np.array([len(x) for x in spk.timestamps])
