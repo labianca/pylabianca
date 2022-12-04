@@ -582,7 +582,6 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
     '''
     import pandas as pd
     from .viz import check_modify_progressbar
-    from .spikes import cluster_based_test
 
     n_cells = len(frate)
     corrwin = [-correct_dos_window, correct_dos_window]
@@ -644,8 +643,13 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
                     df_cluster.loc[row_idx, prefix + '_window'] = twin_str
                     df_cluster.loc[row_idx, prefix + '_in_toi'] = in_toi
                 elif format == 'new':
-                    region_name = fr_cell.region.item()
-                    short_name = region_name[1:-1]
+                    if 'region' in fr_cell:
+                        region_name = fr_cell.region.item()
+                        short_name = region_name[1:-1]
+                    else:
+                        region_name = None
+                        short_name = None
+
                     df_idx = row_idx + ord_idx
                     df_cluster.loc[df_idx, 'neuron'] = cell_name
                     df_cluster.loc[df_idx, 'region'] = region_name
@@ -660,8 +664,11 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
                 if spk is not None:
                     frate_avg = spk.spike_rate(
                         picks=pick, step=False, tmin=tmin, tmax=tmax)
-                    frate_avg = frate_avg.isel(cell=0).sel(
-                        trial=frate_avg.ifcorrect)
+
+                    # TODO: for GammBur I used only correct trials,
+                    #       but it may not always make sense...
+                    frate_avg = frate_avg.isel(cell=0)
+                    # .sel(trial=frate_avg.ifcorrect)
                 else:
                     frate_avg = fr_cell.sel(time=slice(tmin, tmax)).mean(
                         dim='time')  # .sel(trial=frate.ifcorrect)
