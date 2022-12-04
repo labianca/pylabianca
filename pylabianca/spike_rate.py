@@ -115,7 +115,6 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
     return frate
 
 
-
 # TODO: consider an exact mode where the spikes are not transformed to raw
 #       but placed exactly where the spike is (`loc=spike_time`) and evaluated
 #       (maybe this is what is done by elephant?)
@@ -148,7 +147,7 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, kernel=None,
     return cnt_times, cnt
 
 
-def depth_of_selectivity(frate, by, zero_below=0.0001):
+def depth_of_selectivity(frate, by, ignore_below=1e-15):
     '''Compute depth of selectivity for given category.
 
     Parameters
@@ -158,22 +157,39 @@ def depth_of_selectivity(frate, by, zero_below=0.0001):
     by : str
         Name of the dimension to group by and calculate depth of
         selectivity for.
+    ignore_below : float
+        Ignore values below this threshold. This is useful when spike density
+        is passed in ``frate`` - due to numerical errors, some values may be
+        very small or even negative but not exactly zero. Such values can lead
+        to depth of selectivity being far greater than 1. Default is ``1e-15``.
 
     Returns
     -------
     selectivity : xarray
         Xarray with depth of selectivity.
     '''
-    if zero_below > 0:
+    if ignore_below > 0:
         frate = frate.copy()
-        msk = frate.values < zero_below
+        msk = frate.values < ignore_below
         frate.values[msk] = 0.
 
     avg_by_probe = frate.groupby(by).mean(dim='trial')
     n_categories = len(avg_by_probe.coords[by])
     r_max = avg_by_probe.max(by)
+
+    singleton = r_max.shape == ()
+    if singleton and r_max.item() == 0:
+        return 0, avg_by_probe
+
     numerator = n_categories - (avg_by_probe / r_max).sum(by)
     selectivity = numerator / (n_categories - 1)
+    selectivity.name = 'depth of selectivity'
+
+    if not singleton:
+        bad_selectivity = r_max < ignore_below
+        if (bad_selectivity).any():
+            selectivity[bad_selectivity] = 0
+
     return selectivity, avg_by_probe
 
 
