@@ -147,14 +147,14 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, kernel=None,
     return cnt_times, cnt
 
 
-def depth_of_selectivity(frate, by, ignore_below=1e-15):
+def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
     '''Compute depth of selectivity for given category.
 
     Parameters
     ----------
     frate : xarray
         Xarray with firing rate data.
-    by : str
+    groupby : str
         Name of the dimension to group by and calculate depth of
         selectivity for.
     ignore_below : float
@@ -173,15 +173,15 @@ def depth_of_selectivity(frate, by, ignore_below=1e-15):
         msk = frate.values < ignore_below
         frate.values[msk] = 0.
 
-    avg_by_probe = frate.groupby(by).mean(dim='trial')
-    n_categories = len(avg_by_probe.coords[by])
-    r_max = avg_by_probe.max(by)
+    avg_by_probe = frate.groupby(groupby).mean(dim='trial')
+    n_categories = len(avg_by_probe.coords[groupby])
+    r_max = avg_by_probe.max(dim=groupby)
 
     singleton = r_max.shape == ()
     if singleton and r_max.item() == 0:
         return 0, avg_by_probe
 
-    numerator = n_categories - (avg_by_probe / r_max).sum(by)
+    numerator = n_categories - (avg_by_probe / r_max).sum(dim=groupby)
     selectivity = numerator / (n_categories - 1)
     selectivity.name = 'depth of selectivity'
 
