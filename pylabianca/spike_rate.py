@@ -726,7 +726,7 @@ def _compute_time_in_window(clst_msk, times, window_of_interest):
 
 # TODO: adapt for multiple cells
 def explained_variance(frate, groupby, kind='omega'):
-    """Calculate percentage of explained variance effect size.
+    """Calculate percentage of explained variance (PEV) effect size.
 
     Parameters
     ----------
