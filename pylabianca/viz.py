@@ -326,7 +326,7 @@ def plot_raster(spk, pick=0, groupby=None, ax=None):
 
 
 def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
-                min_pval=0.001):
+                min_pval=0.001, ax=None):
     '''Plot average spike rate and spike raster.
 
     spk : pylabianca.spikes.SpikeEpochs
@@ -344,6 +344,9 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
     min_pval : float
         Minimum p-value of cluster to mark on the plot. Only used if
         ``df_clst`` is not None.
+    ax: matplotlib.Axes | None
+        Two axes to plot on: first is used for average firing ratem the second
+        is used for raster plot. If None, a new figure is created.
 
     Returns
     -------
@@ -359,8 +362,12 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
         cell_name = this_frate.coords['cell'].item()
 
     # plot
-    gridspec_kw = {'bottom': 0.15, 'left': 0.15}
-    fig, ax = plt.subplots(nrows=2, gridspec_kw=gridspec_kw)
+    if ax is None:
+        gridspec_kw = {'bottom': 0.15, 'left': 0.15}
+        fig, ax = plt.subplots(nrows=2, gridspec_kw=gridspec_kw)
+    else:
+        assert(len(ax) == 2)
+        fig = ax[0].figure
     plot_spike_rate(this_frate, groupby=groupby, ax=ax[0])
 
     # add highlight
