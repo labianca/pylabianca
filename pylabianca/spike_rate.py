@@ -722,3 +722,62 @@ def _compute_time_in_window(clst_msk, times, window_of_interest):
     twin[1] = max(min(window_of_interest[1], twin[1]),
                     window_of_interest[0])
     return twin[1] - twin[0]
+
+
+# TODO: adapt for multiple cells
+def explained_variance(frate, groupby, kind='omega'):
+    """Calculate percentage of explained variance effect size.
+
+    Parameters
+    ----------
+    frate : xarray.DataArray
+        Firing rate data.
+    groupby : str
+        Name of the grouping variable. It is assumed that the variable is
+        categorical with at least two levels and is specified as a coordinate
+        for the trial dimension.
+    kind : str
+        Type of effect size to calculate. Can be either 'omega' or 'eta' for
+        omega squared and eta squared respectively.
+
+    Returns
+    -------
+    es : xarray.DataArray
+        Explained variance effect size.
+    """
+    is_omega = kind == 'omega'
+    global_avg = frate.mean(dim='trial')
+    n_times = len(frate.coords['time'])
+
+    groups, per_group = np.unique(frate.image, return_counts=True)
+    n_groups = len(groups)
+    # group_avg = np.zeros((n_groups, n_times))
+
+    SS_total = ((frate - global_avg) ** 2).sum(dim='trial')
+    SS_between = np.zeros((n_groups, n_times))
+
+    if is_omega:
+        SS_within = SS_between.copy()
+
+    for idx, (label, arr) in enumerate(frate.groupby('image')):
+        # are group labels always sorted when using .groupby?
+        group_avg = arr.mean(dim='trial')
+        SS_between[idx] = per_group[idx] * (group_avg - global_avg) ** 2
+
+        if is_omega:
+            within_group = ((arr - group_avg) ** 2).sum(dim='trial')
+            SS_within[idx] = within_group
+
+    SS_between = SS_between.sum(axis=0)
+
+    if not is_omega:
+        es = SS_between / SS_total
+        es.name = 'eta squared'
+    else:
+        df = n_groups - 1
+        n_trials = len(frate.coords['trial'])
+        MSE = SS_within.sum(axis=0) / n_trials
+        es = (SS_between - df * MSE) / (SS_total + MSE)
+        es.name = 'omega squared'
+
+    return es
