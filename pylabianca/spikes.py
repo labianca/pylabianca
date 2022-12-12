@@ -3,8 +3,7 @@ import numpy as np
 import pandas as pd
 
 from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
-from .spike_rate import (compute_spike_rate, depth_of_selectivity,
-                         _spike_density)
+from .spike_rate import compute_spike_rate, _spike_density
 from .spike_distance import compare_spike_times
 
 
