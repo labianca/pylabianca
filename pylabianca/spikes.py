@@ -386,9 +386,9 @@ class SpikeEpochs():
         new_cellinfo = None if self.cellinfo is None else self.cellinfo.copy()
         return SpikeEpochs(newtime, newtrial, time_limits=self.time_limits,
                            n_trials=new_metadata.shape[0],
-                            cell_names=self.cell_names.copy(),
-                            metadata=new_metadata, cellinfo=new_cellinfo,
-                            waveform=waveform)
+                           cell_names=self.cell_names.copy(),
+                           metadata=new_metadata, cellinfo=new_cellinfo,
+                           waveform=waveform)
 
     def plot_waveform(self, pick=0, upsample=False, ax=None, labels=True):
         '''Plot waveform heatmap for one cell.
