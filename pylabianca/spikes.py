@@ -62,7 +62,8 @@ class SpikeEpochs():
         self.time_limits = time_limits
 
         if n_trials is None:
-            n_trials = max(max(tri) + 1 for tri in self.trial)
+            n_trials = max(max(tri) + 1 if len(tri) > 0 else 0
+                           for tri in self.trial)
         if cell_names is None:
             n_cells = len(time)
             cell_names = np.array(['cell{:03d}'.format(idx)
@@ -466,8 +467,8 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
     else:
         # not sure why a list with empty array is returned
         # (why wrap with list?)
-        trial = [np.array([])]
-        time = [np.array([])]
+        trial = np.array([])
+        time = np.array([])
 
     return trial, time, idx
 
