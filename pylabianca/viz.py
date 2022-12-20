@@ -267,7 +267,7 @@ def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
 
 
 # TODO: add order=False for groupby?
-def plot_raster(spk, pick=0, groupby=None, ax=None):
+def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     '''Show spike rasterplot.
 
     Parameters
@@ -279,6 +279,10 @@ def plot_raster(spk, pick=0, groupby=None, ax=None):
     groupby : str | None
         If not None, group the raster by given variable (requires present
         ``.metadata`` field of the ``spk``).
+    ax : matplotlib.Axes | None
+        Matplotlib axis to plot to. If ``None`` a new figure is opened.
+    labels : bool
+        Whether to add labels to the axes.
 
     Returns
     -------
@@ -321,6 +325,10 @@ def plot_raster(spk, pick=0, groupby=None, ax=None):
     # set x limits
     xlim = spk.time_limits + np.array([-0.05, 0.05])
     ax.set_xlim(xlim)
+
+    if labels:
+        ax.set_xlabel('Time (s)', fontsize=14)
+        ax.set_ylabel('Trial', fontsize=14)
 
     return ax
 
