@@ -309,7 +309,10 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
             trials = (spk_cell.metadata.query(f'{groupby} == {value}')
                       .index.values)
         else:
-            trials = spk_cell.metadata.index.values
+            if spk_cell.metadata is not None:
+                trials = spk_cell.metadata.index.values
+            else:
+                trials = np.arange(spk_cell.n_trials)
 
         for trial in trials:
             msk = spk_cell.trial[0] == trial
