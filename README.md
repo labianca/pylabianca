@@ -1,5 +1,5 @@
 # pylabianca
-Python tools of spike and LFP analysis.
+Python tools for spike and LFP analysis.
 
 ## installation
 Currently - just install directly from github (you will need git for that, and of course do it from your terminal/console):
