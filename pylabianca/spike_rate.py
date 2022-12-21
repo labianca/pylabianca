@@ -37,8 +37,8 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
     picks = _deal_with_picks(spk, picks)
 
     if isinstance(step, bool) and not step:
-        assert tmin is not None
-        assert tmax is not None
+        tmin = spk.time_limits[0] if tmin is None else tmin
+        tmax = spk.time_limits[1] if tmax is None else tmax
         times = f'{tmin} - {tmax} s'
 
         frate = list()
