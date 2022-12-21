@@ -233,6 +233,8 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
         Dataframe with category-sensitivity information.
     '''
     import pandas as pd
+    import xarray as xr
+
     from .spike_rate import cluster_based_test
     from .viz import check_modify_progressbar
 
@@ -325,7 +327,11 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
                 else:
                     frate_avg = fr_cell.sel(time=slice(tmin, tmax)).mean(
                         dim='time')  # .sel(trial=frate.ifcorrect)
-                depth, preferred = depth_of_selectivity(frate_avg, by=compare)
+
+                depth, preferred = depth_of_selectivity(
+                    frate_avg, groupby=compare)
+                if isinstance(depth, xr.DataArray):
+                    depth = depth.item()
 
                 # find preferred categories
                 perc_pref = preferred / preferred.max()
@@ -335,7 +341,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
                 # check if cluster time window can be deemed as selective
                 is_sel = ((cluster_p[ord_idx] < 0.05)
                           & (in_toi >= min_time_in_window)
-                          & (depth.item() > min_depth_of_selectivity))
+                          & (depth > min_depth_of_selectivity))
 
                 if format == 'old':
                     pref = pref_idx[perc_pref_sel] + 1
@@ -343,7 +349,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
 
                     df_cluster.loc[row_idx, prefix + '_preferred'] = pref_str
                     df_cluster.loc[row_idx, prefix + '_n_preferred'] = len(pref)
-                    df_cluster.loc[row_idx, prefix + 'DoS'] = depth.item()
+                    df_cluster.loc[row_idx, prefix + 'DoS'] = depth
                     df_cluster.loc[row_idx, prefix + '_selective'] = is_sel
                 elif format == 'new':
                     # TODO - use category labels in preferred!
@@ -352,7 +358,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
 
                     df_cluster.loc[df_idx, 'preferred'] = pref_str
                     df_cluster.loc[df_idx, 'n_preferred'] = len(pref)
-                    df_cluster.loc[df_idx, 'DoS'] = depth.item()
+                    df_cluster.loc[df_idx, 'DoS'] = depth
                     df_cluster.loc[df_idx, 'selective'] = is_sel
 
         else:
