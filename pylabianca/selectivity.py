@@ -299,9 +299,13 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
                     df_cluster.loc[row_idx, prefix + '_window'] = twin_str
                     df_cluster.loc[row_idx, prefix + '_in_toi'] = in_toi
                 elif format == 'new':
-                    if 'region' in fr_cell:
+                    if 'region' in fr_cell.coords:
                         region_name = fr_cell.region.item()
-                        short_name = region_name[1:-1]
+
+                        if 'region2' in fr_cell.coords:
+                            short_name = fr_cell.region2.item()
+                        else:
+                            short_name = region_name[1:-1]
                     else:
                         region_name = None
                         short_name = None
