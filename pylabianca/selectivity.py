@@ -2,6 +2,7 @@ import numpy as np
 
 
 # TODO: adapt for multiple cells
+# TODO: make more universal (do not require 'time' and 'trial' dimensions)
 def explained_variance(frate, groupby, kind='omega'):
     """Calculate percentage of explained variance (PEV) effect size.
 
@@ -26,14 +27,16 @@ def explained_variance(frate, groupby, kind='omega'):
     is_omega = kind == 'omega'
 
     global_avg = frate.mean(dim='trial')
-    n_times = len(frate.coords['time'])
+    has_time = 'time' in frate.dims
+    if has_time:
+        n_times = len(frate.coords['time'])
 
     groups, per_group = np.unique(frate.image, return_counts=True)
     n_groups = len(groups)
-    # group_avg = np.zeros((n_groups, n_times))
 
     SS_total = ((frate - global_avg) ** 2).sum(dim='trial')
-    SS_between = np.zeros((n_groups, n_times))
+    SS_between = (np.zeros((n_groups, n_times))
+                  if has_time else np.zeros(n_groups))
 
     if is_omega:
         SS_within = SS_between.copy()
@@ -190,8 +193,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         results[key] = results[key].assign_coords(coords)
 
     return results
-
-
 
 
 # TODO: add njobs
