@@ -1,0 +1,285 @@
+import numpy as np
+
+
+# TODO: decimation should likely be done outside of this function
+def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
+                 n_jobs=4, time_generalization=False, random_state=None,
+                 clf=None, n_pca=0):
+    '''Perform decoding analysis with a linear SVM classifier.
+
+    Parameters
+    ----------
+    X : array-like, shape (n_samples, n_features, n_times)
+        The training input samples. Commonly the samples dimension consists of
+        trials or subjects while the features dimension consists of cells or
+        electrodes.
+    y : array-like, shape (n_samples,)
+        The target values (class labels).
+    decim : int
+        Decimation factor for the time dimension.
+    n_splits : int | str
+        Number of cross-validation splits. If ``'loo'``, leave-one-out
+        cross-validation is used.
+    C : float
+        Inverse of regularization strength.
+    scoring : str
+        Scoring metric.
+    n_jobs : int
+        Number of jobs to run in parallel.
+    time_generalization : bool
+        Whether to perform time generalization (training and testing also
+        on different time points).
+    random_state : int or None
+        Random state for cross-validation.
+    clf : None or sklearn classifier / pipeline
+        If None, a linear SVM classifier with standard scaling is used.
+    n_pca : int
+        Number of principal components to use for dimensionality reduction. If
+        0 (default), no dimensionality reduction is performed.
+
+    Returns
+    -------
+    scores : array, shape (n_splits, n_times, n_times)
+        Decoding scores.
+    sel_time : array, shape (n_times,)
+        Selected time points. Can be ignored if ``decim==1``.
+    '''
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.svm import SVC
+    from sklearn.model_selection import StratifiedKFold, LeaveOneOut
+    from mne.decoding import GeneralizingEstimator, SlidingEstimator
+
+    if n_pca > 0:
+        if clf is not None:
+            raise ValueError('Cannot use PCA and a custom classifier.')
+
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=n_pca)
+
+    # handle data with only one time point / aggregated time window
+    if X.ndim == 2:
+        X = X[:, :, np.newaxis]
+    if X.shape[-1] == 1:
+        decim = 1
+
+    # decimate original data
+    sel_time = slice(0, X.shape[-1], decim)
+    Xrs = X[..., sel_time]
+
+    # k-fold object
+    if isinstance(n_splits, str) and n_splits == 'loo':
+        # use leave one out cross validation
+        spl = LeaveOneOut()
+    else:
+        spl = StratifiedKFold(
+            n_splits=n_splits,
+            shuffle=True,
+            random_state=random_state
+        )
+
+    # classification pipeline
+    if clf is None:
+        steps = [StandardScaler(), SVC(C=C, kernel='linear')]
+        if n_pca > 0:
+            steps.insert(1, pca)
+        clf = make_pipeline(*steps)
+
+    # use simple sliding estimator or generalization across time
+    estimator = (SlidingEstimator if not time_generalization
+                 else GeneralizingEstimator)
+    estimator = estimator(
+        clf, scoring=scoring,
+        n_jobs=n_jobs, verbose=False
+    )
+
+    # do the k-fold
+    scores = list()
+    for train_index, test_index in spl.split(Xrs, y):
+
+        estimator.fit(X=Xrs[train_index, :],
+                      y=y[train_index])
+        score = estimator.score(X=Xrs[test_index, :],
+                                y=y[test_index])
+        scores.append(score)
+
+    scores = np.stack(scores, axis=0)
+    return scores, sel_time
+
+
+# TODO: currently only compares load_cue!
+def frate_to_sklearn(frates, target=None, select=None,
+                     cell_names=None, time_idx=None):
+    '''Format frates xarray into sklearn X, y data arrays.
+
+    Can concatenate conditions if needed.
+    '''
+    if target is None:
+        raise ValueError('You have to specify specify target.')
+
+    fr = frates.transpose('trial', 'cell', 'time')
+
+    # if concat_cond is not None:
+    #     fr2 = frates['maint1'][subj].transpose(
+    #         'trial', 'cell', 'time').sel(time=slice(-0.25, 2.5))
+
+    if cell_names is not None:
+        fr = fr.sel(cell=cell_names)
+
+    if select is not None:
+        fr = fr.query({'trial': select})
+
+    if time_idx is not None:
+        fr = fr.isel(time=time_idx)
+
+    full_time = fr.time.values
+    X = fr.values
+    y = fr.coords[target].values
+
+    return X, y, full_time
+
+
+def frates_dict_to_sklearn(frates, target=None, select=None,
+                           cell_names=None, time_idx=None):
+    '''Get all subjects from frates dictionary.
+
+    The ``frates`` is a dictionary of epoch types / conditions where each
+    item is a dictionary of subject -> firing rate xarray mappings.
+
+    Parameters
+    ----------
+    frates : dict
+        Dictionary with epoch types / conditions as keys and
+        {subject: firing rate xarray} dictionaries as keys.
+    target : str
+        Name of the variable to use as target.
+    cond : str
+        Epoch type / condition to choose.
+    select : str, optional
+        Query string to select trials. Default is ``None``, which does not
+        subselect trials (all trials are used).
+    cell_names : dict of list of str, optional
+        Dictionary with subject id as keys and values being list of cell names
+        to use. Defaults to ``None``, which uses all cells.
+    time_idx : int, optional
+        Time index or time range to use (as time indices). Defaults to
+        ``None``, which uses all time points.
+
+    Returns
+    -------
+    Xs : list of arrays
+        List of (n_trials, n_cells, n_time) firing rate arrays extracted from
+        the ``frates`` dictionary. Each list element represents one subject.
+    ys : list of arrays
+        List of (n_trials,) target values extracted from the ``frates``
+        dictionary. Each list element represents one subject.
+    full_time : np.array
+        Full time vector (in seconds).
+    '''
+    Xs = list()
+    ys = list()
+
+    if target is None:
+        raise ValueError('You have to specify specify target.')
+
+    if cell_names is None:
+        subjects = frates.keys()
+    else:
+        subjects = cell_names.keys()
+
+    for subj in subjects:
+        this_cell_names = (cell_names[subj] if cell_names is not None
+                           else cell_names)
+        X, this_y, full_time = frate_to_sklearn(
+            frates[subj], select=select, y=y, cell_names=this_cell_names,
+            time_idx=time_idx)
+
+        # add to the list
+        Xs.append(X)
+        ys.append(this_y)
+
+    return Xs, ys, full_time
+
+
+def join_subjects(Xs, ys, random_state=None, shuffle=True):
+    '''Concatenate subjects keeping target the same but shuffling tirals
+    within target categories.
+
+    The concatenated array is trials x subjects_cells x time.
+
+    Parameters
+    ----------
+    Xs : list of arrays
+        List of (n_trials, n_cells, n_time) firing rate arrays.
+    ys : list of arrays
+        List of (n_trials,) target values.
+    random_state : int, optional
+        Random state to use for shuffling within-condition trials per subject
+        before joining the arrays into one "pseudo-population".
+
+    Returns
+    -------
+    X : array
+        (n_trials, n_cells, n_time) firing rate array. The cells dimension
+        is a pseudo-population pooled from all the subjects.
+    y : array
+        (n_trials,) target values.
+    '''
+    n_arrays = len(Xs)
+    new_Xs, new_ys = list(), list()
+
+    if random_state is not None:
+        rnd = np.random.default_rng(random_state)
+    else:
+        rnd = None
+
+    for idx in range(n_arrays):
+
+        # shuffle
+        X, y = Xs[idx], ys[idx]
+
+        if shuffle:
+            X, y = shuffle_trials(X, y, random_state=rnd)
+
+            # sort trials by dependent value
+            srt = np.argsort(y)
+        else:
+            # normal sorting can change the order of trials within conditions
+            # so here, we do simpler reordering that retains this order
+            categories = np.unique(y)
+            srt = np.concatenate([np.where(y == cat)[0]
+                                  for cat in categories])
+
+        X = X[srt, :]
+        y = y[srt]
+
+        # add to the list
+        new_Xs.append(X)
+        new_ys.append(y)
+
+    # make sure trials are aligned
+    assert all([(y == new_ys[0]).all() for y in new_ys])
+
+    X = np.concatenate(new_Xs, axis=1)
+    y = new_ys[0]
+
+    return X, y
+
+
+def shuffle_trials(*arrays, random_state=None):
+    n_arrays = len(arrays)
+    array_len = [len(x) for x in arrays]
+    if n_arrays > 1:
+        assert all([array_len[0] == x for x in array_len[1:]])
+
+    n_trials = array_len[0]
+    tri_idx = np.arange(n_trials)
+    if random_state is None:
+        np.random.shuffle(tri_idx)
+    else:
+        random_state.shuffle(tri_idx)
+
+    shuffled = tuple(arr[tri_idx] for arr in arrays)
+    if n_arrays == 1:
+        shuffled = shuffled[0]
+    return shuffled
