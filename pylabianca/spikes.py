@@ -465,8 +465,6 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
         time = np.concatenate(time)
         idx = np.concatenate(idx)
     else:
-        # not sure why a list with empty array is returned
-        # (why wrap with list?)
         trial = np.array([])
         time = np.array([])
 
@@ -621,7 +619,7 @@ class Spikes(object):
 
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
                           cell_names=self.cell_names, cellinfo=self.cellinfo,
-                          waveform=waveforms)
+                          n_trials=len(events), waveform=waveforms)
 
         # TODO: this should be removed later on, as Spike metadata should not
         #       be supported, metadata should be provided during or after
