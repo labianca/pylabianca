@@ -116,7 +116,7 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
 
 
 # TODO: currently only compares load_cue!
-def frate_to_sklearn(frates, target=None, select=None,
+def frate_to_sklearn(frate, target=None, select=None,
                      cell_names=None, time_idx=None):
     '''Format frates xarray into sklearn X, y data arrays.
 
@@ -125,7 +125,10 @@ def frate_to_sklearn(frates, target=None, select=None,
     if target is None:
         raise ValueError('You have to specify specify target.')
 
-    fr = frates.transpose('trial', 'cell', 'time')
+    if 'time' in frate.dims:
+        fr = frate.transpose('trial', 'cell', 'time')
+    else:
+        fr = frate.transpose('trial', 'cell')
 
     # if concat_cond is not None:
     #     fr2 = frates['maint1'][subj].transpose(
@@ -140,7 +143,7 @@ def frate_to_sklearn(frates, target=None, select=None,
     if time_idx is not None:
         fr = fr.isel(time=time_idx)
 
-    full_time = fr.time.values
+    full_time = fr.time.values if 'time' in fr.dims else None
     X = fr.values
     y = fr.coords[target].values
 
@@ -181,8 +184,9 @@ def frates_dict_to_sklearn(frates, target=None, select=None,
     ys : list of arrays
         List of (n_trials,) target values extracted from the ``frates``
         dictionary. Each list element represents one subject.
-    full_time : np.array
-        Full time vector (in seconds).
+    full_time : np.array | None
+        Full time vector (in seconds). ``None`` if no time dimension was
+        present in the the xarrays in ``frates`` dictionary.
     '''
     Xs = list()
     ys = list()
