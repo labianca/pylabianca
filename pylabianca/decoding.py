@@ -105,6 +105,7 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
             sel = feature_selection(Xrs[train_index, :], y[train_index])
         else:
             sel = slice(None)
+
         estimator.fit(X=Xrs[train_index][:, sel],
                       y=y[train_index])
         score = estimator.score(X=Xrs[test_index][:, sel],
@@ -115,7 +116,8 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
     return scores, sel_time
 
 
-# TODO: currently only compares load_cue!
+# TODO: returning ``full_time`` does not make much sense because
+#       this function does not perform any decimation
 def frate_to_sklearn(frate, target=None, select=None,
                      cell_names=None, time_idx=None):
     '''Format frates xarray into sklearn X, y data arrays.
