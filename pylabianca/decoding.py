@@ -4,7 +4,7 @@ import numpy as np
 # TODO: decimation should likely be done outside of this function
 def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
                  n_jobs=4, time_generalization=False, random_state=None,
-                 clf=None, n_pca=0):
+                 clf=None, n_pca=0, feature_selection=None):
     '''Perform decoding analysis with a linear SVM classifier.
 
     Parameters
@@ -36,6 +36,11 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
     n_pca : int
         Number of principal components to use for dimensionality reduction. If
         0 (default), no dimensionality reduction is performed.
+    feature_selection : function | None
+        Function that takes ``X`` and ``y`` array from training set and
+        returns a boolean array of shape (n_features,) that indicates which
+        features to use for training. If None (default), no feature selection
+        is performed.
 
     Returns
     -------
@@ -96,10 +101,13 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
     # do the k-fold
     scores = list()
     for train_index, test_index in spl.split(Xrs, y):
-
-        estimator.fit(X=Xrs[train_index, :],
+        if feature_selection is not None:
+            sel = feature_selection(Xrs[train_index, :], y[train_index])
+        else:
+            sel = slice(None)
+        estimator.fit(X=Xrs[train_index][:, sel],
                       y=y[train_index])
-        score = estimator.score(X=Xrs[test_index, :],
+        score = estimator.score(X=Xrs[test_index][:, sel],
                                 y=y[test_index])
         scores.append(score)
 
