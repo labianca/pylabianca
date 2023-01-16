@@ -203,8 +203,8 @@ def frates_dict_to_sklearn(frates, target=None, select=None,
         this_cell_names = (cell_names[subj] if cell_names is not None
                            else cell_names)
         X, this_y, full_time = frate_to_sklearn(
-            frates[subj], select=select, y=y, cell_names=this_cell_names,
-            time_idx=time_idx)
+            frates[subj], select=select, target=target,
+            cell_names=this_cell_names, time_idx=time_idx)
 
         # add to the list
         Xs.append(X)
