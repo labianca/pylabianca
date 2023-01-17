@@ -77,20 +77,21 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
     return frate
 
 
+# ENH: speed up by using previous mask in the next step to pre-select spikes
 def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
                               n_trials, winlen=0.25, step=0.05):
-    halfwin = winlen / 2
-    epoch_len = time_limits[1] - time_limits[0]
-    n_steps = int(np.floor((epoch_len - winlen) / step + 1))
+    half_win = winlen / 2
+    used_range = time_limits[1] - time_limits[0]
+    n_steps = int(np.floor((used_range - winlen) / step + 1))
 
-    fr_t_start = time_limits[0] + halfwin
-    fr_tend = time_limits[1] - halfwin + step * 0.001
-    times = np.arange(fr_t_start, fr_tend, step=step)
+    fr_t_start = time_limits[0] + half_win
+    fr_t_end = time_limits[1] - half_win + step * 0.001
+    times = np.arange(fr_t_start, fr_t_end, step=step)
     frate = np.zeros((n_trials, n_steps))
 
     for step_idx in range(n_steps):
-        winlims = times[step_idx] + np.array([-halfwin, halfwin])
-        msk = (spike_times >= winlims[0]) & (spike_times < winlims[1])
+        win_lims = times[step_idx] + np.array([-half_win, half_win])
+        msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
         in_tri, count = np.unique(tri, return_counts=True)
         frate[in_tri, step_idx] = count / winlen
