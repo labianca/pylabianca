@@ -35,10 +35,11 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
             Xarray with following labeled dimensions: cell, trial, time.
     '''
     picks = _deal_with_picks(spk, picks)
+    tmin = spk.time_limits[0] if tmin is None else tmin
+    tmax = spk.time_limits[1] if tmax is None else tmax
 
     if isinstance(step, bool) and not step:
-        tmin = spk.time_limits[0] if tmin is None else tmin
-        tmax = spk.time_limits[1] if tmax is None else tmax
+
         times = f'{tmin} - {tmax} s'
 
         frate = list()
@@ -65,7 +66,7 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
 
         for pick in picks:
             times, frt = func(
-                spk.time[pick], spk.trial[pick], spk.time_limits,
+                spk.time[pick], spk.trial[pick], [tmin, tmax],
                 spk.n_trials, winlen=winlen, step=step)
             frate.append(frt)
             cell_names.append(spk.cell_names[pick])
