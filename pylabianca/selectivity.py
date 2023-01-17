@@ -145,13 +145,16 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     import xarray as xr
     from . spike_rate import permutation_test
 
+    has_time = 'time' in frate.dims
+
     # select cells
     if min_Hz:
-        msk = frate.mean(dim=('trial', 'time')) >= min_Hz
+        reduce_dims = 'trial' if not has_time else ('trial', 'time')
+        msk = frate.mean(dim=reduce_dims) >= min_Hz
         frate = frate.sel(cell=msk)
 
     frate_dims = ['trial', 'cell']
-    if 'time' in frate.dims:
+    if has_time:
         frate_dims.append('time')
     frate = frate.transpose(*frate_dims)
 
@@ -173,7 +176,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     dims = ['perm', 'cell']
     coords = {'perm': np.arange(n_perm) + 1,
               'cell': cells}
-    if 'time' in frate.dims:
+    if has_time:
         dims.append('time')
         coords['time'] = frate.time.values
 
