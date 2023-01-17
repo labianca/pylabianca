@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 # TODO - the info about "one other dimension" (that is reduced) seems to be no
 #        longer accurate
 def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
-                    x_dim='time', legend=True, legend_pos=None, colors=None):
+                    x_dim='time', legend=True, legend_pos=None, colors=None,
+                    labels=True):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -34,7 +35,9 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
     colors : list of arrays | dictionary of arrays | None
         List of RGB arrays to use as colors for condition groups. Can also be
         a dictionary linking condition names / values and RBG arrays. Default
-        is ``None`` which
+        is ``None`` which uses the default matplotlib color cycle.
+    labels : bool
+        Whether to add labels to the axes.
 
     Returns
     -------
@@ -101,17 +104,20 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
         ax.fill_between(avg.coords[x_dim], ci_low, ci_high, linewidth=0,
                         alpha=0.3, **add_arg)
 
-    if x_dim == 'time':
-        ax.set_xlabel('Time (s)', fontsize=14)
 
-    ax.set_ylabel('Spike rate (Hz)', fontsize=14)
     if groupby is not None and legend:
         pos = 'best' if legend_pos is None else legend_pos
         ax.legend(title=f'{groupby}:', loc=pos)
 
-    add_txt = '' if groupby is None else f' grouped by {groupby}'
-    ttl = 'Firing rate' + add_txt
-    ax.set_title(ttl, fontsize=16)
+    if labels:
+        if x_dim == 'time':
+            ax.set_xlabel('Time (s)', fontsize=14)
+
+        ax.set_ylabel('Spike rate (Hz)', fontsize=14)
+        add_txt = '' if groupby is None else f' grouped by {groupby}'
+        ttl = 'Firing rate' + add_txt
+        ax.set_title(ttl, fontsize=16)
+
     return lines[0].axes
 
 
