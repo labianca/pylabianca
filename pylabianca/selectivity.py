@@ -150,7 +150,10 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         msk = frate.mean(dim=('trial', 'time')) >= min_Hz
         frate = frate.sel(cell=msk)
 
-    frate = frate.transpose('trial', 'cell', 'time')
+    frate_dims = ['trial', 'cell']
+    if 'time' in frate.dims:
+        frate_dims.append('time')
+    frate = frate.transpose(*frate_dims)
 
     # permutations
     # ------------
@@ -167,10 +170,13 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         cells = ['_'.join([subj, x]) for x in cells]
 
     # perm
-    dims = ['perm', 'cell', 'time']
+    dims = ['perm', 'cell']
     coords = {'perm': np.arange(n_perm) + 1,
-              'time': frate.time,
               'cell': cells}
+    if 'time' in frate.dims:
+        dims.append('time')
+        coords['time'] = frate.time.values
+
     results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
                                    coords=coords, name='t value')
 
@@ -181,7 +187,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     # thresh
     results['thresh'] = np.stack(results['thresh'], axis=0)
-    dims2 = ['tail', 'cell', 'time']
+    dims2 = ['tail'] + dims[1:]
     coords.update({'tail': ['pos', 'neg']})
     results['thresh'] = xr.DataArray(
         data=results['thresh'], dims=dims2, coords=coords, name='t value')
