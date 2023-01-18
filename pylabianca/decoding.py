@@ -1,5 +1,11 @@
 import numpy as np
 
+from sklearn.base import BaseEstimator
+from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
+from sklearn.utils.multiclass import unique_labels
+
+
+
 
 # TODO: decimation should likely be done outside of this function
 def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
@@ -297,3 +303,51 @@ def shuffle_trials(*arrays, random_state=None):
     if n_arrays == 1:
         shuffled = shuffled[0]
     return shuffled
+
+
+class maxCorrClassifier(BaseEstimator):
+    def __init__(self):
+        pass
+
+    def fit(self, X, y):
+        X, y = check_X_y(X, y)
+        self.classes_ = unique_labels(y)
+        self.class_averages_ = list()
+        self.n_classes_ = len(self.classes_)
+        self.n_features_in_ = X.shape[1]
+        for cls in self.classes_:
+            msk = y == cls
+            avg = X[msk, :].mean(axis=0)
+            self.class_averages_.append(avg)
+
+        return self
+
+    def predict(self, X):
+        from scipy.stats import pearsonr
+
+        # Check if fit has been called
+        check_is_fitted(self)
+        X = check_array(X)
+
+        # check correlations
+        n_cases = X.shape[0]
+        r = np.zeros((n_cases, self.n_classes_))
+        for ix_case in range(n_cases):
+            constant = np.all(X[ix_case] == X[ix_case, 0])
+            if not constant:
+                for ix_template in range(self.n_classes_):
+                    rval, _ = pearsonr(
+                        X[ix_case], self.class_averages_[ix_template])
+                    r[ix_case, ix_template] = rval
+            else:
+                # calculate distance instead of correlation
+                for ix_template in range(self.n_classes_):
+                    rval = np.linalg.norm(
+                        X[ix_case] - self.class_averages_[ix_template])
+                    r[ix_case, ix_template] = rval
+
+        # pick class with best correlation:
+        r_best = r.argmax(axis=1)
+        y_pred = self.classes_[r_best]
+
+        return y_pred
