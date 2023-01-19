@@ -329,11 +329,16 @@ class maxCorrClassifier(BaseEstimator):
         check_is_fitted(self)
         X = check_array(X)
 
+        # check if any of the classes is constant
+        has_constant_class = any(
+            [np.allclose(x, x[0]) for x in self.class_averages_]):
+
         # check correlations
         n_cases = X.shape[0]
         r = np.zeros((n_cases, self.n_classes_))
         for ix_case in range(n_cases):
-            constant = np.all(X[ix_case] == X[ix_case, 0])
+            constant = (has_constant_class
+                        or np.all(X[ix_case] == X[ix_case, 0]))
             if not constant:
                 for ix_template in range(self.n_classes_):
                     rval, _ = pearsonr(
