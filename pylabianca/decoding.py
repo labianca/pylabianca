@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 
 from sklearn.base import BaseEstimator
@@ -69,10 +70,12 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
         pca = PCA(n_components=n_pca)
 
     # handle data with only one time point / aggregated time window
+    one_timesample = False
     if X.ndim == 2:
         X = X[:, :, np.newaxis]
     if X.shape[-1] == 1:
         decim = 1
+        one_timesample = True
 
     # decimate original data
     sel_time = slice(0, X.shape[-1], decim)
@@ -97,12 +100,15 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
         clf = make_pipeline(*steps)
 
     # use simple sliding estimator or generalization across time
-    estimator = (SlidingEstimator if not time_generalization
-                 else GeneralizingEstimator)
-    estimator = estimator(
-        clf, scoring=scoring,
-        n_jobs=n_jobs, verbose=False
-    )
+    if not one_timesample:
+        estimator = (SlidingEstimator if not time_generalization
+                    else GeneralizingEstimator)
+        estimator = estimator(
+            clf, scoring=scoring,
+            n_jobs=n_jobs, verbose=False
+        )
+    else:
+        estimator = clf
 
     # do the k-fold
     scores = list()
