@@ -311,6 +311,14 @@ def shuffle_trials(*arrays, random_state=None):
     return shuffled
 
 
+def correlation(X1, X2):
+    ncols1 = X1.shape[1]
+    rval = np.corrcoef(X1, X2, rowvar=False)
+    rval_sel = rval[:ncols1, ncols1:]
+    return rval_sel
+
+
+# TODO: add option to correlate with single-trials, not only class-averages
 class maxCorrClassifier(BaseEstimator):
     def __init__(self):
         pass
@@ -326,39 +334,40 @@ class maxCorrClassifier(BaseEstimator):
             avg = X[msk, :].mean(axis=0)
             self.class_averages_.append(avg)
 
+        self.class_averages_ = np.stack(self.class_averages_, axis=1)
+
         return self
 
     def predict(self, X):
-        from scipy.stats import pearsonr
-
         # Check if fit has been called
         check_is_fitted(self)
         X = check_array(X)
 
         # check if any of the classes is constant
-        has_constant_class = any(
-            [np.allclose(x, x[0]) for x in self.class_averages_]):
+        has_constant_class = (
+            self.class_averages_ == self.class_averages_[[0], :]
+            ).all(axis=0).any()
 
-        # check correlations
-        n_cases = X.shape[0]
-        r = np.zeros((n_cases, self.n_classes_))
-        for ix_case in range(n_cases):
-            constant = (has_constant_class
-                        or np.all(X[ix_case] == X[ix_case, 0]))
-            if not constant:
-                for ix_template in range(self.n_classes_):
-                    rval, _ = pearsonr(
-                        X[ix_case], self.class_averages_[ix_template])
-                    r[ix_case, ix_template] = rval
-            else:
-                # calculate distance instead of correlation
-                for ix_template in range(self.n_classes_):
-                    rval = np.linalg.norm(
-                        X[ix_case] - self.class_averages_[ix_template])
-                    r[ix_case, ix_template] = rval
+        if not has_constant_class:
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    'ignore',
+                    message='invalid value encountered in true_divide',
+                    category=RuntimeWarning
+                )
+                r = correlation(self.class_averages_, X.T)
+        else:
+            distance = self.class_averages_[..., None] - X.T[:, None, :]
+            r = np.linalg.norm(distance, axis=0) * -1
+
+        bad_trials = np.isnan(r).all(axis=0)
+        if bad_trials.any():
+            distance = (self.class_averages_[..., None]
+                        - X.T[:, None, bad_trials])
+            r[:, bad_trials] = np.linalg.norm(distance, axis=0) * -1
 
         # pick class with best correlation:
-        r_best = r.argmax(axis=1)
+        r_best = r.argmax(axis=0)
         y_pred = self.classes_[r_best]
 
         return y_pred
