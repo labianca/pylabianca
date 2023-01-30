@@ -16,8 +16,11 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
     Parameters
     ----------
     frate : xarray.DataArray
-        Xarray with ``'time'`` and one other dimension. The other dimension
-        is reduced (see ``reduce_dim`` argument below).
+        Xarray with at least two dimensions: one is plotted along the x axis
+        (this is controlled with ``x_dim`` argument); the other is reduced
+        by averaging (see ``reduce_dim`` argument below). The averaged
+        dimension also gives rise to the standard error of the mean, which is
+        plotted as a shaded area.
     reduce_dim : str
         The dimension to reduce (average). The standard error is also computed
         along this dimension. The default is ``'trial'``.
@@ -27,6 +30,8 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
         does not perform grouping.
     ax : matplotlib.Axes | None
         Axis to plot into. The default is ``None`` which creates an new axis.
+    x_dim : str
+        Dimension to use for the x axis. The default is ``'time'``.
     legend : bool
         Whether to plot the legend.
     legend_pos : str | None
@@ -427,7 +432,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     arr : xarray.DataArray
         Data array. Used only for axis coordinates.
     clusters : list of np.array
-        List of boolean arrays, where each array cointains cluster membership
+        List of boolean arrays, where each array contains cluster membership
         information (which points along the last array dimension contribute
         to the given cluster).
     pvals : list-like
@@ -447,6 +452,13 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     bottom_extend : bool
         Whether to extend the lower limits of y axis when adding bottom
         significance bars. Defaults to ``True``.
+    pval_text : bool
+        Whether to add p value text boxes to respective cluster ranges in the
+        plot. Defaults to ``True``.
+    text_props : dict | None
+        Dictionary with text properties for p value text boxes. If None,
+        defaults to
+        ``{'boxstyle': 'round', 'facecolor': 'white', 'alpha': 0.75, edgecolor='gray'}``.
 
     Returns
     -------
@@ -533,6 +545,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     return ax
 
 
+# - [ ] combine with layout functions from sarna
 def align_axes_limits(axes=None, ylim=True, xlim=False):
     '''Align the limits of all ``axes``.'''
     if axes is None:
@@ -562,7 +575,7 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
                 set_lim[lim](limits[lim])
 
 
-# TODO - move this to separate submodule .waveform
+# TODO - move this to separate submodule .waveform ?
 def calculate_perceptual_waveform_density(spk, cell_idx):
     # get waveform 2d histogram image
     hist, xbins, ybins, time_edges = (
