@@ -70,16 +70,15 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
         pca = PCA(n_components=n_pca)
 
     # handle data with only one time point / aggregated time window
-    one_timesample = False
+    one_time_sample = False
     if X.ndim == 2:
-        X = X[:, :, np.newaxis]
-    if X.shape[-1] == 1:
-        decim = 1
-        one_timesample = True
-
-    # decimate original data
-    sel_time = slice(0, X.shape[-1], decim)
-    Xrs = X[..., sel_time]
+        one_time_sample = True
+        sel_time = None
+        Xrs = X
+    else:
+        # decimate original data
+        sel_time = slice(0, X.shape[-1], decim)
+        Xrs = X[..., sel_time]
 
     # k-fold object
     if isinstance(n_splits, str) and n_splits == 'loo':
@@ -100,7 +99,7 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
         clf = make_pipeline(*steps)
 
     # use simple sliding estimator or generalization across time
-    if not one_timesample:
+    if not one_time_sample:
         estimator = (SlidingEstimator if not time_generalization
                     else GeneralizingEstimator)
         estimator = estimator(
@@ -323,7 +322,7 @@ class maxCorrClassifier(BaseEstimator):
     def __init__(self):
         pass
 
-    def fit(self, X, y):
+    def fit(self, X, y, scoring=None):
         X, y = check_X_y(X, y)
         self.classes_ = unique_labels(y)
         self.class_averages_ = list()
@@ -335,6 +334,7 @@ class maxCorrClassifier(BaseEstimator):
             self.class_averages_.append(avg)
 
         self.class_averages_ = np.stack(self.class_averages_, axis=1)
+        self.scoring = 'accuracy' if scoring is None else scoring
 
         return self
 
@@ -371,3 +371,10 @@ class maxCorrClassifier(BaseEstimator):
         y_pred = self.classes_[r_best]
 
         return y_pred
+
+    def score(self, X=None, Y=None):
+        from sklearn.metrics import get_scorer
+
+        scorer = get_scorer(self.scoring)
+        score = scorer(self, X, Y)
+        return score
