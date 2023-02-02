@@ -1,5 +1,6 @@
 from . import (io, utils, co_spikes, decoding, selectivity, spikes,
-               spike_distance, viz)
+               spike_distance, stats, viz)
+
 from .viz import plot_spike_rate, plot_raster, plot_spikes
 from .io import read_gammbur, read_spikes
 from .spikes import SpikeEpochs, Spikes
