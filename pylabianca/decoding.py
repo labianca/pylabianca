@@ -311,6 +311,22 @@ def shuffle_trials(*arrays, random_state=None):
     return shuffled
 
 
+def select_n_best_cells(X, y, select_n=1):
+    from scipy.stats import ttest_ind
+
+    t_val_per_cell, _ = np.abs(ttest_ind(X[y], X[~y]))
+    if t_val_per_cell.ndim > 1:
+        # max over time
+        t_val_per_cell = t_val_per_cell.max(axis=1)
+    tval_ord = t_val_per_cell.argsort()[::-1]
+
+    # return selector array
+    n_features = t_val_per_cell.shape[0]
+    sel = np.zeros(n_features, dtype='bool')
+    sel[tval_ord[:select_n]] = True
+    return sel
+
+
 def correlation(X1, X2):
     ncols1 = X1.shape[1]
     rval = np.corrcoef(X1, X2, rowvar=False)
