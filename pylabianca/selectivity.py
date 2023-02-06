@@ -143,7 +143,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         name.
     '''
     import xarray as xr
-    from . spike_rate import permutation_test
+    from .stats import permutation_test
 
     has_time = 'time' in frate.dims
 
@@ -245,7 +245,7 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
     import pandas as pd
     import xarray as xr
 
-    from .spike_rate import cluster_based_test
+    from .stats import cluster_based_test
     from .viz import check_modify_progressbar
 
     n_cells = len(frate)
