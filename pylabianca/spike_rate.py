@@ -122,18 +122,41 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
 #       (maybe this is what is done by elephant?)
 # TODO: check if time is symmetric wrt 0 (in most cases it should be as epochs
 #       are constructed wrt specific event)
-def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, kernel=None,
-                   sfreq=500.):
+def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
+                   kernel=None, sfreq=500.):
     '''Calculates normal (constant) spike density.
 
     The density is computed by convolving the binary spike representation
     with a gaussian kernel.
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        SpikeEpochs object.
+    picks : array-like | None
+        Indices or names of cells to use. If ``None`` all cells are used.
+    winlen : float
+        Length of the gaussian kernel in seconds. Default is ``0.3``.
+        If ``gauss_sd`` is ``None`` the standard deviation of the gaussian
+        kernel is set to ``winlen / 6``.
+    gauss_sd : float | None
+        Standard deviation of the gaussian kernel in seconds. If ``None``
+        the standard deviation is set to ``winlen / 6``.
+    fwhm : float | None
+        Full width at half maximum of the gaussian kernel in seconds.
+    kernel : array-like | None
+        Kernel to use for convolution. If ``None`` the gaussian kernel is
+        constructed from ``winlen`` and ``gauss_sd``.
     '''
     from scipy.signal import correlate
 
     if kernel is None:
-        gauss_sd = winlen / 6 if gauss_sd is None else gauss_sd
-        gauss_sd = gauss_sd * sfreq
+        if fwhm is not None:
+            gauss_sd = _gauss_sd_from_FWHM(fwhm)
+            winlen = gauss_sd * 6
+        else:
+            gauss_sd = winlen / 6 if gauss_sd is None else gauss_sd
+            gauss_sd = gauss_sd * sfreq
 
         win_smp, trim = _symmetric_window_samples(winlen, sfreq)
         kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
@@ -271,3 +294,18 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         progress=progress)
 
     return stat, clusters, pval
+
+
+def _gauss_sd_from_FWHM(FWHM):
+    gauss_sd = FWHM / (2 * np.sqrt(2 * np.log(2)))
+    return gauss_sd
+
+
+def _FWHM_from_window(winlen=None, gauss_sd=None):
+    # exactly one of the two must be specified
+    assert winlen is not None or gauss_sd is not None
+    assert winlen is None or gauss_sd is None
+
+    gauss_sd = winlen / 6 if gauss_sd is None else gauss_sd
+    FWHM = 2 * np.sqrt(2 * np.log(2)) * gauss_sd
+    return FWHM
