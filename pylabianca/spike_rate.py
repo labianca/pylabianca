@@ -156,8 +156,8 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
             winlen = gauss_sd * 6
         else:
             gauss_sd = winlen / 6 if gauss_sd is None else gauss_sd
-            gauss_sd = gauss_sd * sfreq
 
+        gauss_sd = gauss_sd * sfreq
         win_smp, trim = _symmetric_window_samples(winlen, sfreq)
         kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
     else:
