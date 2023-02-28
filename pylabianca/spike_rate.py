@@ -147,6 +147,9 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
     kernel : array-like | None
         Kernel to use for convolution. If ``None`` the gaussian kernel is
         constructed from ``winlen`` and ``gauss_sd``.
+    sfreq : float
+        Sampling frequency (in Hz) of the spike density representation. Default
+        is ``500``.
     '''
     from scipy.signal import correlate
 
