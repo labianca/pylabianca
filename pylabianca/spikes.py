@@ -211,7 +211,8 @@ class SpikeEpochs():
         return compute_spike_rate(self, picks=picks, winlen=winlen, step=step,
                                   tmin=tmin, tmax=tmax, backend=backend)
 
-    def spike_density(self, picks=None, winlen=0.3, gauss_sd=None, sfreq=500.):
+    def spike_density(self, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
+                      sfreq=500.):
         '''Compute spike density by convolving spikes with a gaussian kernel.
 
         Parameters
@@ -227,6 +228,9 @@ class SpikeEpochs():
         gauss_sd : float | None
             Standard deviation of the gaussian kernel. By default it is set to
             ``winlen / 6``.
+        fwhm : float | None
+            Full width at half maximum of the gaussian kernel in seconds. If
+            not ``None`` it overrides ``winlen`` and ``gauss_sd``.
         sfreq : float
             Desired sampling frequency of the spike density. Defaults to 500
             Hz.
@@ -238,7 +242,7 @@ class SpikeEpochs():
         '''
         picks = _deal_with_picks(self, picks)
         tms, cnt = _spike_density(self, picks=picks, winlen=winlen,
-                                  gauss_sd=gauss_sd, sfreq=sfreq)
+                                  gauss_sd=gauss_sd, fwhm=fwhm, sfreq=sfreq)
         xarr = _turn_spike_rate_to_xarray(
             tms, cnt.transpose((1, 0, 2)), self,
             cell_names=self.cell_names[picks])
