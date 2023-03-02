@@ -128,13 +128,14 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 # ENH: move to sarna/borsar sometime
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
                                          adjacency=None):
-    '''Performs a cluster-based test from precalculated permutations.'''
-    # should get data ready for permutation test WITHOUT performing
-    # any statistical tests
-    # so if t test between boots of two regions are done, then
-    # this should be done OUTSIDE of this function
-    #
-    # also boot averages should be done OUTSIDE
+    '''Performs a cluster-based test from precalculated permutations.
+    
+    This function should get data ready for cluster-based permutation test
+    WITHOUT the need to perform any statistical tests - so if t test between
+    boots of two regions are done for example, then this should be done
+    OUTSIDE of this function (the function should receive the t values in
+    such case), also boot averages should be done OUTSIDE.
+    '''
     import xarray as xr
     import borsar
 
@@ -168,7 +169,8 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
         perm_stat = perm_data.sel(perm=perm_idx)
 
         perm_clusters, perm_cluster_stats = borsar.find_clusters(
-            perm_stat, thresholds, backend='borsar', adjacency=adjacency)
+            perm_stat.values, thresholds, backend='borsar',
+            adjacency=adjacency)
 
         n_perm_clusters = len(perm_clusters)
         perm_is_neg = perm_cluster_stats < 0
@@ -194,7 +196,7 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     cluster_pval = np.array(cluster_pval)
 
     if tail == 'both':
-        # we are essentially performing two test essentially (one for pos
+        # we are essentially performing two test (one for pos
         # and one for neg clusters) so we have to correct...
         cluster_pval = np.minimum(cluster_pval * 2, 1)
 
