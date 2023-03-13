@@ -1,7 +1,7 @@
 import warnings
 import numpy as np
 
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 
@@ -101,7 +101,7 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
     # use simple sliding estimator or generalization across time
     if not one_time_sample:
         estimator = (SlidingEstimator if not time_generalization
-                    else GeneralizingEstimator)
+                     else GeneralizingEstimator)
         estimator = estimator(
             clf, scoring=scoring,
             n_jobs=n_jobs, verbose=False
@@ -167,14 +167,12 @@ def frates_dict_to_sklearn(frates, target=None, select=None,
                            cell_names=None, time_idx=None):
     '''Get all subjects from frates dictionary.
 
-    The ``frates`` is a dictionary of epoch types / conditions where each
-    item is a dictionary of subject -> firing rate xarray mappings.
+    The ``frates`` is a dictionary of subject -> firing rate xarray mappings.
 
     Parameters
     ----------
     frates : dict
-        Dictionary with epoch types / conditions as keys and
-        {subject: firing rate xarray} dictionaries as keys.
+        Dictionary of the form {subject_string: firing rate xarray}.
     target : str
         Name of the variable to use as target.
     cond : str
@@ -394,3 +392,57 @@ class maxCorrClassifier(BaseEstimator):
         scorer = get_scorer(self.scoring)
         score = scorer(self, X, Y)
         return score
+
+
+class SparseRemover(BaseEstimator, TransformerMixin):
+    def __init__(self, n_select, threshold=1e-5):
+        self.n_select = n_select
+        self.threshold = threshold
+
+    def fit(self, X, y):
+        X, y = check_X_y(X, y)
+
+        bad_prop = (X < self.threshold).mean(axis=0)
+        bad_prop_thresh = np.sort(bad_prop)[self.n_select]
+        self.sel_features_ = bad_prop <= bad_prop_thresh
+
+        return self
+
+    def transform(self, X):
+        # Check if fit has been called
+        check_is_fitted(self)
+        X = check_array(X)
+
+        return X[:, self.sel_features_]
+
+    def fit_transform(self, X, y):
+        self.fit(X, y)
+        return self.transform(X)
+
+
+class SelectKBestLeastSparse(BaseEstimator, TransformerMixin):
+    def __init__(self, stat_fun, k=10, threshold=1e-5):
+        self.n_select = k
+        self.stat_fun = stat_fun
+        self.threshold = threshold
+
+    def fit(self, X, y):
+        X, y = check_X_y(X, y)
+
+        bad_prop = (X < self.threshold).mean(axis=0)
+        stat, _ = self.stat_fun(X, y)
+        select = stat * (1 - bad_prop)
+        self.sel_features_ = np.argsort(select)[::-1][:self.n_select]
+
+        return self
+
+    def transform(self, X):
+        # Check if fit has been called
+        check_is_fitted(self)
+        X = check_array(X)
+
+        return X[:, self.sel_features_]
+
+    def fit_transform(self, X, y):
+        self.fit(X, y)
+        return self.transform(X)
