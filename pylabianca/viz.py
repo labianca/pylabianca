@@ -429,8 +429,10 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 
     Parameters
     ----------
-    arr : xarray.DataArray
-        Data array. Used only for axis coordinates.
+    arr : xarray.DataArray | numpy.ndarray
+        xarray Data array or numpy array. Used only for axis coordinates.
+        If xarray, the last dimension is taken as x axis coordinates.
+        If numpy array, the values are assumed to be the x axis coordinates.
     clusters : list of np.array
         List of boolean arrays, where each array contains cluster membership
         information (which points along the last array dimension contribute
@@ -466,6 +468,11 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         Axis with the plot.
     '''
     import sarna
+    try:
+        import xarray as xr
+        has_xarray = True
+    except ModuleNotFoundError:
+        has_xarray = False
 
     if text_props is None and pval_text:
         text_props = dict(boxstyle='round', facecolor='white', alpha=0.75,
@@ -478,7 +485,16 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         return
 
     pvals_significant = pvals < p_threshold
-    last_dim = arr.dims[-1]
+
+    if isinstance(arr, np.ndarray):
+        x_coords = arr
+    elif has_xarray and isinstance(arr, xr.DataArray):
+        last_dim = arr.dims[-1]
+        x_coords = arr.coords[last_dim].values
+    else:
+        raise RuntimeError('The `arr` has to be either a numpy array or'
+                           'xarray.DataArray.')
+
     extend_textbox_x = 4
 
     clusters_x_sorting = np.argsort([np.where(x)[0][0] for x in clusters])
@@ -495,7 +511,6 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         ax.set_ylim([ylm[0], ylm[1] + 2 * y_step])
 
         sig_idx = np.where(pvals_significant)[0]
-        x_coords = arr.coords[last_dim].values
 
         sig_clusters = [clusters[ix] for ix in sig_idx]
         
@@ -546,8 +561,6 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                     this_text.set_position((x, y - y_step))
                     textbox = this_text.get_window_extent()
             texts.append(textbox)
-
-
 
     return ax
 
