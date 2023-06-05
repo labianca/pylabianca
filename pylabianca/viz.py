@@ -513,16 +513,16 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         sig_idx = np.where(pvals_significant)[0]
 
         sig_clusters = [clusters[ix] for ix in sig_idx]
-        
+
         try:
             sarna.viz.highlight(
                 x_coords, sig_clusters, axis=ax,
-                bottom_bar=True,  bottom_extend=bottom_extend
+                bottom_bar=True, bottom_extend=bottom_extend
             )
         except TypeError:
             sarna.viz.highlight(
                 x_coords, sig_clusters, ax=ax,
-                bottom_bar=True,  bottom_extend=bottom_extend
+                bottom_bar=True, bottom_extend=bottom_extend
             )
 
         texts = list()
