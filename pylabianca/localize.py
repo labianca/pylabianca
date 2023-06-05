@@ -21,6 +21,8 @@ def set_up_paths(onedrive_dir=None):
 
 def plot_overlay(image, compare, title, thresh=None):
     """Define a helper function for comparing plots."""
+    import nibabel as nib
+
     image = nib.orientations.apply_orientation(
         np.asarray(image.dataobj), nib.orientations.axcodes2ornt(
             nib.orientations.aff2axcodes(image.affine))).astype(np.float32)
@@ -66,13 +68,14 @@ def find_scans(subject, paths):
     return ct_dir, ct_file, mri_dir, mri_file
 
 
-def read_compute_ct_alignment(subject, paths, CT_orig, T1):
+def read_compute_ct_alignment(subject, paths, CT_orig, T1, plot=False):
     import mne
     import h5io
+    import nibabel as nib
 
     # if pre-alignment was needed
     coreg_dir = op.join(paths['anat_dir'], 'derivatives', 'coreg', subject)
-    ct_coreg_fname = op.join(coreg_dir, 'ct_trans.h5')
+    ct_coreg_fname = op.join(coreg_dir, f'{subject}_ct_trans.h5')
 
     this_fname = f'{subject}_ct_aligned_manual.lta'
     pre_alg_fname = op.join(coreg_dir, this_fname)
@@ -91,7 +94,7 @@ def read_compute_ct_alignment(subject, paths, CT_orig, T1):
 
         CT_aligned = mne.transforms.apply_volume_registration(
             CT_orig, T1, manual_reg_affine, cval='1%')
-        plot_overlay(T1, CT_aligned, 'Aligned CT - T1 preoptim', thresh=0.95)
+
 
         # optimize further starting from pre-alignment
         reg_affine, _ = mne.transforms.compute_volume_registration(
@@ -106,9 +109,12 @@ def read_compute_ct_alignment(subject, paths, CT_orig, T1):
         CT_aligned = mne.transforms.apply_volume_registration(
             CT_orig, T1, reg_affine, cval='1%')
 
+        if plot:
+            plot_overlay(T1, CT_aligned, 'Aligned CT - T1 preoptim',
+                         thresh=0.95)
+
         # save
         h5io.write_hdf5(ct_coreg_fname, reg_affine, overwrite=True)
-
 
     # else/then - read the alignment or compute
     if op.exists(ct_coreg_fname):
