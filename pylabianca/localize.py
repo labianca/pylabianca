@@ -284,3 +284,131 @@ def project_channel_positions_to_voxels(T1, info, stat_map=True,
         return all_distgauss
     else:
         return ch_names, pos_vox
+
+
+def autolabel_channels(montage, subject, paths):
+    '''Autolabel channel positions with DKT atlas labels.
+    The passed montage has to be in MRI space.'''
+
+    # in: montage, subject, subjects_dir=None, aseg="aparc+aseg", dist=2
+    from collections import OrderedDict
+    from tqdm import tqdm
+
+    from mne.channels import DigMontage
+    from mne._freesurfer import read_freesurfer_lut, _get_aseg
+    from mne.utils import _validate_type
+    from mne.transforms import apply_trans
+    from mne.surface import _voxel_neighbors, _VOXELS_MAX
+
+    subjects_dir = paths['subjects_dir']
+    _validate_type(montage, DigMontage, "montage")
+    _validate_type(dist, (int, float), "dist")
+
+    if dist < 0 or dist > 10:
+        raise ValueError("`dist` must be between 0 and 10")
+
+    aseg, aseg_data = _get_aseg(aseg, subject, subjects_dir)
+
+    # read freesurfer lookup table
+    lut, fs_colors = read_freesurfer_lut()
+    label_lut = {v: k for k, v in lut.items()}
+
+    # assert that all the values in the aseg are in the labels
+    assert all([idx in label_lut for idx in np.unique(aseg_data)])
+
+    # get transform to surface RAS for distance units instead of voxels
+    vox2ras_tkr = aseg.header.get_vox2ras_tkr()
+
+    ch_dict = montage.get_positions()
+    if ch_dict["coord_frame"] != "mri":
+        raise RuntimeError(
+            "Coordinate frame not supported, expected "
+            '"mri", got ' + str(ch_dict["coord_frame"])
+        )
+    ch_coords = np.array(list(ch_dict["ch_pos"].values()))
+
+    # convert to freesurfer voxel space
+    ch_coords = apply_trans(
+        np.linalg.inv(aseg.header.get_vox2ras_tkr()), ch_coords * 1000
+    )
+
+    # try various distances
+    labels_dist = OrderedDict()
+    found_labels = OrderedDict()
+    distances = np.arange(0.5, 5.5, step=0.5)
+
+    for dist in tqdm(distances):
+        for ch_name, ch_coord in zip(montage.ch_names, ch_coords):
+            if ch_name not in found_labels:
+                found_labels[ch_name] = list()
+            if ch_name not in labels_dist:
+                labels_dist[ch_name] = list()
+
+            if np.isnan(ch_coord).any():
+                labels[ch_name] = list()
+            else:
+                voxels = _voxel_neighbors(
+                    ch_coord,
+                    aseg_data,
+                    dist=dist,
+                    vox2ras_tkr=vox2ras_tkr,
+                    voxels_max=_VOXELS_MAX,
+                )
+                label_idxs = set([aseg_data[tuple(voxel)].astype(int)
+                                  for voxel in voxels])
+                current_labels = [label_lut[idx] for idx in label_idxs]
+
+                for lab in current_labels:
+                    if lab not in found_labels[ch_name]:
+                        found_labels[ch_name].append(lab)
+                        labels_dist[ch_name].append((lab, dist))
+
+    # now rename from DKT atlas names, to human-readable
+    new_names = dict()
+    for ch_name in labels_dist.keys():
+        new_names[ch_name] = list()
+        for (region, distance) in labels_dist[ch_name]:
+            region = rename_region(region)
+            if region is not None:
+                new_names[ch_name].append((region, distance))
+
+    return new_names
+
+
+def parse_part(name):
+    parts = ['superior', 'middle', 'inferior',
+             'anterior', 'posterior', 'caudal', 'rostral',
+             'lateral', 'medial', 'isthemus', 'transverse']
+
+    for part in parts:
+        if name.startswith(part):
+            part_len = len(part)
+            return part.capitalize(), name[part_len:]
+    return name, None
+
+
+def iterative_parsing(name):
+    rest = name
+    new_name = list()
+    while rest is not None:
+        part, rest = parse_part(rest)
+        new_name.append(part.capitalize())
+    return '-'.join(new_name)
+
+
+def rename_region(region):
+    ignore = ['White-Matter', 'Unknown', 'Vent']
+    translate_hemi = {'lh': 'Left', 'rh': 'Right'}
+
+    if isinstance(region, np.str_):
+        region = str(region)
+    for ign in ignore:
+        if ign in region:
+            return None
+    if region.startswith('ctx'):
+        region_parts = region.split('-')
+        hemi = translate_hemi[region_parts[1]]
+        rest = region_parts[2]
+        return iterative_parsing(rest)
+    else:
+        return region
