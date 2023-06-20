@@ -212,7 +212,7 @@ def read_create_channel_positions(subject, paths):
 
 # select only specific regions micro channels from info
 # regions -> str or list
-def find_channels(info, regions, micro=True, side='both'):
+def find_channels(info, regions=None, micro=True, side='both'):
     assert side.lower() in ['both', 'l', 'r']
     one_side = not side == 'both'
     regions = [regions] if isinstance(regions, str) else regions
@@ -221,7 +221,11 @@ def find_channels(info, regions, micro=True, side='both'):
     indices = list()
     for ch_idx, ch_name in enumerate(info.ch_names):
         ch_type, region_name, contact_type = ch_name.split('_')
-        is_region = any([region in region_name for region in regions])
+
+        if regions is not None:
+            is_region = any([region in region_name for region in regions])
+        else:
+            is_region = True
 
         if is_region and one_side:
             is_region = side.upper() in region_name
@@ -238,9 +242,12 @@ def find_channels(info, regions, micro=True, side='both'):
     return names, indices
 
 
-def pick_info(info, region, micro=True, side='both'):
-    _, idx = find_channels(info, region, micro=micro, side=side)
-    info_sel = mne.pick_info(info, sel=idx)
+# TODO: make sure if mne.pick_info operates inplace or not
+def pick_info(info, regions=None, micro=True, side='both'):
+    import mne
+
+    _, idx = find_channels(info, regions=regions, micro=micro, side=side)
+    info_sel = mne.pick_info(info.copy(), sel=idx)
     return info_sel
 
 
@@ -302,11 +309,9 @@ def autolabel_channels(montage, subject, paths):
 
     subjects_dir = paths['subjects_dir']
     _validate_type(montage, DigMontage, "montage")
-    _validate_type(dist, (int, float), "dist")
+    distances = np.arange(0.5, 5.5, step=0.5)
 
-    if dist < 0 or dist > 10:
-        raise ValueError("`dist` must be between 0 and 10")
-
+    aseg = 'aparc.DKTatlas+aseg'
     aseg, aseg_data = _get_aseg(aseg, subject, subjects_dir)
 
     # read freesurfer lookup table
@@ -335,7 +340,6 @@ def autolabel_channels(montage, subject, paths):
     # try various distances
     labels_dist = OrderedDict()
     found_labels = OrderedDict()
-    distances = np.arange(0.5, 5.5, step=0.5)
 
     for dist in tqdm(distances):
         for ch_name, ch_coord in zip(montage.ch_names, ch_coords):
@@ -344,8 +348,6 @@ def autolabel_channels(montage, subject, paths):
             if ch_name not in labels_dist:
                 labels_dist[ch_name] = list()
 
-            if np.isnan(ch_coord).any():
-                labels[ch_name] = list()
             else:
                 voxels = _voxel_neighbors(
                     ch_coord,
@@ -378,7 +380,7 @@ def autolabel_channels(montage, subject, paths):
 def parse_part(name):
     parts = ['superior', 'middle', 'inferior',
              'anterior', 'posterior', 'caudal', 'rostral',
-             'lateral', 'medial', 'isthemus', 'transverse']
+             'lateral', 'medial', 'isthmus', 'transverse']
 
     for part in parts:
         if name.startswith(part):
@@ -409,6 +411,7 @@ def rename_region(region):
         region_parts = region.split('-')
         hemi = translate_hemi[region_parts[1]]
         rest = region_parts[2]
-        return iterative_parsing(rest)
+        name = hemi + '_' + iterative_parsing(rest)
+        return name
     else:
         return region
