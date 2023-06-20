@@ -51,6 +51,21 @@ def plot_overlay(image, compare, title='', thresh=None):
 
 
 def find_scans(subject, paths):
+    """Find MRI and CT scans for given subjects in Labianca OneDrive BIDS
+    structure.
+
+    Parameters
+    ----------
+    subjects : str
+        Subject name.
+    paths : dict
+        Dictionary of paths obtained via ``pylabianca.localize.set_up_paths``.
+
+    Returns
+    -------
+    ct_dir, ct_file, mri_dir, mri_file
+    """
+
     # we also need the path to the subject's CT scan:
     ct_dir = op.join(paths['anat_dir'], subject)
     ct_files = os.listdir(ct_dir)
