@@ -155,6 +155,8 @@ def read_compute_ct_alignment(subject, paths, CT_orig, T1, plot=False):
     return reg_affine
 
 
+# TODO: separate function for reading channel labels from
+#       positions unified
 def read_create_channel_positions(subject, paths):
     import mne
     import pandas as pd
@@ -206,6 +208,40 @@ def read_create_channel_positions(subject, paths):
               'some clicking!')
 
     return info
+
+
+# select only specific regions micro channels from info
+# regions -> str or list
+def find_channels(info, regions, micro=True, side='both'):
+    assert side.lower() in ['both', 'l', 'r']
+    one_side = not side == 'both'
+    regions = [regions] if isinstance(regions, str) else regions
+
+    names = list()
+    indices = list()
+    for ch_idx, ch_name in enumerate(info.ch_names):
+        ch_type, region_name, contact_type = ch_name.split('_')
+        is_region = any([region in region_name for region in regions])
+
+        if is_region and one_side:
+            is_region = side.upper() in region_name
+        if is_region and micro:
+            is_region = 'micro' in contact_type
+
+        if is_region:
+            names.append(ch_name)
+            indices.append(ch_idx)
+
+    indices = np.array(indices)
+    names = np.array(names)
+
+    return names, indices
+
+
+def pick_info(info, region, micro=True, side='both'):
+    _, idx = find_channels(info, region, micro=micro, side=side)
+    info_sel = mne.pick_info(info, sel=idx)
+    return info_sel
 
 
 def project_channel_positions_to_voxels(T1, info, stat_map=True,
