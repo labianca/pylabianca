@@ -19,7 +19,7 @@ def set_up_paths(onedrive_dir=None):
     return paths
 
 
-def plot_overlay(image, compare, title, thresh=None):
+def plot_overlay(image, compare, title='', thresh=None):
     """Define a helper function for comparing plots."""
     import nibabel as nib
 
@@ -29,10 +29,15 @@ def plot_overlay(image, compare, title, thresh=None):
     compare = nib.orientations.apply_orientation(
         np.asarray(compare.dataobj), nib.orientations.axcodes2ornt(
             nib.orientations.aff2axcodes(compare.affine))).astype(np.float32)
+
     if thresh is not None:
         compare[compare < np.quantile(compare, thresh)] = np.nan
+
     fig, axes = plt.subplots(1, 3, figsize=(12, 4))
-    fig.suptitle(title)
+
+    if isinstance(title, str) and len(title) > 0:
+        fig.suptitle(title)
+
     for i, ax in enumerate(axes):
         ax.imshow(np.take(image, [image.shape[i] // 2], axis=i).squeeze().T,
                   cmap='gray')
@@ -40,7 +45,9 @@ def plot_overlay(image, compare, title, thresh=None):
                           axis=i).squeeze().T, cmap='gist_heat', alpha=0.5)
         ax.invert_yaxis()
         ax.axis('off')
+
     fig.tight_layout()
+    return fig
 
 
 def find_scans(subject, paths):
