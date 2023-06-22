@@ -1,5 +1,6 @@
 import os
 import os.path as op
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -70,11 +71,14 @@ def find_scans(subject, paths):
     ct_dir = op.join(paths['anat_dir'], subject)
     ct_files = os.listdir(ct_dir)
 
-    print('Found the following anatomy files:')
-    print([f for f in ct_files if f.endswith('.nii')])
+    # filter files
+    ct_files = [f for f in ct_files if f.endswith('.nii')
+                or f.endswith('.nii.gz')]
 
-    ct_files = [f for f in ct_files
-                if f.endswith('.nii') and '_ct' in f and 'preop' not in f]
+    print('Found the following anatomy files:')
+    print(ct_files)
+
+    ct_files = [f for f in ct_files if '_ct' in f and 'preop' not in f]
     if len(ct_files) > 1:
         fname_lens = [len(f) for f in ct_files]
         longest = np.argmax(fname_lens)
@@ -155,16 +159,67 @@ def read_compute_ct_alignment(subject, paths, CT_orig, T1, plot=False):
     return reg_affine
 
 
-# TODO: separate function for reading channel labels from
-#       positions unified
-def read_create_channel_positions(subject, paths):
-    import mne
+def read_channel_table(subject, paths):
     import pandas as pd
 
-    fname_base = f'{subject}_channel_positions_ieeg_micro'
-    coreg_dir = op.join(paths['anat_dir'], 'derivatives', 'coreg', subject)
     ch_info_dir = op.join(paths['onedrive_dir'], 'RESEARCH', 'additional info',
                           'channels description')
+    chan_info = pd.read_excel(
+        op.join(ch_info_dir, 'All_channels_unified.xlsx'),
+        sheet_name=subject.replace('sub-', ''))
+    return chan_info
+
+
+def is_known(val_or_str):
+    if isinstance(val_or_str, str):
+        return not val_or_str == '?'
+    else:
+        return True
+
+
+def construct_info_from_channel_table(chan_info):
+    import mne
+    ch_names = list()
+
+    for row_ix in chan_info.index:
+        current_row = chan_info.loc[row_ix]
+
+        if (isinstance(current_row.electrode, str)
+            and 'macro' in current_row.electrode):
+
+            prefix = current_row.electrode.split('-')[0]
+            known_range = (
+                is_known(current_row['channel start'])
+                and is_known(current_row['channel end'])
+            )
+
+            if not known_range:
+                n_channels = 8 if prefix == 'BF' else 10
+            else:
+                n_channels = int(current_row['channel end']
+                                 - current_row['channel start']) + 1
+
+            area = current_row.area
+            ch_name = f'{prefix}_{area}_'
+
+            if prefix == 'BF':
+                ch_names.append(ch_name + 'micro')
+
+            for ch_idx in range(n_channels):
+                ch_names.append(ch_name + f'{ch_idx + 1:01d}')
+
+    info = mne.create_info(ch_names, sfreq=32_000, ch_types='seeg')
+    return info
+
+
+# TODO: separate function for reading channel labels from
+#       positions unified
+def read_create_channel_positions(subject, paths, ending='_micro'):
+    import mne
+
+    fname_base = f'{subject}_channel_positions_ieeg' + ending
+    coreg_dir = op.join(paths['anat_dir'], 'derivatives', 'coreg', subject)
+
 
     info_fname = op.join(coreg_dir, fname_base + '.fif')
     info_fname2 = op.join(coreg_dir, fname_base + '_Karolina.fif')
@@ -179,31 +234,8 @@ def read_create_channel_positions(subject, paths):
         info = raw.info
     else:
         # no saved positions found, creating new
-        chan_info = pd.read_excel(
-            op.join(ch_info_dir, 'All patients all channels_U10U11.xlsx'),
-            sheet_name=subject.replace('sub-', ''))
-
-        ch_names = list()
-
-        for row_ix in chan_info.index:
-            current_row = chan_info.loc[row_ix]
-
-            if (isinstance(current_row.electrode, str)
-                and 'macro' in current_row.electrode):
-
-                prefix = current_row.electrode.split('-')[0]
-                n_channels = int(current_row['channel end']
-                                 - current_row['channel start']) + 1
-                area = current_row.area
-                ch_name = f'{prefix}_{area}_'
-
-                if prefix == 'BF':
-                    ch_names.append(ch_name + 'micro')
-
-                for ch_idx in range(n_channels):
-                    ch_names.append(ch_name + f'{ch_idx + 1:01d}')
-
-        info = mne.create_info(ch_names, sfreq=32_000, ch_types='seeg')
+        chan_info = read_channel_table(subject, paths)
+        info = construct_info_from_channel_table(chan_info)
         print('No channel positions for this subject, you have to do '
               'some clicking!')
 
@@ -309,7 +341,7 @@ def autolabel_channels(montage, subject, paths):
 
     subjects_dir = paths['subjects_dir']
     _validate_type(montage, DigMontage, "montage")
-    distances = np.arange(0.5, 5.5, step=0.5)
+    distances = np.arange(0.25, 5.5, step=0.25)
 
     aseg = 'aparc.DKTatlas+aseg'
     aseg, aseg_data = _get_aseg(aseg, subject, subjects_dir)
@@ -411,7 +443,7 @@ def rename_region(region):
         region_parts = region.split('-')
         hemi = translate_hemi[region_parts[1]]
         rest = region_parts[2]
-        name = hemi + '_' + iterative_parsing(rest)
+        name = hemi + '-' + iterative_parsing(rest)
         return name
     else:
         return region
