@@ -6,11 +6,23 @@ import matplotlib.pyplot as plt
 
 
 def set_up_paths(onedrive_dir=None):
-    try:
-        import sarna
-        onedrive_dir = sarna.proj.find_onedrive()
-    except ImportError:
-        pass
+    """Prepare OneDrive BIDS anatomy paths.
+
+    Parameters
+    ----------
+    onedrive_dir : str | None
+        Path to OneDrive. If ``None``, will be detected automatically using
+        ``sarna`` package.
+
+    Returns
+    -------
+    paths : dict
+        Dictionary of paths.
+    """
+    if onedrive_dir is None:
+        try:
+            import sarna
+            onedrive_dir = sarna.proj.find_onedrive()
 
     anat_dir = op.join(onedrive_dir, 'RESEARCH', 'anat')
     subjects_dir = op.join(anat_dir, 'derivatives', 'freesurfer')
@@ -21,7 +33,7 @@ def set_up_paths(onedrive_dir=None):
 
 
 def plot_overlay(image, compare, title='', thresh=None):
-    """Define a helper function for comparing plots."""
+    """Overlay plot for comparing MRI and CT scans."""
     import nibabel as nib
 
     image = nib.orientations.apply_orientation(
@@ -160,6 +172,20 @@ def read_compute_ct_alignment(subject, paths, CT_orig, T1, plot=False):
 
 
 def read_channel_table(subject, paths):
+    """Read table containing channel ranges and initial anatomy labels.
+
+    Parameters
+    ----------
+    subject : str
+        Subject identifier, for example ``'sub-U10'``.
+    paths : dict
+        Dictionary of paths obtained with ``pylabianca.localize.set_up_paths``.
+
+    Returns
+    -------
+    chan_info : pandas.DataFrame
+        DataFrame containing channel ranges and labels.
+    """
     import pandas as pd
 
     ch_info_dir = op.join(paths['onedrive_dir'], 'RESEARCH', 'additional info',
@@ -178,6 +204,7 @@ def is_known(val_or_str):
 
 
 def construct_info_from_channel_table(chan_info):
+    """Construct mne-python Info object from channel tablw."""
     import mne
     ch_names = list()
 
