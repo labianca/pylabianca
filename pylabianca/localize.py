@@ -214,9 +214,11 @@ def read_anatomical_labels(subject, onedrive_dir):
     anat: pd.DataFrame
         Table with anatomical labels.
     """
+    import pandas as pd
+
     anat_dir = op.join(onedrive_dir, 'RESEARCH', 'anat', 'derivatives',
-                       'anat', 'labels')
-    fname = f'{subject}_labels_DKT.tsv'
+                       'labels')
+    fname = f'{subject}_labels-DKT.tsv'
     anat_table = pd.read_csv(op.join(anat_dir, fname), sep='\t')
     return anat_table
 
