@@ -651,7 +651,8 @@ def _save_spk_to_mm_matlab_format(spk, path):
     savemat(path, data)
 
 
-def add_region_from_channels_table(spk, channel_info):
+def add_region_from_channels_table(spk, channel_info, source_column='area',
+                                   target_column='region'):
     '''Add brain region information to Spikes from channel info excel table.
 
     Parameters
@@ -668,7 +669,7 @@ def add_region_from_channels_table(spk, channel_info):
         chan_num = int(''.join([char for char in chan if char.isdigit()]))
         msk = (channel_info['channel start'] <= chan_num) & (
             channel_info['channel end'] >= chan_num)
-        region = channel_info.loc[msk, 'area'].values[0]
+        region = channel_info.loc[msk, source_column].values[0]
 
         cell_msk = spk.cellinfo.channel == chan
-        spk.cellinfo.loc[cell_msk, 'region'] = region
+        spk.cellinfo.loc[cell_msk, target_column] = region
