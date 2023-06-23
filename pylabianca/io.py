@@ -665,6 +665,10 @@ def add_region_from_channels_table(spk, channel_info, source_column='area',
     '''
     chans = spk.cellinfo.channel.unique()
 
+    numeric_rows = [isinstance(x, (int, float))
+                    for x in channel_info['channel start']]
+    channel_info = channel_info.loc[numeric_rows, :]
+
     for chan in chans:
         chan_num = int(''.join([char for char in chan if char.isdigit()]))
         msk = (channel_info['channel start'] <= chan_num) & (
