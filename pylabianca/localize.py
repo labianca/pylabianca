@@ -23,6 +23,9 @@ def set_up_paths(onedrive_dir=None):
         try:
             import sarna
             onedrive_dir = sarna.proj.find_onedrive()
+        except ImportError:
+            raise RuntimeError('You either need to provide onedrive_dir, or'
+                               'have sarna package to auto-locate OneDrive.')
 
     anat_dir = op.join(onedrive_dir, 'RESEARCH', 'anat')
     subjects_dir = op.join(anat_dir, 'derivatives', 'freesurfer')
@@ -474,3 +477,26 @@ def rename_region(region):
         return name
     else:
         return region
+
+
+def construct_table_from_anatomical_labels(new_names):
+    import pandas as pd
+
+    df = pd.DataFrame(columns=['label', 'closest_anat', 'closest_distance',
+                            'second_closest_anat', 'second_closest_distance'])
+
+    # construct a table
+    for ch_name, labels in new_names.items():
+        _, ch_label, _ = ch_name.split('_')
+
+        idx = df.shape[0]
+        df.loc[idx, 'label'] = ch_label
+
+        for label_idx, (anat_label, dist) in enumerate(labels):
+            if label_idx > 1:
+                break
+            prefix = 'closest_' if label_idx == 0 else 'second_closest_'
+            df.loc[idx, prefix + 'anat'] = anat_label
+            df.loc[idx, prefix + 'distance'] = dist
+
+    return df
