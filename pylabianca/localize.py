@@ -199,6 +199,28 @@ def read_channel_table(subject, paths):
     return chan_info
 
 
+def read_anatomical_labels(subject, onedrive_dir):
+    """Read anatomical labels assigned to channels based on DKT atlas.
+
+    Parameters
+    ----------
+    subject : str
+        Subject identifier.
+    onedrive_dir : str
+        Path to OneDrive.
+
+    Return
+    ------
+    anat: pd.DataFrame
+        Table with anatomical labels.
+    """
+    anat_dir = op.join(onedrive_dir, 'RESEARCH', 'anat', 'derivatives',
+                       'anat', 'labels')
+    fname = f'{subject}_labels_DKT.tsv'
+    anat_table = pd.read_csv(op.join(anat_dir, fname), sep='\t')
+    return anat_table
+
+
 def is_known(val_or_str):
     if isinstance(val_or_str, str):
         return not val_or_str == '?'
@@ -500,3 +522,20 @@ def construct_table_from_anatomical_labels(new_names):
             df.loc[idx, prefix + 'distance'] = dist
 
     return df
+
+
+def simplify_DKT_name(DKT_name, retain_side=False):
+    assert retain_side == False  # retaining side currently not supported
+
+    transl = {'Hippocampus': 'HIP', 'Caudal-Anterior-Cingulate': 'cACC',
+              'Rostral-Anterior-Cingulate': 'rACC', 'Amygdala': 'AMG',
+              'Posterior-Cingulate': 'PCC', 'Medial-Orbitofrontal': 'OFC',
+              'Lateral-Orbitofrontal': 'OFC', 'Isthmus-Cingulate': 'PCC',
+              'Superior-Frontal': 'SMA', 'Precuneus': 'RSC'}
+
+    for tr_from, tr_to in transl.items():
+        if tr_from in DKT_name:
+            return tr_to
+
+    # no simplifications found, retain original name
+    return DKT_name
