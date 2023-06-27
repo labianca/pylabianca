@@ -83,3 +83,19 @@ for fname in files:
             add_case_to_dict(case, total)
     
     per_subject[sub] = this_subject
+    
+# %%
+regions = dict()
+regions_no_side = dict()
+
+for fname in files:
+    sub = fname.split('_')[0]
+    df = pd.read_csv(op.join(data_dir, fname), sep='\t')
+    n_cols = df.shape[0]
+
+    for idx in range(n_cols):
+        this_area = df.loc[idx, 'closest_anat']
+        this_area_no_side = this_area.replace(
+            'Left-', '').replace('Right-', '')
+        add_case_to_dict(this_area, regions)
+        add_case_to_dict(this_area_no_side, regions_no_side)
