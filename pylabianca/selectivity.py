@@ -205,8 +205,10 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     # add cell coords
     for key in results.keys():
+        copy_coords = ['region', 'region2', 'anat', 'channel', 'cluster']
+        copy_coords = [coord for coord in copy_coords if coord in frate.coords]
         coords = {coord: ('cell', frate.coords[coord].values)
-                  for coord in ['region', 'region2', 'channel', 'cluster']}
+                  for coord in copy_coords}
         results[key] = results[key].assign_coords(coords)
 
     return results
