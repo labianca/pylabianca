@@ -111,8 +111,6 @@ def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
     return selectivity, avg_by_probe
 
 
-# TODO: return type wrong in docs
-#       should return: matrix of selectivity for each permutation
 def compute_selectivity_continuous(frate, compare='image', n_perm=500,
                                    n_jobs=1, min_Hz=False):
     '''
@@ -127,7 +125,8 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     compare : str
         Metadata category to compare. Defaults to ``'image'``.
     n_perm : int
-        Number of permutations to use for permutation test.
+        Number of permutations to use for permutation test. Defaults to
+        ``500``.
     n_jobs : int
         Number of parallel jobs. No parallel computation is done when
         ``n_jobs=1`` (default).
@@ -137,10 +136,19 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     Returns
     -------
-    selectivity : dict of pandas.DataFrame
-        Dictionary of dataframes with selectivity for each cell. Each
-        dictionary key and each dataframe corresponds to a time window of given
-        name.
+    selectivity : dict of xarray.DataArray
+        Dictionary of DataArrays with selectivity for each cell. The following
+        keys are used:
+        * ``'stat'`` - selectivity statistic (t values), DataArray with
+          dimensions ``('cell', 'time')`` (unless time was not present in the
+          ``frate``)
+        * ``'thresh'`` - 95% significance thresholds from permutation test:
+          lower, negative (2.5%) and higher, positive (97.5%) tails. DataArray
+          with dimensions ``('tail', 'cell', 'time')`` (unless time was not
+          present in the ``frate``)
+        * ``'perm'`` - selectivity statistic for each permutation. DataArray
+          with dimensions ``('perm', 'cell', 'time')`` (unless time was not
+          present in the ``frate``)
     '''
     import xarray as xr
     from .stats import permutation_test
