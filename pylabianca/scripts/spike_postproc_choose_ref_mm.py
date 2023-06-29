@@ -4,6 +4,7 @@ Created on Tue Mar 29 15:21:13 2022
 
 @author: mmagnuski
 """
+# %%
 import os
 import os.path as op
 
@@ -32,16 +33,17 @@ import switchorder as swo
 # SETTINGS
 # --------
 
-subject = 'sub-W02'
+subject = 'sub-U12'
+session = 'main2'
 sorter, norm = 'osort', False
 bids_dir = swo.find_switchorder()
 
-dir_fname = (f'{subject}_ses-main_task-switchorder_run-01_'
+dir_fname = (f'{subject}_ses-{session}_task-switchorder_run-01_'
              f'sorter-{sorter}_norm-{norm}')
-data_dir = op.join(bids_dir, 'derivatives', 'sorting', subject, 'ses-main',
+data_dir = op.join(bids_dir, 'derivatives', 'sorting', subject, f'ses-{session}',
                    dir_fname)
 save_fig_dir = op.join(bids_dir, 'derivatives', 'sel_ref', subject,
-                       'ses-main')
+                       f'ses-{session}')
 
 # whether to plot figures and where to save them
 save_fig = True
@@ -89,7 +91,7 @@ if not op.exists(save_fig_dir):
 
 # read the file
 print('Reading files - including all waveforms...')
-spk = swo.read_spk(subject, waveform=True, norm=norm)
+spk = swo.read_spk(subject, waveform=True, norm=norm, ses=session)
 print('done.')
 
 # remove units with no spikes
@@ -317,15 +319,15 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
         # add measures
         for ix, measure_name in enumerate(reordered_names):
             this_df.loc[:, measure_name] = measures_sel[:, ix]
-            
+
         incl_idx = np.ix_(incluster_cell_indices, incluster_cell_indices)
         incluster_simil = simil[incl_idx]
-            
+
         # iteratively drop according to score_ranks
         subgroup_id = 1
         drop_msk = np.zeros(incluster_simil.shape[0], dtype='bool')
         left_simil = incluster_simil[~drop_msk][:, ~drop_msk]
-        
+
         while (left_simil > coincidence_threshold).any():
             this_df.loc[~drop_msk, 'subgroup'] = np.nan
             any_left = this_df.subgroup.isna().any()
@@ -343,13 +345,13 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
                 this_df.loc[drop_idx, 'subgroup'] = subgroup_id
                 this_df.loc[drop_idx, 'drop'] = True
 
-                this_df.loc[notdrop_idx, 'subgroup'] = subgroup_id 
+                this_df.loc[notdrop_idx, 'subgroup'] = subgroup_id
                 this_df.loc[notdrop_idx, 'drop'] = False
-                
+
                 # select the best unit
                 any_left = this_df.subgroup.isna().any()
                 subgroup_id += 1
-            
+
             # aggregate nodrop simil
             drop_msk = this_df.loc[:, 'drop'].values.astype('bool')
             left_simil = incluster_simil[~drop_msk][:, ~drop_msk]
@@ -378,7 +380,7 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
             fig = plot_scores(spk_sel, score_ranks)
             fig.savefig(op.join(save_fig_dir, fname), dpi=300)
             plt.close(fig)
-            
+
             # plot after if more than one subgroup
             if left_simil.shape[0] > 1:
                 fname = fname_base + '_02_coincid_after.png'
@@ -392,7 +394,7 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
                     cluster_idx=cluster_idx)
                 fig.savefig(op.join(save_fig_dir, fname), dpi=300)
                 plt.close(fig)
-                
+
 
     if save_fig:
         ignored_clst_idx = np.where(counts < min_ref_channels)[0]
@@ -436,16 +438,16 @@ for chan in channels_with_drops:
         clusters = df_sel.loc[msk, 'cluster'].values.tolist()
         line = f'{chan}, {clusters}\n'
         lines_to_write.append(line)
-        
+
 with open(fname, 'w') as file:
     file.writelines(lines_to_write)
 
 # %% draw given cluster as graph
 import networkx as nx
 
-pack_idx = 2
+pack_idx = 3
 cluster_idx = 0
-plot_edge_threshold = 0. # coincidence_threshold
+plot_edge_threshold = 0.15 # coincidence_threshold
 
 pack_units_idx = units_in_pack[pack_idx]
 simil = similarity_per_pack[pack_idx]
