@@ -575,6 +575,8 @@ class Spikes(object):
         msg = '<Spikes, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(n_cells, avg_spikes)
 
+    # TODO: return idx from _epoch_spikes only when self.waveform is not None
+    # TODO: time and consider speeding up
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.):
         '''Epoch spikes with respect to selected events.
 
