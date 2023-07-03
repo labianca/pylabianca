@@ -1,6 +1,9 @@
 import numpy as np
 
 
+# TODO: ensure same ``frate`` explanation for all functions
+#       - obtained with SpikeEpochs.spike_rate or SpikeEpochs.spike_density
+#       - dimensions: ..., ..., ...
 # TODO: adapt for multiple cells
 # TODO: make more universal (do not require 'time' and 'trial' dimensions)
 def explained_variance(frate, groupby, kind='omega'):
@@ -235,17 +238,31 @@ def cluster_based_selectivity(frate, compare, spk=None,
     frate : xarray.DataArray
         Xarray with spike rate  or spike density containing ``'cell'``,
         ``'trial'`` and ``'time'`` dimensions.
-    spk : SpikeEpochs
-        Spikes to use when calculating depth of sensitivity in cluster
-        time window.
     compare : str
         Dimension labels specified for ``'trial'`` dimension that constitutes
         categories to test selectivity for.
+    spk : SpikeEpochs
+        Spikes object to use when calculating depth of sensitivity (DoS) or
+        percentage of explained variance (PEV) in cluster time window.
+        Not used if ``calculate_pev`` and ``calculate_dos`` are ``False``.
     cluster_entry_pval : float
         P value used as a cluster-entry threshold. The default is ``0.05``.
+    n_permutations : int
+        Number of permutations to use for permutation test. The default is
+        ``1000``.
+    n_stat_permutations : int
+        Number of permutations to use for non-parametric calculation of the p
+        value for the test statistic (see ``stat_fun``). The default is ``0``,
+        which means that the p value is calculated parametrically. Using
+        non-parametric calculation is slower but more resistant to parametric
     pbar : str | tqdm progressbar
         Progressbar to use. The default is ``'notebook'`` which creates a
         ``tqdm.notebook.tqdm`` progressbar.
+    correct_window : float
+        The cluster time window will be extended by this value when calculating
+        window average statistics (DoS, PEV). The default is ``0.``.
+    min_cluster_pval : float
+        Minimum p value for a cluster to be stored in the results dataframe.
 
     Returns
     -------
