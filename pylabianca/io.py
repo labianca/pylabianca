@@ -329,6 +329,7 @@ def read_combinato(path, label=None, alignment='both'):
                         group.append(grp)
                         align.append(pol)
                         channel.append(subdir)
+
                         # Combinato times are in ms, but we turn this
                         # to 1 microsecond timestamps used by Neuralynx
                         spike_data['timestamp'].append(times[idx] * 1000)
@@ -547,10 +548,10 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
         n_events by 3 array in mne-python format (first column - timestamps,
         last columns - trigger values).
     '''
-    import neuralynx_io as ni
+    from .neuralynx_io import load_nev, load_ncs
 
     events_path = op.join(path, events_file)
-    nev = ni.neuralynx_io.load_nev(events_path)
+    nev = load_nev(events_path)
 
     # take all trigger timestamps
     event_timestamps = nev['events']['TimeStamp'].astype('int64')
@@ -566,7 +567,7 @@ def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
         # take first timestamp of the recording from one of the files
         if first_timestamp_from:
             ncs_path = op.join(path, first_timestamp_from)
-            ncs = ni.neuralynx_io.load_ncs(ncs_path)
+            ncs = load_ncs(ncs_path)
             first_sample = ncs['time'][0].astype('int64')
             last_sample = ncs['time'][-1].astype('int64')
             del ncs
