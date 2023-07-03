@@ -217,14 +217,14 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 # TODO: add njobs
 # TODO: refactor to separate cluster-based and cell selection
 # TODO: create more progress bars and pass to cluster_based_test
-def cluster_based_selectivity(frate, spk=None, compare='probe',
+# TODO: use calculate_dos to ignore DoS calculation
+def cluster_based_selectivity(frate, compare, spk=None,
                               cluster_entry_pval=0.05, n_permutations=1000,
                               n_stat_permutations=0, pbar='notebook',
-                              correct_dos_window=0.,
-                              window_of_interest=(0.1, 1),
-                              min_time_in_window=0.2,
-                              min_depth_of_selectivity=0.4,
-                              stat_fun=None, format='new'):
+                              correct_window=0., min_cluster_pval=0.1,
+                              calculate_pev=False, calculate_dos=True,
+                              calculate_peak_pev=False, stat_fun=None,
+                              baseline_window=(-0.5, 0)):
     '''Calculate category-sensitivity of neurons using cluster-based tests.
 
     Performs cluster-based ANOVA on firing rate of each neuron to test
@@ -259,16 +259,20 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
     from .viz import check_modify_progressbar
 
     n_cells = len(frate)
-    corrwin = [-correct_dos_window, correct_dos_window]
+    corrwin = [-correct_window, correct_window]
     pbar = check_modify_progressbar(pbar, total=n_cells)
 
     # init dataframe for storing results
-    cols = ['pval', 'window', 'in_toi', 'preferred', 'n_preferred']
-    if format == 'old':
-        cols = ['cluster1_' + postfix for postfix in cols]
-        cols = ['cell', 'n_signif_clusters'] + cols
-    elif format == 'new':
-        cols = ['neuron', 'region', 'region_short', 'cluster'] + cols
+    cols = ['pval', 'window', 'preferred', 'n_preferred', 'FR_preferred']
+    cols = ['neuron', 'region', 'region_short', 'anat', 'cluster'] + cols
+    if calculate_pev:
+        cols += ['pev']
+    if calculate_dos:
+        cols += ['DoS']
+    if calculate_peak_pev:
+        cols += ['peak_pev']
+    if baseline_window is not None:
+        cols += ['FR_vs_baseline']
 
     df_cluster = pd.DataFrame(columns=cols)
 
@@ -285,126 +289,189 @@ def cluster_based_selectivity(frate, spk=None, compare='probe',
         # process clusters
         # TODO - separate function
         n_clusters = len(pval)
-        n_signif_clusters = 0
         if n_clusters > 0:
-            # extract relevant cluster info
-            n_signif_clusters = (pval < 0.05).sum()
-            time_in_window = [_compute_time_in_window(
-                                  clusters[idx], fr_cell.time,
-                                  window_of_interest)
-                              for idx in range(n_clusters)]
-            win_start = np.array([fr_cell.time[clusters[idx]][0]
-                                  for idx in range(n_clusters)])
 
             # select clusters to save in df
-            good_clst = (np.array(time_in_window) > 0) | (win_start > 0)
-            clst_idx = np.where(good_clst & (pval < 0.05))[0]
-
-            if len(clst_idx) == 0:
-                clst_idx = [np.argmax(time_in_window)]
-            cluster_p = pval[clst_idx]
+            good_clst = pval <= min_cluster_pval
+            clst_idx = np.where(good_clst)[0]
 
             for ord_idx, idx in enumerate(clst_idx):
                 # get cluster time window
                 clst_msk = clusters[idx]
-                this_pval = cluster_p[ord_idx]
+                this_pval = pval[idx]
                 twin = fr_cell.time[clst_msk].values[[0, -1]]
                 twin_str = '{:.03f} - {:.03f}'.format(*twin)
-                in_toi = time_in_window[idx]
 
-                if format == 'old':
-                    prefix = 'cluster{}'.format(ord_idx + 1)
-                    df_cluster.loc[row_idx, prefix + '_pval'] = this_pval
-                    df_cluster.loc[row_idx, prefix + '_window'] = twin_str
-                    df_cluster.loc[row_idx, prefix + '_in_toi'] = in_toi
-                elif format == 'new':
-                    if 'region' in fr_cell.coords:
-                        region_name = fr_cell.region.item()
+                # get anatomical information
+                if 'region' in fr_cell.coords:
+                    region_name = fr_cell.region.item()
 
-                        if 'region2' in fr_cell.coords:
-                            short_name = fr_cell.region2.item()
-                        else:
-                            short_name = region_name[1:-1]
+                    if 'region2' in fr_cell.coords:
+                        short_name = fr_cell.region2.item()
                     else:
-                        region_name = None
-                        short_name = None
+                        short_name = region_name[1:-1]
+                else:
+                    region_name = None
+                    short_name = None
 
-                    df_idx = row_idx + ord_idx
-                    df_cluster.loc[df_idx, 'neuron'] = cell_name
-                    df_cluster.loc[df_idx, 'region'] = region_name
-                    df_cluster.loc[df_idx, 'region_short'] = short_name
-                    df_cluster.loc[df_idx, 'cluster'] = ord_idx + 1
-                    df_cluster.loc[df_idx, 'pval'] = this_pval
-                    df_cluster.loc[df_idx, 'window'] = twin_str
-                    df_cluster.loc[df_idx, 'in_toi'] = in_toi
+                if 'anat' in fr_cell.coords:
+                    anat_name = fr_cell.anat.item()
+                else:
+                    anat_name = None
+
+                df_idx = row_idx + ord_idx
+                df_cluster.loc[df_idx, 'neuron'] = cell_name
+                df_cluster.loc[df_idx, 'region'] = region_name
+                df_cluster.loc[df_idx, 'region_short'] = short_name
+                df_cluster.loc[df_idx, 'anat'] = anat_name
+                df_cluster.loc[df_idx, 'cluster'] = ord_idx + 1
+                df_cluster.loc[df_idx, 'pval'] = this_pval
+                df_cluster.loc[df_idx, 'window'] = twin_str
 
                 # calculate depth of selectivity for each selective window
                 tmin, tmax = twin + corrwin
                 if spk is not None:
                     frate_avg = spk.spike_rate(
-                        picks=pick, step=False, tmin=tmin, tmax=tmax)
+                        picks=pick, step=False, tmin=tmin, tmax=tmax
+                        ).isel(cell=0)
 
                     # TODO: for GammBur I used only correct trials,
                     #       but it may not always make sense...
-                    frate_avg = frate_avg.isel(cell=0)
                     # .sel(trial=frate_avg.ifcorrect)
+
+                    if baseline_window is not None:
+                        frate_bsln = spk.spike_rate(
+                            picks=pick, step=False, tmin=baseline_window[0],
+                            tmax=baseline_window[1]).isel(cell=0)
+
                 else:
                     frate_avg = fr_cell.sel(time=slice(tmin, tmax)).mean(
                         dim='time')  # .sel(trial=frate.ifcorrect)
+
+                    if baseline_window is not None:
+                        frate_bsln = fr_cell.sel(
+                            time=slice(baseline_window[0], baseline_window[1])
+                            ).mean(dim='time')
 
                 depth, preferred = depth_of_selectivity(
                     frate_avg, groupby=compare)
                 if isinstance(depth, xr.DataArray):
                     depth = depth.item()
 
+                # TODO - this also could be moved outside
                 # find preferred categories
                 perc_pref = preferred / preferred.max()
                 pref_idx = np.where(perc_pref >= 0.75)[0]
                 perc_pref_sel = perc_pref.values[pref_idx].argsort()[::-1]
 
-                # check if cluster time window can be deemed as selective
-                is_sel = ((cluster_p[ord_idx] < 0.05)
-                          & (in_toi >= min_time_in_window)
-                          & (depth > min_depth_of_selectivity))
+                # TODO - use category labels in preferred!
+                pref = pref_idx[perc_pref_sel].tolist()
+                pref_str = str(pref)
 
-                if format == 'old':
-                    pref = pref_idx[perc_pref_sel] + 1
-                    pref_str = ';'.join([str(x) for x in pref])
+                # calculate PEV and peak PEV
+                if calculate_pev:
+                    pev = explained_variance(
+                        frate_avg, compare).item()
 
-                    df_cluster.loc[row_idx, prefix + '_preferred'] = pref_str
-                    df_cluster.loc[row_idx, prefix + '_n_preferred'] = len(pref)
-                    df_cluster.loc[row_idx, prefix + 'DoS'] = depth
-                    df_cluster.loc[row_idx, prefix + '_selective'] = is_sel
-                elif format == 'new':
-                    # TODO - use category labels in preferred!
-                    pref = pref_idx[perc_pref_sel].tolist()
-                    pref_str = str(pref)
+                if calculate_peak_pev:
+                    peak_pev = explained_variance(
+                        fr_cell.sel(time=slice(tmin, tmax)),
+                        compare
+                        ).max().item()
 
-                    df_cluster.loc[df_idx, 'preferred'] = pref_str
-                    df_cluster.loc[df_idx, 'n_preferred'] = len(pref)
-                    df_cluster.loc[df_idx, 'DoS'] = depth
-                    df_cluster.loc[df_idx, 'selective'] = is_sel
+                if baseline_window is not None:
+                    FR_vs_bsln = (preferred.max().item()
+                                  / frate_bsln.mean().item())
 
-        else:
-            if format == 'old':
-                df_cluster.loc[row_idx, 'cluster1_selective'] = False
+                df_cluster.loc[df_idx, 'preferred'] = pref_str
+                df_cluster.loc[df_idx, 'n_preferred'] = len(pref)
+                df_cluster.loc[df_idx, 'FR_preferred'] = preferred.max().item()
+                df_cluster.loc[df_idx, 'DoS'] = depth
 
-        # store the information in a dataframe
-        if format == 'old':
-            df_cluster.loc[row_idx, 'cell'] = cell_name
-            df_cluster.loc[row_idx, 'n_signif_clusters'] = n_signif_clusters
+                if calculate_pev:
+                    df_cluster.loc[df_idx, 'PEV'] = pev
+
+                if calculate_peak_pev:
+                    df_cluster.loc[df_idx, 'peak_PEV'] = peak_pev
+
+                if baseline_window is not None:
+                    df_cluster.loc[df_idx, 'FR_vs_baseline'] = FR_vs_bsln
 
         pbar.update(1)
+
+    # make sure that the dataframe columns are of the right type
+    df_cluster = df_cluster.infer_objects()
     return df_cluster
 
 
-def _compute_time_in_window(clst_msk, times, window_of_interest):
-    twin = times[clst_msk].values[[0, -1]]
-    twin[0] = min(max(window_of_interest[0], twin[0]),
-                    window_of_interest[1])
-    twin[1] = max(min(window_of_interest[1], twin[1]),
-                    window_of_interest[0])
+def assess_selectivity(df_cluster, min_cluster_p=0.05,
+                       window_of_interest=(0.1, 1), min_time_in_window=0.2,
+                       min_depth_of_selectivity=None, min_pev=None,
+                       min_peak_pev=None, min_FR_vs_baseline=None,
+                       min_FR_preferred=None):
+    pval_msk = df_cluster.pval <= min_cluster_p
+
+    def eval_column(column_name, min_value):
+        msk = (np.ones_like(pval_msk) if min_value is None
+               else df_cluster[column_name] >= min_value)
+        return msk
+
+    if min_time_in_window is not None:
+        df_cluster = compute_time_in_window(df_cluster, window_of_interest)
+        in_toi_msk = df_cluster.in_toi >= min_time_in_window
+    else:
+        in_toi_msk = np.ones_like(pval_msk)
+
+    dos_msk = eval_column('DoS', min_depth_of_selectivity)
+    pev_msk = eval_column('PEV', min_pev)
+    peak_pev_msk = eval_column('peak_PEV', min_peak_pev)
+    fr_vs_bsln_msk = eval_column('FR_vs_baseline', min_FR_vs_baseline)
+    fr_pref_msk = eval_column('FR_preferred', min_FR_preferred)
+
+    # check if cluster time window can be deemed as selective
+    is_sel = (pval_msk & pev_msk & in_toi_msk & dos_msk & peak_pev_msk
+              & fr_vs_bsln_msk & fr_pref_msk)
+
+    df_cluster['selective'] = is_sel
+    return df_cluster
+
+
+def _compute_time_in_window(clst_window, window_of_interest):
+    # clst_limits = times[clst_msk].values[[0, -1]]
+    twin = [0., 0.]
+    clst_limits = _parse_window(clst_window)
+    twin[0] = min(max(window_of_interest[0], clst_limits[0]),
+                      window_of_interest[1])
+    twin[1] = max(min(window_of_interest[1], clst_limits[1]),
+                      window_of_interest[0])
     return twin[1] - twin[0]
+
+
+def _parse_window(window_str):
+    start, fin = [float(x) for x in window_str.split(' - ')]
+    return start, fin
+
+
+def compute_time_in_window(df_cluster, window_of_interest):
+    '''
+    Compute time spent in the window of interest for each cluster.
+
+    Parameters
+    ----------
+    df_cluster : pandas.DataFrame
+        Dataframe with cluster information.
+    window_of_interest : tuple of float
+        Time window of interest.
+
+    Returns
+    -------
+    df_cluster : pandas.DataFrame
+        Dataframe with cluster information, including time spent in the window
+        of interest.
+    '''
+    df_cluster.loc[:, 'in_toi'] = df_cluster.window.apply(
+        _compute_time_in_window, args=(window_of_interest,))
+    return df_cluster
 
 
 # TODO: compare with time resolved selectivity
