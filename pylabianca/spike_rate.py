@@ -4,6 +4,7 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
 
 
 
+# TODO: add n_jobs?
 # CONSIDER wintype 'rectangular' vs 'gaussian'
 def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
                        tmax=None, backend='numpy'):
@@ -117,8 +118,10 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
     return frate
 
 
-# TODO: consider an exact mode where the spikes are not transformed to raw
-#       but placed exactly where the spike is (`loc=spike_time`) and evaluated
+# TODO: add n_jobs?
+# TODO: consider an exact mode where the spikes are not transformed to raw /
+#       binned representation (binned raster) and the gaussian kernel is placed
+#       exactly where the spike is (`loc=spike_time`?) and evaluated
 #       (maybe this is what is done by elephant?)
 # TODO: check if time is symmetric wrt 0 (in most cases it should be as epochs
 #       are constructed wrt specific event)
@@ -156,9 +159,9 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
     if kernel is None:
         if fwhm is not None:
             gauss_sd = _gauss_sd_from_FWHM(fwhm)
-            winlen = gauss_sd * 6
+            winlen = gauss_sd * 6.
         else:
-            gauss_sd = winlen / 6 if gauss_sd is None else gauss_sd
+            gauss_sd = winlen / 6. if gauss_sd is None else gauss_sd
 
         gauss_sd = gauss_sd * sfreq
         win_smp, trim = _symmetric_window_samples(winlen, sfreq)
