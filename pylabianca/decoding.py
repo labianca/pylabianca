@@ -292,6 +292,70 @@ def join_subjects(Xs, ys, random_state=None, shuffle=True):
     return X, y
 
 
+def resample_decoding(frates, decoding_fun, arguments=dict(), n_resamples=20,
+                      n_jobs=1, permute=False, target=None, select_trials=None,
+                      decim=None):
+
+    assert target is not None, "``target`` must be specified"
+
+    Xs, ys, time = frates_dict_to_sklearn(
+        frates, target=target, select=select_trials, decim=decim)
+    n_trials = _count_trials(Xs)
+
+    if isinstance(permute, bool) and permute:
+        permute = np.arange(n_trials)
+        np.random.shuffle(permute)
+
+    # split into n_jobs = 1 or n_resamples = 1
+    # and n_jobs > 1 (joblib)
+    if n_jobs == 1 or n_resamples == 1:
+        score_resamples = [
+            _do_resample(Xs, ys, decoding_fun, arguments,
+                         permute=False, time=time)
+            for resample_idx in range(n_resamples)
+        ]
+    else:
+        from joblib import Parallel, delayed
+
+        score_resamples = Parallel(n_jobs=n_jobs)(
+            delayed(_do_resample)(
+                Xs, ys, decoding_fun, arguments, permute=permute, time=time)
+            for resample_idx in range(n_resamples)
+        )
+
+    # join the results
+    if isinstance(score_resamples[0], xr.DataArray):
+        resamples = pd.Index(np.arange(n_resamples), name='resample')
+        score_resamples = xr.concat(score_resamples, resamples)
+    else:
+        score_resamples = np.stack(score_resamples, axis=0)
+    return score_resamples
+
+
+def _do_resample(Xs, ys, decoding_fun, arguments, permute=False, time=None):
+    X, y = join_subjects(Xs, ys)
+
+    if isinstance(permute, bool):
+        if permute:
+            np.random.shuffle(y)
+    else:
+        # assume permutation array
+        y = y[permute]
+
+    # do the actual decoding
+    return decoding_fun(X, y, time=time, **arguments)
+
+
+def _count_trials(Xs):
+    # check n trials (across subjects)
+
+    n_tri = np.array([X.shape[1] for X in Xs])
+    assert (n_tri[0] == n_tri).all()
+    n_tri = n_tri[0]
+
+    return n_tri
+
+
 def shuffle_trials(*arrays, random_state=None):
     n_arrays = len(arrays)
     array_len = [len(x) for x in arrays]
