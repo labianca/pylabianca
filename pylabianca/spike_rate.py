@@ -179,11 +179,42 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
 
 
 def _gauss_sd_from_FWHM(FWHM):
+    """Calculate the standard deviation of a gaussian kernel from the FWHM.
+
+    Parameters
+    ----------
+    FWHM : float
+        Full width at half maximum of the gaussian kernel in seconds.
+
+    Returns
+    -------
+    gauss_sd : float
+        Standard deviation of the gaussian kernel in seconds.
+    """
     gauss_sd = FWHM / (2 * np.sqrt(2 * np.log(2)))
     return gauss_sd
 
 
 def _FWHM_from_window(winlen=None, gauss_sd=None):
+    """Calculate the full width at half maximum of a gaussian kernel.
+
+    Parameters
+    ----------
+    winlen : float | None
+        Length of the gaussian kernel in seconds. The length is assumed to be
+        6 times the standard deviation of the gaussian kernel. Exactly one of
+        ``winlen`` and ``gauss_sd`` must be specified. Default is ``None``,
+        in which case ''winlen`` is ignored and ``gauss_sd`` is used.
+    gauss_sd : float | None
+        Standard deviation of the gaussian kernel in seconds. Exactly one of
+        ``winlen`` and ``gauss_sd`` must be specified. Default is ``None``,
+        in which case ''gauss_sd`` is ignored and ``winlen`` is used.
+
+    Returns
+    -------
+    FWHM : float
+        Full width at half maximum of the gaussian kernel in seconds.
+    """
     # exactly one of the two must be specified
     assert winlen is not None or gauss_sd is not None
     assert winlen is None or gauss_sd is None
