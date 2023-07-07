@@ -6,10 +6,8 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 
 
-
-
 # TODO: decimation should likely be done outside of this function
-def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
+def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
                  n_jobs=4, time_generalization=False, random_state=None,
                  clf=None, n_pca=0, feature_selection=None):
     '''Perform decoding analysis with a linear SVM classifier.
@@ -22,8 +20,6 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
         electrodes.
     y : array-like, shape (n_samples,)
         The target values (class labels).
-    decim : int
-        Decimation factor for the time dimension.
     n_splits : int | str
         Number of cross-validation splits. If ``'loo'``, leave-one-out
         cross-validation is used.
@@ -127,10 +123,8 @@ def run_decoding(X, y, decim=1, n_splits=6, C=1., scoring='accuracy',
     return scores, sel_time
 
 
-# TODO: returning ``full_time`` does not make much sense because
-#       this function does not perform any decimation
 def frate_to_sklearn(frate, target=None, select=None,
-                     cell_names=None, time_idx=None):
+                     cell_names=None, time_idx=None, decim=10):
     '''Format frates xarray into sklearn X, y data arrays.
 
     Can concatenate conditions if needed.
@@ -138,7 +132,8 @@ def frate_to_sklearn(frate, target=None, select=None,
     if target is None:
         raise ValueError('You have to specify specify target.')
 
-    if 'time' in frate.dims:
+    has_time = 'time' in frate.dims
+    if has_time:
         fr = frate.transpose('trial', 'cell', 'time')
     else:
         fr = frate.transpose('trial', 'cell')
@@ -156,15 +151,20 @@ def frate_to_sklearn(frate, target=None, select=None,
     if time_idx is not None:
         fr = fr.isel(time=time_idx)
 
-    full_time = fr.time.values if 'time' in fr.dims else None
-    X = fr.values
+    if has_time:
+        full_time = fr.time.values[::decim]
+        X = fr.values[... ::decim]
+    else:
+        full_time = None
+        X = fr.values
+
     y = fr.coords[target].values
 
     return X, y, full_time
 
 
 def frates_dict_to_sklearn(frates, target=None, select=None,
-                           cell_names=None, time_idx=None):
+                           cell_names=None, time_idx=None, decim=10):
     '''Get all subjects from frates dictionary.
 
     The ``frates`` is a dictionary of subject -> firing rate xarray mappings.
@@ -215,7 +215,8 @@ def frates_dict_to_sklearn(frates, target=None, select=None,
                            else cell_names)
         X, this_y, full_time = frate_to_sklearn(
             frates[subj], select=select, target=target,
-            cell_names=this_cell_names, time_idx=time_idx)
+            cell_names=this_cell_names, time_idx=time_idx, decim=decim
+        )
 
         # add to the list
         Xs.append(X)
@@ -239,6 +240,8 @@ def join_subjects(Xs, ys, random_state=None, shuffle=True):
     random_state : int, optional
         Random state to use for shuffling within-condition trials per subject
         before joining the arrays into one "pseudo-population".
+    shuffle : bool, optional
+        Whether to shuffle trials within conditions before joining the arrays.
 
     Returns
     -------
