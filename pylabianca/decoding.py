@@ -145,7 +145,7 @@ def frate_to_sklearn(frate, target=None, select=None,
 
     if has_time:
         full_time = fr.time.values[::decim]
-        X = fr.values[... ::decim]
+        X = fr.values[..., ::decim]
     else:
         full_time = None
         X = fr.values
@@ -287,6 +287,7 @@ def join_subjects(Xs, ys, random_state=None, shuffle=True):
 def resample_decoding(frates, decoding_fun, arguments=dict(), n_resamples=20,
                       n_jobs=1, permute=False, target=None, select_trials=None,
                       decim=None):
+    import xarray as xr
 
     assert target is not None, "``target`` must be specified"
 
@@ -317,6 +318,7 @@ def resample_decoding(frates, decoding_fun, arguments=dict(), n_resamples=20,
 
     # join the results
     if isinstance(score_resamples[0], xr.DataArray):
+        import pandas as pd
         resamples = pd.Index(np.arange(n_resamples), name='resample')
         score_resamples = xr.concat(score_resamples, resamples)
     else:
@@ -341,7 +343,7 @@ def _do_resample(Xs, ys, decoding_fun, arguments, permute=False, time=None):
 def _count_trials(Xs):
     # check n trials (across subjects)
 
-    n_tri = np.array([X.shape[1] for X in Xs])
+    n_tri = np.array([X.shape[0] for X in Xs])
     assert (n_tri[0] == n_tri).all()
     n_tri = n_tri[0]
 
