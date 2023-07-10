@@ -8,7 +8,7 @@ from sklearn.utils.multiclass import unique_labels
 
 # TODO: decimation should likely be done outside of this function
 def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
-                 n_jobs=4, time_generalization=False, random_state=None,
+                 n_jobs=1, time_generalization=False, random_state=None,
                  clf=None, n_pca=0, feature_selection=None):
     '''Perform decoding analysis with a linear SVM classifier.
 
