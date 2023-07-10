@@ -49,8 +49,6 @@ def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
     -------
     scores : array, shape (n_splits, n_times, n_times)
         Decoding scores.
-    sel_time : array, shape (n_times,)
-        Selected time points. Can be ignored if ``decim==1``.
     '''
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
@@ -69,12 +67,6 @@ def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
     one_time_sample = False
     if X.ndim == 2:
         one_time_sample = True
-        sel_time = None
-        Xrs = X
-    else:
-        # decimate original data
-        sel_time = slice(0, X.shape[-1], decim)
-        Xrs = X[..., sel_time]
 
     # k-fold object
     if isinstance(n_splits, str) and n_splits == 'loo':
@@ -107,20 +99,20 @@ def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
 
     # do the k-fold
     scores = list()
-    for train_index, test_index in spl.split(Xrs, y):
+    for train_index, test_index in spl.split(X, y):
         if feature_selection is not None:
-            sel = feature_selection(Xrs[train_index, :], y[train_index])
+            sel = feature_selection(X[train_index, :], y[train_index])
         else:
             sel = slice(None)
 
-        estimator.fit(X=Xrs[train_index][:, sel],
+        estimator.fit(X=X[train_index][:, sel],
                       y=y[train_index])
-        score = estimator.score(X=Xrs[test_index][:, sel],
+        score = estimator.score(X=X[test_index][:, sel],
                                 y=y[test_index])
         scores.append(score)
 
     scores = np.stack(scores, axis=0)
-    return scores, sel_time
+    return scores
 
 
 def frate_to_sklearn(frate, target=None, select=None,
