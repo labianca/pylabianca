@@ -284,9 +284,50 @@ def join_subjects(Xs, ys, random_state=None, shuffle=True):
     return X, y
 
 
-def resample_decoding(frates, decoding_fun, arguments=dict(), n_resamples=20,
-                      n_jobs=1, permute=False, target=None, select_trials=None,
-                      decim=None):
+def resample_decoding(frates, decoding_fun, target, arguments=dict(),
+                      n_resamples=20, n_jobs=1, permute=False,
+                      select_trials=None, decim=None):
+    """Resample a decoding analysis.
+
+    The resampling is done by rearranging trials within each subject,
+    matching the ``target`` category across subjects.
+
+    Parameters
+    ----------
+    frates : dict
+        Dictionary of the form {subject_string: firing rate xarray}.
+    decoding_fun : callable
+        Decoding function to use. Must accept ``X`` and ``y`` as first two
+        arguments, and allow for ``time`` keyword argument. When given the
+        ``time`` argument, the function must return a xarray DataArray with
+        decoding scores.
+    target : str
+        Target category to use for decoding.
+    arguments : dict, optional
+        Additional arguments to pass to the ``decoding_fun``.
+    n_resamples : int, optional
+        Number of resamples to perform. Defaults to 20.
+    n_jobs : int, optional
+        Number of jobs to use for resampling. Defaults to 1, higher values
+        will use joblib to parallelize the resampling.
+    permute : bool | array, optional
+        Whether to permute the trials within each subject. If ``True``, the
+        trials are permuted randomly. If an array, the array is used to
+        permute the trials. Defaults to ``False``, which does not perform
+        permutation.
+    select_trials : str, optional
+        A string query used to select trials out of subject-specific xarrays.
+        Defaults to ``None``, which uses all trials.
+    decim : int | None, optional
+        Temporal decimation factor. Defaults to ``None``, which does not
+        perform decimation.
+
+    Returns
+    -------
+    score_resamples : xarray.DataArray | numpy.ndarray
+        Resampled decoding scores. If the ``decoding_fun`` returns a xarray
+        DataArray, the resampled scores are also returned as a DataArray.
+    """
     import xarray as xr
 
     assert target is not None, "``target`` must be specified"
