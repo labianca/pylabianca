@@ -34,7 +34,7 @@ def explained_variance(frate, groupby, kind='omega'):
     if has_time:
         n_times = len(frate.coords['time'])
 
-    groups, per_group = np.unique(frate.image, return_counts=True)
+    groups, per_group = np.unique(frate.coords[groupby], return_counts=True)
     n_groups = len(groups)
 
     SS_total = ((frate - global_avg) ** 2).sum(dim='trial')
@@ -44,7 +44,7 @@ def explained_variance(frate, groupby, kind='omega'):
     if is_omega:
         SS_within = SS_between.copy()
 
-    for idx, (label, arr) in enumerate(frate.groupby('image')):
+    for idx, (label, arr) in enumerate(frate.groupby(groupby)):
         # are group labels always sorted when using .groupby?
         group_avg = arr.mean(dim='trial')
         SS_between[idx] = per_group[idx] * (group_avg - global_avg) ** 2
