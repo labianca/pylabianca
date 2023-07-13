@@ -284,9 +284,9 @@ def join_subjects(Xs, ys, random_state=None, shuffle=True):
     return X, y
 
 
-def resample_decoding(frates, decoding_fun, target, arguments=dict(),
-                      n_resamples=20, n_jobs=1, permute=False,
-                      select_trials=None, decim=None):
+def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
+                      time=None, arguments=dict(), n_resamples=20, n_jobs=1,
+                      permute=False, select_trials=None, decim=None):
     """Resample a decoding analysis.
 
     The resampling is done by rearranging trials within each subject,
@@ -294,15 +294,27 @@ def resample_decoding(frates, decoding_fun, target, arguments=dict(),
 
     Parameters
     ----------
-    frates : dict
-        Dictionary of the form {subject_string: firing rate xarray}.
     decoding_fun : callable
         Decoding function to use. Must accept ``X`` and ``y`` as first two
         arguments, and allow for ``time`` keyword argument. When given the
         ``time`` argument, the function must return a xarray DataArray with
         decoding scores.
-    target : str
-        Target category to use for decoding.
+    frates : dict | None
+        Dictionary of the form {subject_string: firing rate xarray}. If
+        ``None``, the ``Xs`` and ``ys`` arguments must be provided.
+    target : str | None
+        Target category to use for decoding. Has to be provided if ``frates``
+        is used.
+    Xs : list of arrays | None
+        List of (n_trials, n_cells, n_time) firing rate arrays (one array per
+        subject / session). If ``None``, the ``frates`` argument must be
+        provided.
+    ys : list of arrays | None
+        List of (n_trials,) target values (one array per subject / session).
+        If ``None``, the ``frates`` argument must be provided.
+    time : array | None
+        If data is provided as ``Xs`` and ``ys`` arrays, a time vector is
+        needed.
     arguments : dict, optional
         Additional arguments to pass to the ``decoding_fun``.
     n_resamples : int, optional
@@ -330,10 +342,17 @@ def resample_decoding(frates, decoding_fun, target, arguments=dict(),
     """
     import xarray as xr
 
-    assert target is not None, "``target`` must be specified"
+    # check if correct arguments are provided
+    if frates is None:
+        if Xs is None or ys is None:
+            raise ValueError('Either frates or Xs and ys must be provided.')
+    else:
+        if target is None:
+            raise ValueError('target must be provided if frates is used.')
 
-    Xs, ys, time = frates_dict_to_sklearn(
-        frates, target=target, select=select_trials, decim=decim)
+        Xs, ys, time = frates_dict_to_sklearn(
+            frates, target=target, select=select_trials, decim=decim)
+
     n_trials = _count_trials(Xs)
 
     if isinstance(permute, bool) and permute:
@@ -345,7 +364,7 @@ def resample_decoding(frates, decoding_fun, target, arguments=dict(),
     if n_jobs == 1 or n_resamples == 1:
         score_resamples = [
             _do_resample(Xs, ys, decoding_fun, arguments,
-                         permute=False, time=time)
+                         permute=permute, time=time)
             for resample_idx in range(n_resamples)
         ]
     else:
