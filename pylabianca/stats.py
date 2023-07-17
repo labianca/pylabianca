@@ -45,9 +45,9 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
             elif tail == 'both':
                 is_pos = stat >= 0
                 pval = np.zeros(stat.shape)
-                pval[is_pos] = (dist[:, is_pos] >= stat[None, is_pos]
+                pval[is_pos] = ((dist[:, is_pos] >= stat[None, is_pos])
                                 .mean(axis=0))
-                pval[~is_pos] = (dist[:, ~is_pos] <= stat[None, ~is_pos]
+                pval[~is_pos] = ((dist[:, ~is_pos] <= stat[None, ~is_pos])
                                 .mean(axis=0))
                 pval *= multiply_p
 
