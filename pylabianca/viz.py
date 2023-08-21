@@ -83,12 +83,12 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
             group_names = ['base']
 
         assert len(colors) == n_groups
-        if isinstance(colors, (list, np.ndarray)):
+        if isinstance(colors, (list, tuple, np.ndarray)):
             assert all(isinstance(x, (list, np.ndarray)) for x in colors)
             colors = {group: color for group, color in zip(group_names, colors)}
         else:
             assert all(name in colors.keys() for name in group_names)
-            assert all(isinstance(x, (list, np.ndarray))
+            assert all(isinstance(x, (list, tuple, np.ndarray))
                        for x in colors.values())
 
     # plot each line with error interval
