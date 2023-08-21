@@ -2,6 +2,7 @@ import numpy as np
 
 
 # TODO: move to borsar
+# CHANGE THE api - the first argument could be a list of arrays or an xarray
 def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
                      return_pvalue=True, return_distribution=True, n_jobs=1):
     import sarna
@@ -84,12 +85,14 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     Parameters
     ----------
     frate : xarray.DataArray
-        Xarray with spike rate  or spike density containing
-        observations as the first dimension (for example trials for
-        between-trials analysis or cells for between-cells analysis).
-        If you have both cells and trials then the cell should already be
-        selected, via ``frate.isel(cell=0)`` for example or the trials
-        dimension should be averaged (for example ``frate.mean(dim='trial')``).
+        Xarray with spike rate or spike density containing observations as the
+        first dimension (for example trials for between-trials analysis or
+        cells for between-cells analysis). If you have both cells and trials
+        then you should either:
+            * selected one cell at a time, via ``frate.isel(cell=0)`` for
+              example
+            * the trials dimension should be averaged (for example
+              ``frate.mean(dim='trial')``) for a between-cell analysis.
     compare : str
         Dimension labels specified for ``'trial'`` dimension that constitutes
         categories to test selectivity for.
