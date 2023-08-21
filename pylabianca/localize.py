@@ -580,3 +580,25 @@ def simplify_DKT_name(DKT_name, retain_side=False, translate=None):
 
     # no simplifications found, retain original name
     return DKT_name
+
+
+def create_info_from_pos(pos, ch_names=None, sfreq=None):
+    import mne
+
+    assert pos.ndim == 2
+    assert pos.shape[1] == 3
+    n_pos = pos.shape[0]
+    if ch_names is None:
+        ch_names = ['SEEG_{:03d}'.format(idx) for idx in range(n_pos)]
+
+    sfreq = 32_000 if sfreq is None else sfreq
+    dev_head_trans = mne.Transform(fro=1, to=4, trans=np.identity(4))
+    info = mne.create_info(ch_names, sfreq=sfreq, ch_types='seeg')
+    info['dev_head_t'] = dev_head_trans
+
+    # apply positions
+    # CHECK, CONSIDER: maybe constructing and applying montage is better?
+    for ch_idx in range(n_pos):
+        info['chs'][ch_idx]['loc'][:3] = pos[ch_idx, :]
+
+    return info
