@@ -12,7 +12,8 @@ from .spike_distance import compare_spike_times
 # - [ ] object of type 'SpikeEpochs' has no len() !
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
-                 waveform=None, cell_names=None, metadata=None, cellinfo=None):
+                 waveform=None, waveform_time=None, cell_names=None,
+                 metadata=None, cellinfo=None):
         '''Create ``SpikeEpochs`` object for convenient storage, analysis and
         visualization of spikes data.
 
@@ -38,6 +39,9 @@ class SpikeEpochs():
             cells fire for the last few trials).
         waveform : list of numpy ndarrays | None
             List of spikes x samples waveform arrays.
+        waveform_time : np.ndarray | None
+            One-dimensional array of time values in milliseconds for
+            consecutive samples of the waveform.
         cell_names : list of str | None
             String identifiers of cells. First string corresponds to first
             cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
@@ -411,7 +415,7 @@ class SpikeEpochs():
         '''
         from .viz import plot_waveform
         return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
-                             labels=labels)
+                             labels=labels, times=self.waveform_time)
 
 
 def _epoch_spikes(timestamps, event_times, tmin, tmax):
@@ -525,7 +529,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 
 class Spikes(object):
     def __init__(self, timestamps, sfreq, cell_names=None, metadata=None,
-                 cellinfo=None, waveform=None):
+                 cellinfo=None, waveform=None, waveform_time=None):
         '''Create ``Spikes`` object for convenient storage, analysis and
         visualization of spikes data.
 
@@ -549,6 +553,9 @@ class Spikes(object):
             Additional cell information.
         waveform : list of np.ndarray
             List of spikes x samples waveform arrays.
+        waveform_time : np.ndarray | None
+            One-dimensional array of time values in milliseconds for
+            consecutive samples of the waveform.
         '''
         n_cells = len(timestamps)
         self.timestamps = timestamps
@@ -563,10 +570,12 @@ class Spikes(object):
         self.cellinfo = cellinfo
 
         if waveform is not None:
-            _check_waveforms(timestamps, waveform)
+            _check_waveforms(timestamps, waveform, waveform_time)
             self.waveform = waveform
+            self.waveform_time = waveform_time
         else:
             self.waveform = None
+            self.waveform_time = None
 
     def __repr__(self):
         '''Text representation of SpikeEpochs.'''
@@ -625,7 +634,8 @@ class Spikes(object):
 
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
                           cell_names=self.cell_names, cellinfo=self.cellinfo,
-                          n_trials=len(events), waveform=waveforms)
+                          n_trials=len(events), waveform=waveforms,
+                          waveform_time=self.waveform_time)
 
         # TODO: this should be removed later on, as Spike metadata should not
         #       be supported, metadata should be provided during or after
@@ -754,7 +764,7 @@ class Spikes(object):
         '''
         from .viz import plot_waveform
         return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
-                             labels=labels)
+                             labels=labels, times=self.waveform_time)
 
     def to_epochs(self, pad_timestamps=10_000):
         '''Turn Spike object into one-epoch SpikeEpochs representation.'''
@@ -832,12 +842,31 @@ class Spikes(object):
         write_spikes(self, path)
 
 
-def _check_waveforms(times, waveform):
+def _check_waveforms(times, waveform, waveform_time):
     '''Safety checks for waveform data.'''
-    assert len(times) == len(waveform)
+    n_waveforms = len(waveform)
+    assert len(times) == n_waveforms
     n_spikes_times = np.array([len(x) for x in times])
     n_spikes_waveform = np.array([x.shape[0] for x in waveform])
     assert (n_spikes_times == n_spikes_waveform).all()
+
+    if waveform_time is not None:
+        n_times = len(waveform_time)
+        n_times_wvfm_arr = [waveform[ix].shape[1]
+                            for ix in range(n_waveforms)]
+
+        if n_waveforms > 1:
+            msg = ('If `waveform_time` is passed, waveforms for each unit '
+                   'need to have the same number of samples (second dimension'
+                   ').')
+            assert all([n_times_wvfm_arr[0] == n_times_wvfm_arr[ix]
+                        ix in range(1, n_waveforms)]), msg
+
+        if not n_times == n_times_wvfm_arr[0]:
+            msg = ('Length of `waveform_times` and the second dimension of '
+                   '`waveform` must be equal.')
+            raise RuntimeError(msg)
+
 
 
 def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
