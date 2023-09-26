@@ -168,12 +168,12 @@ def check_modify_progressbar(pbar, total=None):
 
 
 # TODO:
-# - [ ] ! fix x axis units !
+# - [x] ! fix x axis units !
 # - [ ] kind='line' ?
 # - [ ] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
 def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
-                  y_bins=100):
+                  y_bins=100, times=None):
     '''Plot waveform heatmap for one cell.
 
     Parameters
@@ -216,13 +216,16 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
               extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
               aspect='auto')
     if labels:
-        ax.set_xlabel('Time (ms)', fontsize=14)
+        if times is not None:
+            ax.set_xlabel('Time (ms)', fontsize=14)
+        else:
+            ax.set_xlabel('Time (samples)', fontsize=14)
         ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
     return ax
 
 
 def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
-                                      density=True, y_range=None):
+                                      density=True, y_range=None, times=None):
     '''Helps in calculating 2d density histogram of the waveforms.'''
     from pylabianca.utils import _deal_with_picks
 
@@ -246,13 +249,17 @@ def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
 
     x_coords = np.tile(np.arange(n_samples), (n_spikes, 1))
 
-    # assume default osort times
-    sfreq = 32_000
     # sample_time = 1000 / sfreq  (combinato)
-    sample_time = 1000 / sfreq / 4  # (assume 4x upsampling)
-    sample_edge = -94  # -19 for combinato
-    time_edges = [sample_edge * sample_time,
-                  (n_samples / upsample + (sample_edge - 1)) * sample_time]
+    # sample_time = 1 if times is None else np.diff(times).mean()
+    # sample_edge = -94  # -19 for combinato
+    # time_edges = [sample_edge * sample_time,
+    #               (n_samples / upsample + (sample_edge - 1)) * sample_time]
+
+    if times is not None:
+        time_edges = [times[0], times[1]]
+    else:
+        time_ranges = [0, n_samples]
+
 
     xs = x_coords.ravel()
     ys = waveform.ravel()
