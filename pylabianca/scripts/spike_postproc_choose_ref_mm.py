@@ -141,6 +141,16 @@ def plot_scores(spk_sel, score):
 # -------------------
 channel_info = swo.read_channel_info(subject)
 
+# there may be non-numeric rows sometimes (U13 has "?" in some macro channels)
+numeric_rows = [isinstance(x, (int, float))
+                for x in channel_info['channel start']]
+channel_info = channel_info.loc[numeric_rows, :]
+
+# but we want to drop any NaN 'channel start' rows
+na_msk = channel_info['channel start'].isna()
+if na_msk.any():
+    channel_info = channel_info.loc[~na_msk, :]
+
 channels = spk.cellinfo.channel.unique()
 channel_number = np.sort([int(ch[1:]) for ch in channels])
 
@@ -149,7 +159,7 @@ msk = channel_info['channel start'] <= first_channel
 first_channel = channel_info.loc[msk, 'channel start'].max()
 first_row_idx = np.where(
     channel_info.loc[:, 'channel start'] == first_channel)[0][0]
-channel_info_sel = channel_info.loc[first_row_idx:, :]
+channel_info_sel = channel_info.iloc[first_row_idx:, :]
 
 # find which units belong to which pack
 packs = list()
@@ -160,7 +170,6 @@ for _, row in channel_info_sel.iterrows():
 unit_channel = spk.cellinfo.channel.str.slice(1).astype('int')
 units_in_pack = [np.where(np.in1d(unit_channel, pack))[0]
                  for pack in packs]
-
 
 # calculate measures
 # ------------------

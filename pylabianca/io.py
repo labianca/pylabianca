@@ -1,6 +1,7 @@
 import os
 import os.path as op
 from pathlib import Path
+from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -9,7 +10,7 @@ from .spikes import SpikeEpochs, Spikes
 
 
 # TODO - trialinfo columns ...
-def read_filedtrip(fname, data_name='spike', kind='raw'):
+def read_filedtrip(fname, data_name='spike', kind='raw', waveform=True):
     '''Read fieldtrip SpikeTrials format.
 
     Parameters
@@ -23,6 +24,8 @@ def read_filedtrip(fname, data_name='spike', kind='raw'):
         Data format to read. Can be:
         * ``'raw'`` for FieldTrip raw spikes format
         * ``'trials'`` or ``'epochs'`` for FieldTrip SpikeTrials format
+    waveform : bool
+        Whether to read waveforms. Defaults to ``True``.
 
     Returns
     -------
@@ -40,7 +43,12 @@ def read_filedtrip(fname, data_name='spike', kind='raw'):
 
     cell_names = data['label'].item()
 
-    if 'trialinfo' in data:
+    if waveform:
+        waveform, waveform_time = _get_waveforms(data)
+    else:
+        waveform, waveform_time = None, None
+
+    if 'trialinfo' in data.dtype.names:
         trialinfo = data['trialinfo'].item()
         trialinfo = pd.DataFrame(trialinfo)
     else:
@@ -48,6 +56,7 @@ def read_filedtrip(fname, data_name='spike', kind='raw'):
 
     if 'cellinfo' in data.dtype.names:
         data_dct = dict()
+        fields = data['cellinfo'].item().dtype.names
         for fld in fields:
             data_dct[fld] = data['cellinfo'].item()[fld].item()
         cellinfo = pd.DataFrame(data_dct)
@@ -55,26 +64,21 @@ def read_filedtrip(fname, data_name='spike', kind='raw'):
         cellinfo = None
 
     if kind in ['trials', 'epochs']:
-        spk = _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo)
-        return spk
+        spk = _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo,
+                                  waveform, waveform_time)
     elif kind == 'raw':
-        spk, events = _read_ft_spikes_raw(
-            data, cell_names, trialinfo, cellinfo)
-        return spk, events
+        spk = _read_ft_spikes_raw(data, cell_names, trialinfo, cellinfo,
+                                  waveform, waveform_time)
+
+    spk.filename = fname
+    return spk
 
 
 # TODO
 # - [ ] read waveform too...
-def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo):
+def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
+                        waveform_time):
     '''Read fieldtrip SpikeTrials format.
-
-    Parameters
-    ----------
-    fname : str | pathlib.Path
-        Path to the file to read.
-    data_name : str
-        The name of the saved variable - this can be arbitrary so it is
-        necessary to specify. ``'spike'`` by default.
 
     Returns
     -------
@@ -95,44 +99,91 @@ def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo):
     # create SpikeEpochs
     spk = SpikeEpochs(time, trial, time_limits, n_trials=n_trials,
                       metadata=trialinfo, cell_names=cell_names,
-                      cellinfo=cellinfo)
-    spk.filename = fname
+                      cellinfo=cellinfo, waveform=waveform,
+                      waveform_time=waveform_time)
+
     return spk
 
 
 # TODO - [ ] trialinfo likely shouldn't be used in raw format ...
-def _read_ft_spikes_raw(data, cell_names, trialinfo, cellinfo):
+def _read_ft_spikes_raw(data, cell_names, trialinfo, cellinfo, waveform,
+                        waveform_time):
     '''Read raw spikes fieldtrip format.
 
-    Parameters
-    ----------
-    fname : str
-        Filename / path to the file.
-    data_name : str
-        Name of the variable stored in the .mat file.
 
     Returns
     -------
     spk : Spikes
         Spikes object.
-    events : np.ndarray | None
-        If ``.events`` field is present in the mat file ``events`` contain
-        64 bit numpy array of the shape n_events x 2. Otherwise it is ``None``.
+
     '''
 
     timestamps = data['timestamp'].item()
-    fields = data['cellinfo'].item().dtype.names
+    timestamps = _check_timestamps(timestamps)
     sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
 
-    if 'events' in data.dtype.names:
-        events = data['events'].item().astype('int64')
-    else:
-        events = None
+    # This seems tohave been specific to gammbur, removed
+    # if 'events' in data.dtype.names:
+    #     events = data['events'].item().astype('int64')
+    # else:
+    #     events = None
 
     # create Spikes
     spk = Spikes(timestamps, sfreq, cell_names=cell_names,
-                 metadata=trialinfo, cellinfo=cellinfo)
-    return spk, events
+                 metadata=trialinfo, cellinfo=cellinfo, waveform=waveform,
+                 waveform_time=waveform_time)
+    return spk
+
+
+def _check_timestamps(timestamps):
+    from numbers import Integral
+
+    n_units = len(timestamps)
+    for ix in range(n_units):
+        if isinstance(timestamps[ix], Integral):
+            timestamps[ix] = np.array([timestamps[ix]])
+
+    return timestamps
+
+
+def _get_waveforms(data):
+    sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
+
+    if 'waveform' in data.dtype.names:
+        waveforms = data['waveform'].item()
+        new_waveforms = list()
+        n_units = len(waveforms)
+        for ix in range(n_units):
+            this_waveform = waveforms[ix]
+
+            if (isinstance(this_waveform, np.ndarray)
+                and len(this_waveform) > 0):
+
+                # we currently take only the first lead
+                if this_waveform.ndim > 2:
+                    this_waveform = this_waveform[0]
+                elif this_waveform.ndim == 1:
+                    # only one waveform, squeezed
+                    this_waveform = this_waveform[:, None]
+                new_waveforms.append(this_waveform.T)
+            else:
+                new_waveforms.append(None)
+
+        waveform_length = [x.shape[1] for x in new_waveforms if x is not None]
+        same_lengths = all(waveform_length[0] == x
+                           for x in waveform_length[1:])
+
+        if same_lengths:
+            waveform_time = np.arange(waveform_length[0]) / sfreq
+        else:
+            warn('Not all waveforms have the same number of samples, '
+                 'waveforms are therefore ignored. Got the following waveform'
+                 f'lengths: {waveform_length}.')
+            waveforms, waveform_time = None, None
+    else:
+        waveforms, waveform_time = None, None
+
+    return new_waveforms, waveform_time
 
 
 # TODO: add progressbar?

@@ -216,10 +216,8 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
               extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
               aspect='auto')
     if labels:
-        if times is not None:
-            ax.set_xlabel('Time (ms)', fontsize=14)
-        else:
-            ax.set_xlabel('Time (samples)', fontsize=14)
+        time_unit = 'samples' if times is None else 'ms'
+        ax.set_xlabel('Time ({time_unit})', fontsize=14)
         ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
     return ax
 
@@ -256,10 +254,9 @@ def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
     #               (n_samples / upsample + (sample_edge - 1)) * sample_time]
 
     if times is not None:
-        time_edges = [times[0], times[1]]
+        time_edges = [times[0] / upsample, times[1] / upsample]
     else:
-        time_ranges = [0, n_samples]
-
+        time_edges = [0, n_samples / upsample]
 
     xs = x_coords.ravel()
     ys = waveform.ravel()

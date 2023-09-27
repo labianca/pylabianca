@@ -846,21 +846,26 @@ def _check_waveforms(times, waveform, waveform_time):
     '''Safety checks for waveform data.'''
     n_waveforms = len(waveform)
     assert len(times) == n_waveforms
-    n_spikes_times = np.array([len(x) for x in times])
-    n_spikes_waveform = np.array([x.shape[0] for x in waveform])
+    
+    ignore_waveforms = [x is None for x in waveform]
+    n_spikes_times = np.array(
+        [len(x) for x, ign in zip(times, ignore_waveforms) if not ign])
+    n_spikes_waveform = np.array(
+        [x.shape[0] for x, ign in zip(waveform, ignore_waveforms) if not ign])
     assert (n_spikes_times == n_spikes_waveform).all()
 
     if waveform_time is not None:
         n_times = len(waveform_time)
+        check_waveforms = np.where(~np.array(ignore_waveforms))[0]
         n_times_wvfm_arr = [waveform[ix].shape[1]
-                            for ix in range(n_waveforms)]
+                            for ix in check_waveforms]
 
         if n_waveforms > 1:
             msg = ('If `waveform_time` is passed, waveforms for each unit '
                    'need to have the same number of samples (second dimension'
                    ').')
-            assert all([n_times_wvfm_arr[0] == n_times_wvfm_arr[ix]
-                        ix in range(1, n_waveforms)]), msg
+            assert all([n_times_wvfm_arr[0] == x
+                        for x in n_times_wvfm_arr[1:]]), msg
 
         if not n_times == n_times_wvfm_arr[0]:
             msg = ('Length of `waveform_times` and the second dimension of '
