@@ -149,7 +149,7 @@ def check_modify_progressbar(pbar, total=None):
     '''
     if isinstance(pbar, bool):
         if pbar:
-            from tqdm.auto import tqdm
+            from tqdm import tqdm
             pbar = tqdm(total=total)
         else:
             from sarna.utils import EmptyProgressbar
@@ -663,16 +663,34 @@ def auto_multipanel(n_to_show, ax=None):
 def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
              max_isi=None, ax=None):
     '''Plot inter-spike intervals (ISIs).
-    
+
     Parameters
     ----------
-    
+    spk : pylabianca.spikes.Spikes
+        Spikes object to use.
+    picks : int | str | list of int | list of str | None
+        Which cells to plot. If ``None`` all cells are plotted.
+    unit : str
+        Time unit to use when plotting the ISIs. Can be ``'ms'`` or ``'s'``.
+    bins : int | None
+        Number of bins to use for the histograms. If ``None`` the number of
+        bins is automatically determined.
+    min_spikes : int
+        Minimum number of spikes required to plot the ISI histogram.
+    max_isi : float | None
+        Maximum ISI time to plot. If ``None`` the maximum ISI is set to 0.1 for
+        ``unit == 's'`` and 100 for ``unit == 'ms'``.
+    ax : matplotlib.Axes | None
+        Axis to plot to. If ``None`` a new figure is created.
+
     Returns
     -------
+    ax : matplotlib.Axes
+        Axes with the plot.
     '''
     from .utils import _deal_with_picks
     from .spikes import Spikes
-    
+
     msg = 'Currently only Spikes are supported in ``plot_isi()``.'
     assert(isinstance(spk, Spikes)), msg
 
@@ -685,8 +703,13 @@ def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
     if max_isi is None:
         max_isi = 100 if unit == 'ms' else 0.1
 
-    orig_ax = ax.copy()
-    axes = ax.ravel()
+    if isinstance(ax, list):
+        axes = np.array(ax)
+    elif isinstance(ax, np.ndarray):
+        axes = ax.ravel()
+    else:
+        axes = np.array([ax])
+
     n_axes = len(axes)
     for idx, unit_idx in enumerate(picks):
         stamps = spk.timestamps[unit_idx]
@@ -707,4 +730,4 @@ def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
             axes[ix].set_xticks([])
             axes[ix].set_yticks([])
 
-    return orig_ax
+    return ax
