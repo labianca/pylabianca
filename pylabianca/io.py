@@ -174,7 +174,8 @@ def _get_waveforms(data):
                            for x in waveform_length[1:])
 
         if same_lengths:
-            waveform_time = np.arange(waveform_length[0]) / sfreq
+            # waveform time in ms
+            waveform_time = np.arange(waveform_length[0]) / (sfreq / 1000)
         else:
             warn('Not all waveforms have the same number of samples, '
                  'waveforms are therefore ignored. Got the following waveform'
