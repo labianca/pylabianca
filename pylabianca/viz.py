@@ -200,7 +200,7 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
     '''
 
     hist, _, ybins, time_edges = _calculate_waveform_density_image(
-        spk, pick, upsample, y_bins
+        spk, pick, upsample, y_bins, times=times
     )
     max_alpha = np.percentile(hist[hist > 0], 45)
     max_lim = np.percentile(hist[hist > 0], 99)
@@ -217,7 +217,7 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
               aspect='auto')
     if labels:
         time_unit = 'samples' if times is None else 'ms'
-        ax.set_xlabel('Time ({time_unit})', fontsize=14)
+        ax.set_xlabel(f'Time ({time_unit})', fontsize=14)
         ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
     return ax
 
@@ -254,7 +254,7 @@ def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
     #               (n_samples / upsample + (sample_edge - 1)) * sample_time]
 
     if times is not None:
-        time_edges = [times[0] / upsample, times[1] / upsample]
+        time_edges = [times[0], times[-1]]
     else:
         time_edges = [0, n_samples / upsample]
 
