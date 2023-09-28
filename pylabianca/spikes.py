@@ -9,7 +9,7 @@ from .spike_distance import compare_spike_times
 
 # TODO:
 # - [ ] index by trial?
-# - [ ] object of type 'SpikeEpochs' has no len() !
+# - [ ] len(spk_epochs) currently gives number of units, not epochs ...
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  waveform=None, waveform_time=None, cell_names=None,
@@ -85,10 +85,11 @@ class SpikeEpochs():
             assert cellinfo.shape[0] == n_cells
 
         if waveform is not None:
-            _check_waveforms(self.time, waveform)
+            _check_waveforms(self.time, waveform, waveform_time)
 
         self.n_trials = n_trials
         self.waveform = waveform
+        self.waveform_time = waveform_time
         self.cell_names = cell_names
         self.metadata = metadata
         self.cellinfo = cellinfo
@@ -846,7 +847,7 @@ def _check_waveforms(times, waveform, waveform_time):
     '''Safety checks for waveform data.'''
     n_waveforms = len(waveform)
     assert len(times) == n_waveforms
-    
+
     ignore_waveforms = [x is None for x in waveform]
     n_spikes_times = np.array(
         [len(x) for x, ign in zip(times, ignore_waveforms) if not ign])
