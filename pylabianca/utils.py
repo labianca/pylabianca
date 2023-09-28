@@ -291,3 +291,58 @@ def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50,
                   'min_idx': min_val_idx, 'max_idx': max_val_idx,
                   'align_idx': align_idx, 'align_sign': align_sign}
         return output
+
+
+def _realign_waveforms(waveforms, pad_nans=False):
+    mean_wv = np.nanmean(waveforms, axis=0)
+    min_idx, max_idx = np.argmin(mean_wv), np.argmax(mean_wv)
+
+    if min_idx < max_idx:
+        waveforms *= -1
+        mean_wv *= -1
+        min_idx, max_idx = max_idx, min_idx
+
+    spike_max = np.argmax(waveforms, axis=1)
+
+    new_waveforms = np.empty(waveforms.shape)
+    new_waveforms.fill(np.nan)
+
+    unique_mx = np.unique(spike_max)
+
+    for uni_ix in unique_mx:
+        diff_idx = max_idx - uni_ix
+        spk_msk = spike_max == uni_ix
+
+        if diff_idx == 0:
+            new_waveforms[spk_msk, :] = waveforms[spk_msk, :]
+        elif diff_idx > 0:
+            # indiv peak too early
+            new_waveforms[spk_msk, diff_idx:] = waveforms[spk_msk, :-diff_idx]
+
+            if not pad_nans:
+                new_waveforms[spk_msk, :diff_idx] = (
+                    waveforms[spk_msk, [0]][:, None])
+        else:
+            # indiv peak too late
+            new_waveforms[spk_msk, :diff_idx] = waveforms[spk_msk, -diff_idx:]
+
+            if not pad_nans:
+                new_waveforms[spk_msk, diff_idx:] = (
+                    waveforms[spk_msk, [diff_idx - 1]][:, None])
+
+    return new_waveforms
+
+
+def realign_waveforms(spk, min_spikes=10):
+    '''Realign waveforms based on their average. Works in place.
+
+    Parameters
+    ----------
+    spk :  pylabianca.Spikes | pylabianca.SpikeEpochs
+        Spikes or SpikeEpochs object.
+    '''
+    for cell_idx in range(len(spk.cell_names)):
+        waveforms = spk.waveform[cell_idx]
+        if waveforms is not None and len(waveforms) > min_spikes:
+            waveforms = _realign_waveforms(waveforms)
+            spk.waveform[cell_idx] = waveforms
