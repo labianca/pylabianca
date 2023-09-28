@@ -225,7 +225,7 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
 def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
                                       density=True, y_range=None, times=None):
     '''Helps in calculating 2d density histogram of the waveforms.'''
-    from pylabianca.utils import _deal_with_picks
+    from .utils import _deal_with_picks
 
     pick = _deal_with_picks(spk, pick)[0]
     n_spikes, n_samples = spk.waveform[pick].shape
@@ -644,3 +644,67 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
     dns = vals.mean()
 
     return dns
+
+
+def auto_multipanel(n_to_show, ax=None):
+    '''Create a multipanel figure that fits at least ``n_to_show`` axes.'''
+    n = np.sqrt(n_to_show)
+
+    if ax is None:
+        n *= 1.25
+        n_cols = int(np.round(n))
+        n_rows = int(np.ceil(n_to_show / n))
+        fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(8, 6),
+                               constrained_layout=True)
+
+    return ax
+
+
+def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
+             max_isi=None, ax=None):
+    '''Plot inter-spike intervals (ISIs).
+    
+    Parameters
+    ----------
+    
+    Returns
+    -------
+    '''
+    from .utils import _deal_with_picks
+    from .spikes import Spikes
+    
+    msg = 'Currently only Spikes are supported in ``plot_isi()``.'
+    assert(isinstance(spk, Spikes)), msg
+
+    assert unit in ['s', 'ms']
+    picks = _deal_with_picks(spk, picks)
+    n_picks = len(picks)
+    ax = auto_multipanel(n_picks)
+
+    div = 1000 if unit == 'ms' else 1
+    if max_isi is None:
+        max_isi = 100 if unit == 'ms' else 0.1
+
+    orig_ax = ax.copy()
+    axes = ax.ravel()
+    n_axes = len(axes)
+    for idx, unit_idx in enumerate(picks):
+        stamps = spk.timestamps[unit_idx]
+
+        if len(stamps) > min_spikes:
+            isi = np.diff(stamps / (spk.sfreq / div))
+            isi = isi[isi < max_isi]
+            n_isi = len(isi)
+            use_bins = (bins if bins is not None
+                        else min(250, int(n_isi / 100)))
+            axes[idx].hist(isi, bins=use_bins)
+            axes[idx].set_ylabel('Count', fontsize=12)
+            axes[idx].set_xlabel(f'ISI ({unit})', fontsize=12)
+        axes[idx].set_title(spk.cell_names[unit_idx], fontsize=12)
+
+    if n_axes > n_picks:
+        for ix in range(n_picks, n_axes):
+            axes[ix].set_xticks([])
+            axes[ix].set_yticks([])
+
+    return orig_ax
