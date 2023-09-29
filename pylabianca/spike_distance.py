@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 
 from . import utils, viz
@@ -101,8 +102,181 @@ def compute_spike_coincidence_matrix(spk, spk2=None, tol=0.002, progress=True):
     return similarity
 
 
-def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
-                        kernel_winlen=0.025):
+def _construct_bins(sfreq, max_lag, bins=None):
+    '''Construct bins for cross-correlation histogram.
+
+    Parameters
+    ----------
+    sfreq : float
+        Sampling frequency of the bins. The bin width will be ``1 / sfreq``
+        seconds. Used only when ``bins is None``.
+    max_lag : float
+        Maximum lag in seconds. Used only when ``bins is None``.
+    bins : numpy array | None
+        Array representing edges of the histogram bins. If ``None`` (default)
+        the bins are constructed based on ``sfreq`` and ``max_lag``.
+
+    Returns
+    -------
+    bins : numpy array
+        Array representing edges of the histogram bins.
+    '''
+    if bins is not None:
+        return bins
+    else:
+        smp_time = 1 / sfreq
+        bins = np.arange(-max_lag, max_lag + smp_time / 2, step=smp_time)
+
+        # check if middle bin is zero-centered
+        bin_width = np.diff(bins[:2])[0]
+        mid_bin = np.abs(bins).argmin()
+        diff_to_centered = np.abs(bins[mid_bin] - (bin_width / 2))
+
+        if diff_to_centered > (bin_width / 10):
+            bins = bins - diff_to_centered
+            bins = np.concatenate([bins, [bins[-1] + bin_width]])
+
+    return bins
+
+
+# TODO: add option to shuffle trials?
+# TODO: add option to shift trials?
+def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
+                       bins=None):
+    '''
+    Compute cross-correlation histogram between two cells of SpikeEpochs.
+
+    Parameters
+    ----------
+    spk : pylabianca.spikes.SpikeEpochs
+        SpikeEpochs object to use.
+    sfreq : float
+        Sampling frequency of the bins. The bin width will be ``1 / sfreq``
+        seconds. Used only when ``bins is None``. Defaults to ``500.``.
+    max_lag : float
+        Maximum lag in seconds. Used only when ``bins is None``. Defaults
+        to ``0.2``.
+    bins : numpy array | None
+        Array representing edges of the histogram bins. If ``None`` (default)
+        the bins are constructed based on ``sfreq`` and ``max_lag``.
+
+    Returns
+    -------
+    bins : numpy array
+        Array representing edges of the histogram bins.
+    '''
+    from .utils import _get_trial_boundaries
+
+    bins = _construct_bins(sfreq, max_lag, bins=bins)
+    max_tri = max([tri.max() for tri in spk.trial])
+    xcorr = np.zeros((max_tri + 1, len(bins) - 1), dtype=int)
+
+    # TODO: this could be done once at the beginning
+    trial_boundaries1, tri_num1 = _get_trial_boundaries(spk, cell_idx1)
+    if cell_idx1 == cell_idx2:
+        autocorr = True
+        trial_boundaries2, tri_num2 = trial_boundaries1, tri_num1
+    else:
+        autocorr = False
+        trial_boundaries2, tri_num2 = _get_trial_boundaries(spk, cell_idx2)
+
+    idx2 = 0
+    for idx1, tri in enumerate(tri_num1):
+
+        if not autocorr:
+            # check if the other unit has spikes in this trial
+            has_tri = tri in tri_num2[idx2:]
+            if has_tri:
+                idx2 = np.where(tri_num2[idx2:] == tri)[0][0] + idx2
+            else:
+                continue
+
+        times1 = spk.time[cell_idx1][
+            trial_boundaries1[idx1]:trial_boundaries1[idx1 + 1]]
+
+        if autocorr:
+            times2 = times1
+        else:
+            times2 = spk.time[cell_idx2][
+                trial_boundaries2[idx2]:trial_boundaries2[idx2 + 1]]
+
+        time_diffs = times2[:, None] - times1[None, :]
+        n_diffs = time_diffs.shape[0]
+        ind = np.diag_indices(n_diffs)
+
+        if autocorr:
+            time_diffs[ind] = np.nan
+
+        time_diffs = time_diffs.ravel()
+        this_hist, _ = np.histogram(time_diffs, bins=bins)
+        xcorr[tri, :] = this_hist
+
+    return xcorr, bins
+
+
+def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
+                      bins=None):
+    '''FIXME'''
+    from .spikes import SpikeEpochs
+    from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
+    assert isinstance(spk, SpikeEpochs)
+
+    bins = _construct_bins(sfreq, max_lag, bins=bins)
+
+    picks = _deal_with_picks(spk, picks)
+    if picks2 is None:
+        # picks and picks2 has to be all combinations of picks
+        pick_pairs = itertools.product(picks, picks)
+    else:
+        picks2 = _deal_with_picks(spk, picks2)
+        pick_pairs = itertools.product(picks, picks2)
+
+    cell = list()  # pair name, but set as cell attr in xarray
+    cell1_idx, cell2_idx = list(), list()
+    cell1_name = list()
+    cell2_name = list()
+    auto = list()  # is autocorrelation
+
+    # LOOP
+    xcorrs = list()
+    for idx1, idx2  in pick_pairs:
+        # compute xcorr histogram for cell pair
+        xcorr, _ = _xcorr_hist_trials(spk, idx1, idx2, sfreq=sfreq,
+                                      max_lag=max_lag, bins=bins)
+
+        name1 = spk.cell_names[idx1]
+        name2 = spk.cell_names[idx2]
+        is_auto = idx1 == idx2
+        name = f'{name1} x {name2}'
+
+        cell.append(name)
+        cell1_name.append(name1)
+        cell2_name.append(name2)
+        cell1_idx.append(idx1)
+        cell2_idx.append(idx2)
+
+        xcorrs.append(xcorr)
+
+    # stack cell pairs as first dimension
+    xcorrs = np.stack(xcorrs, axis=0)
+
+    # calc bin_centers
+    bin_widths = np.diff(bins)
+    bin_centers = bins[:-1] + bin_widths
+
+    # construct xarr
+    xcorrs = _turn_spike_rate_to_xarray(
+        bin_centers, xcorrs, spk, cell_names=cell)
+    xcorr.name = 'count'
+
+    # add cell1_idx etc.
+    # ...
+
+    return xcorrs
+
+
+def _spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
+                         kernel_winlen=0.025):
     from .spike_rate import _spike_density
 
     # create kernel
@@ -139,8 +313,8 @@ def spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
     return xcorr
 
 
-def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
-                         kernel_winlen=0.025, shift_predictor=False):
+def _spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
+                          kernel_winlen=0.025, shift_predictor=False):
     from scipy.signal import correlate
     import quantities as pq
     from elephant.conversion import BinnedSpikeTrain
@@ -194,7 +368,7 @@ def spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
     return cch
 
 
-def xcorr(x, y, maxlag=None):
+def xcorr_signal(x, y, maxlag=None):
     '''Compute un-normalized cross-correlation for required max lag.
 
     This is equivalent to convolution but without reversing the kernel.
@@ -256,7 +430,7 @@ def shuffled_spike_xcorr(spk, cell_idx1, cell_idx2, sfreq=500,
 
     # turn spikes into continuous signal
     cnt = correlate(concat, gauss[None, :], mode='same')
-    lags, corr = xcorr(cnt[0], cnt[1], maxlag=max_lag_smp)
+    lags, corr = xcorr_signal(cnt[0], cnt[1], maxlag=max_lag_smp)
     lags = lags / sfreq
 
     if n_shuffles > 0:
@@ -275,7 +449,7 @@ def shuffled_spike_xcorr(spk, cell_idx1, cell_idx2, sfreq=500,
 
             # turn spikes into continuous signal
             cnt_shuffled = correlate(concat_shuffled, gauss, mode='same')
-            _, this_corr = xcorr(cnt1, cnt_shuffled, maxlag=max_lag_smp)
+            _, this_corr = xcorr_signal(cnt1, cnt_shuffled, maxlag=max_lag_smp)
             corr_shuffled[shuffle_idx] = this_corr
             pbar.update(1)
 
@@ -421,7 +595,6 @@ def drop_duplicated_units(spk, similarity, return_clusters=False,
         return drop
     else:
         return drop, clusters, counts, suspicious_idx
-
 
 
 # TODO: move to viz
