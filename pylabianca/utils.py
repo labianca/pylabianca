@@ -335,15 +335,20 @@ def _realign_waveforms(waveforms, pad_nans=False):
     return new_waveforms
 
 
-def realign_waveforms(spk, min_spikes=10):
-    '''Realign waveforms based on their average. Works in place.
+def realign_waveforms(spk, picks=None, min_spikes=10):
+    '''Realign single waveforms compared to average waveform. Works in place.
 
     Parameters
     ----------
     spk :  pylabianca.Spikes | pylabianca.SpikeEpochs
         Spikes or SpikeEpochs object.
+    picks : int | str | list-like of int | list-like of str
+        The units to realign waveforms for.
+    min_spikes : int
+        Minimum number of spikes to try realigning the waveform.
     '''
-    for cell_idx in range(len(spk.cell_names)):
+    picks = _deal_with_picks(spk, picks)
+    for cell_idx in picks:
         waveforms = spk.waveform[cell_idx]
         if waveforms is not None and len(waveforms) > min_spikes:
             waveforms = _realign_waveforms(waveforms)
