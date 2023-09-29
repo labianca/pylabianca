@@ -529,7 +529,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 
 
 class Spikes(object):
-    def __init__(self, timestamps, sfreq, cell_names=None, metadata=None,
+    def __init__(self, timestamps, sfreq, cell_names=None,
                  cellinfo=None, waveform=None, waveform_time=None):
         '''Create ``Spikes`` object for convenient storage, analysis and
         visualization of spikes data.
@@ -548,8 +548,6 @@ class Spikes(object):
             cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
             Optional, the default (``None``) names the first cell
             ``'cell000'``, the second cell ``'cell001'`` and so on.
-        metadata : pandas.DataFrame | None
-            DataFrame with trial-level metadata.
         cellinfo : pandas.DataFrame | None
             Additional cell information.
         waveform : list of np.ndarray
@@ -567,7 +565,6 @@ class Spikes(object):
                                    for idx in range(n_cells)])
 
         self.cell_names = cell_names
-        self.metadata = metadata
         self.cellinfo = cellinfo
 
         if waveform is not None:
@@ -637,16 +634,6 @@ class Spikes(object):
                           cell_names=self.cell_names, cellinfo=self.cellinfo,
                           n_trials=len(events), waveform=waveforms,
                           waveform_time=self.waveform_time)
-
-        # TODO: this should be removed later on, as Spike metadata should not
-        #       be supported, metadata should be provided during or after
-        #       epoching
-        if self.metadata is not None:
-            if spk.n_trials == self.metadata.shape[0]:
-                spk.metadata = self.metadata
-            else:
-                pass
-                # raise warning ...
 
         return spk
 
