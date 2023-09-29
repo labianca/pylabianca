@@ -295,7 +295,7 @@ def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50,
         return output
 
 
-def _realign_waveforms(waveforms, pad_nans=False):
+def _realign_waveforms(waveforms, pad_nans=False, reject=True):
     mean_wv = np.nanmean(waveforms, axis=0)
     min_idx, max_idx = np.argmin(mean_wv), np.argmax(mean_wv)
 
@@ -304,12 +304,27 @@ def _realign_waveforms(waveforms, pad_nans=False):
         mean_wv *= -1
         min_idx, max_idx = max_idx, min_idx
 
-    spike_max = np.argmax(waveforms, axis=1)
+    # checking slope
+    # --------------
+    if reject:
+        slope = np.nansum(np.diff(waveforms[:, :max_idx], axis=1), axis=1)
+        bad_slope = slope < 0
 
+    # realigning
+    # ----------
+    spike_max = np.argmax(waveforms, axis=1)
     new_waveforms = np.empty(waveforms.shape)
     new_waveforms.fill(np.nan)
 
     unique_mx = np.unique(spike_max)
+
+    if reject:
+        n_samples = waveforms.shape[1]
+        max_dist = int(n_samples / 5)
+        dist_to_peak = np.abs(spike_max - max_idx)
+        bad_peak_dist = dist_to_peak > max_dist
+
+        unique_mx = unique_mx[np.abs(unique_mx - max_idx) <= max_dist]
 
     for uni_ix in unique_mx:
         diff_idx = max_idx - uni_ix
@@ -332,10 +347,13 @@ def _realign_waveforms(waveforms, pad_nans=False):
                 new_waveforms[spk_msk, diff_idx:] = (
                     waveforms[spk_msk, [diff_idx - 1]][:, None])
 
-    return new_waveforms
+    waveforms_to_reject = (np.where(bad_slope | bad_peak_dist)[0]
+                           if reject else None)
+
+    return new_waveforms, waveforms_to_reject
 
 
-def realign_waveforms(spk, picks=None, min_spikes=10):
+def realign_waveforms(spk, picks=None, min_spikes=10, reject=True):
     '''Realign single waveforms compared to average waveform. Works in place.
 
     Parameters
@@ -346,13 +364,28 @@ def realign_waveforms(spk, picks=None, min_spikes=10):
         The units to realign waveforms for.
     min_spikes : int
         Minimum number of spikes to try realigning the waveform.
+    reject : bool
+        Also remove waveforms and
     '''
     picks = _deal_with_picks(spk, picks)
     for cell_idx in picks:
         waveforms = spk.waveform[cell_idx]
         if waveforms is not None and len(waveforms) > min_spikes:
-            waveforms = _realign_waveforms(waveforms)
+            waveforms, reject_idx = _realign_waveforms(waveforms)
             spk.waveform[cell_idx] = waveforms
+
+            # reject spikes
+            # TODO: could be made a separate function one day
+            n_reject = len(reject_idx)
+            if n_reject > 0:
+                msg = (f'Removing {n_reject} bad waveforms for cell'
+                       f'{spk.cell_names[cell_idx]}.')
+                print(msg)
+
+                spk.waveform[cell_idx] = np.delete(
+                    spk.waveform[cell_idx], reject_idx, axis=0)
+                spk.timestamps[cell_idx] = np.delete(
+                    spk.timestamps[cell_idx], reject_idx)
 
 
 def _get_trial_boundaries(spk, cell_idx):
