@@ -653,7 +653,7 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
     return dns
 
 
-def auto_multipanel(n_to_show, ax=None):
+def auto_multipanel(n_to_show, ax=None, figsize=None):
     '''Create a multipanel figure that fits at least ``n_to_show`` axes.'''
     n = np.sqrt(n_to_show)
 
@@ -661,7 +661,15 @@ def auto_multipanel(n_to_show, ax=None):
         n *= 1.25
         n_cols = int(np.round(n))
         n_rows = int(np.ceil(n_to_show / n))
-        fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=(8, 6),
+
+        if figsize is None:
+            if n_cols == 1 and n_rows == 1:
+                figsize = None
+            elif n_rows > 2 or n_cols > 2:
+                # some calculation
+                figsize = (n_cols * 1.35 * 1.5, n_rows * 1.5)
+
+        fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=figsize,
                                constrained_layout=True)
 
     return ax
