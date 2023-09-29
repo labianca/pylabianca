@@ -67,7 +67,7 @@ def read_filedtrip(fname, data_name='spike', kind='raw', waveform=True):
         spk = _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo,
                                   waveform, waveform_time)
     elif kind == 'raw':
-        spk = _read_ft_spikes_raw(data, cell_names, trialinfo, cellinfo,
+        spk = _read_ft_spikes_raw(data, cell_names, cellinfo,
                                   waveform, waveform_time)
 
     spk.filename = fname
@@ -105,11 +105,9 @@ def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
     return spk
 
 
-# TODO - [ ] trialinfo likely shouldn't be used in raw format ...
-def _read_ft_spikes_raw(data, cell_names, trialinfo, cellinfo, waveform,
+def _read_ft_spikes_raw(data, cell_names, cellinfo, waveform,
                         waveform_time):
     '''Read raw spikes fieldtrip format.
-
 
     Returns
     -------
@@ -117,20 +115,13 @@ def _read_ft_spikes_raw(data, cell_names, trialinfo, cellinfo, waveform,
         Spikes object.
 
     '''
-
     timestamps = data['timestamp'].item()
     timestamps = _check_timestamps(timestamps)
     sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
 
-    # This seems tohave been specific to gammbur, removed
-    # if 'events' in data.dtype.names:
-    #     events = data['events'].item().astype('int64')
-    # else:
-    #     events = None
-
     # create Spikes
     spk = Spikes(timestamps, sfreq, cell_names=cell_names,
-                 metadata=trialinfo, cellinfo=cellinfo, waveform=waveform,
+                 cellinfo=cellinfo, waveform=waveform,
                  waveform_time=waveform_time)
     return spk
 
