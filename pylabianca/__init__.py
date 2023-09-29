@@ -1,4 +1,4 @@
-from . import (io, utils, co_spikes, decoding, localize, selectivity, spikes,
+from . import (io, utils, decoding, localize, selectivity, spikes,
                spike_distance, stats, viz)
 
 from .viz import plot_spike_rate, plot_raster, plot_spikes
