@@ -168,11 +168,10 @@ def check_modify_progressbar(pbar, total=None):
 
 
 # TODO:
-# - [x] ! fix x axis units !
 # - [ ] kind='line' ?
 # - [ ] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
-def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
+def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
                   y_bins=100, times=None):
     '''Plot waveform heatmap for one cell.
 
@@ -198,27 +197,35 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
     ax : matplotlib.Axes
         Axis with the waveform plot.
     '''
+    from .utils import _deal_with_picks
 
-    hist, _, ybins, time_edges = _calculate_waveform_density_image(
-        spk, pick, upsample, y_bins, times=times
-    )
-    max_alpha = np.percentile(hist[hist > 0], 45)
-    max_lim = np.percentile(hist[hist > 0], 99)
+    picks = _deal_with_picks(spk, picks)
+    n_picks = len(picks)
+    ax = auto_multipanel(n_picks)
+    use_ax = _simplify_axes(ax)
 
-    alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
-    alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
-    alpha_sum[alpha_sum > 1] = 1
+    time_unit = 'samples' if times is None else 'ms'
 
-    if ax is None:
-        _, ax = plt.subplots()
+    for idx, unit_idx in enumerate(picks):
+        hist, _, ybins, time_edges = _calculate_waveform_density_image(
+            spk, unit_idx, upsample, y_bins, times=times
+        )
+        max_alpha = np.percentile(hist[hist > 0], 45)
+        max_lim = np.percentile(hist[hist > 0], 99)
 
-    ax.imshow(hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
-              extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
-              aspect='auto')
-    if labels:
-        time_unit = 'samples' if times is None else 'ms'
-        ax.set_xlabel(f'Time ({time_unit})', fontsize=14)
-        ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
+        alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
+        alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
+        alpha_sum[alpha_sum > 1] = 1
+
+        use_ax[idx].imshow(
+            hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
+            extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
+            aspect='auto'
+        )
+        if labels:
+            use_ax[idx].set_xlabel(f'Time ({time_unit})', fontsize=14)
+            use_ax[idx].set_ylabel('Amplitude ($\mu$V)', fontsize=14)
+
     return ax
 
 
@@ -660,6 +667,16 @@ def auto_multipanel(n_to_show, ax=None):
     return ax
 
 
+def _simplify_axes(ax):
+    if isinstance(ax, list):
+        axes = np.array(ax)
+    elif isinstance(ax, np.ndarray):
+        axes = ax.ravel()
+    else:
+        axes = np.array([ax])
+    return axes
+
+
 def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
              max_isi=None, ax=None):
     '''Plot inter-spike intervals (ISIs).
@@ -703,13 +720,7 @@ def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
     if max_isi is None:
         max_isi = 100 if unit == 'ms' else 0.1
 
-    if isinstance(ax, list):
-        axes = np.array(ax)
-    elif isinstance(ax, np.ndarray):
-        axes = ax.ravel()
-    else:
-        axes = np.array([ax])
-
+    axes = _simplify_axes(ax)
     n_axes = len(axes)
     for idx, unit_idx in enumerate(picks):
         stamps = spk.timestamps[unit_idx]

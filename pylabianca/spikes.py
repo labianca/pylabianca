@@ -400,7 +400,7 @@ class SpikeEpochs():
                            metadata=new_metadata, cellinfo=new_cellinfo,
                            waveform=waveform)
 
-    def plot_waveform(self, pick=0, upsample=False, ax=None, labels=True):
+    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -415,7 +415,7 @@ class SpikeEpochs():
             Axis to plot to. By default opens a new figure.
         '''
         from .viz import plot_waveform
-        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
+        return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
                              labels=labels, times=self.waveform_time)
 
 
@@ -744,7 +744,7 @@ class Spikes(object):
         self = _sort_spikes(self, by)
         return self
 
-    def plot_waveform(self, pick=0, upsample=False, ax=None, labels=True):
+    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -764,7 +764,7 @@ class Spikes(object):
             Axis with waveform heatmap.
         '''
         from .viz import plot_waveform
-        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
+        return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
                              labels=labels, times=self.waveform_time)
 
     def to_epochs(self, pad_timestamps=10_000):
