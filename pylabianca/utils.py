@@ -34,8 +34,8 @@ def _deal_with_picks(spk, picks):
     return picks
 
 
-# TODO: consider changing the array dim order to: trials, cells, times
-#       (mne-python-like)
+# CONSIDER: changing the array dim order to: trials, cells, times
+#           (mne-python-like)
 def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
                                tri=None, copy_cellinfo=True):
     '''Turn spike rate data to xarray.
@@ -48,12 +48,14 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         describing the time window if static window was used.
     frate : numpy array
         Numpy array with firing rate, with the following dimensions:
+
         * 3d ``n_cells x n_trials x n_times`` (``cell_names`` has to be not
           None)
         * 2d ``n_cells x n_trials`` (``cell_names`` not None and ``times``
           as string)
         * 2d ``n_trials x n_times`` (``cell_names`` is None and ``times``
           is an array)
+
     spike_epochs : SpikeEpochs object
         SpikeEpochs object.
     cell_names : list-like of str | None
