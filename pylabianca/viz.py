@@ -654,6 +654,25 @@ def auto_multipanel(n_to_show, ax=None, figsize=None):
         n *= 1.25
         n_cols = int(np.round(n))
         n_rows = int(np.ceil(n_to_show / n))
+        n_left = (n_cols * n_rows) - n_to_show
+
+        # check if one less row works better
+        n_cols_try,  = n_cols + 1, n_rows - 1
+        n_left_try1 = (n_cols_try * n_rows_try) - n_to_show
+        try1_good = n_left_try1 > 0 and l_left_try1 < n_left
+        n_left_try1 += (1 - try1_good) * 100
+
+        # also check if one less column is better
+        n_cols_try2, n_rows_try2 = n_cols - 1, n_rows + 1
+        n_left_try2 = (n_cols_try2 * n_rows_try2) - n_to_show
+        try2_good = n_left_try2 > 0 and l_left_try2 < n_left
+        n_left_try2 += (1 - try2_good) * 100
+
+        if try1_good or try2_good:
+            if n_left_try2 < n_left_try1:
+                n_cols, n_rows = n_cols_try2, n_rows_try2
+            else:
+                n_cols, n_rows = n_cols_try, n_rows_try
 
         if figsize is None:
             if n_cols == 1 and n_rows == 1:
