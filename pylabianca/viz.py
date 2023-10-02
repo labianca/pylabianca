@@ -478,7 +478,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     ax : matplotlib.Axes
         Axis with the plot.
     '''
-    import sarna
+    from borsar.viz import highlight
     try:
         import xarray as xr
         has_xarray = True
@@ -522,19 +522,12 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         ax.set_ylim([ylm[0], ylm[1] + 2 * y_step])
 
         sig_idx = np.where(pvals_significant)[0]
-
         sig_clusters = [clusters[ix] for ix in sig_idx]
 
-        try:
-            sarna.viz.highlight(
-                x_coords, sig_clusters, axis=ax,
-                bottom_bar=True, bottom_extend=bottom_extend
-            )
-        except TypeError:
-            sarna.viz.highlight(
-                x_coords, sig_clusters, ax=ax,
-                bottom_bar=True, bottom_extend=bottom_extend
-            )
+        sarna.viz.highlight(
+            x_coords, sig_clusters, ax=ax,
+            bottom_bar=True, bottom_extend=bottom_extend
+        )
 
         texts = list()
         for ix in clusters_x_sorting:
