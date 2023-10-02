@@ -148,7 +148,10 @@ def parse_header(raw_hdr):
     # Read the parameters, assuming "-PARAM_NAME PARAM_VALUE" format
     for line_idx, line in enumerate(hdr_lines[parse_rest_from:]):
         try:
-            name, value = line[1:].split()  # Ignore the dash and split PARAM_NAME and PARAM_VALUE
+            # Ignore the dash and split PARAM_NAME and PARAM_VALUE
+            parts = line[1:].split()
+            name = parts[0]
+            value = ' '.join(parts[1:])
             if not new_way or (line_idx + parse_rest_from) not in time_fields:
                 hdr[name] = value
         except:
