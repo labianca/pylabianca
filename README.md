@@ -9,5 +9,9 @@ pip install git+https://github.com/labianca/pylabianca
 
 ## docs
 Online docs are currently under construction.  
-See the [introductory notebook](doc/intro_overview.ipynb) for a general overview using human intracranial spike data (sorted with Osort).  
-Another broad overview uses fieldtrip sanoke spike data from non-human primates: [notebook](doc/fieldtrip_example.ipynb)
+
+You can see the following jupyter notebook examples for an overview of `pylabianca` features.
+* [introductory notebook](doc/intro_overview.ipynb) - a general overview using human intracranial spike data (sorted with Osort).  
+* [FiedTrip data example notebook](doc/fieldtrip_example.ipynb) - another broad overview using fieldtrip sample spike data from non-human primates.
+
+To better understand the data formats read natively by pylabianca (and how to read other formats) see [data formats page](doc/data_formats.md).
