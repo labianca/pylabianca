@@ -10,7 +10,7 @@ from sklearn.utils.multiclass import unique_labels
 def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
                  n_jobs=1, time_generalization=False, random_state=None,
                  clf=None, n_pca=0, feature_selection=None):
-    '''Perform decoding analysis with a linear SVM classifier.
+    '''Perform decoding analysis.
 
     Parameters
     ----------
@@ -454,6 +454,7 @@ def correlation(X1, X2):
 
 # TODO: add option to correlate with single-trials, not only class-averages
 class maxCorrClassifier(BaseEstimator):
+    '''Simple implementation of maxCorr classifier.'''
     def __init__(self):
         pass
 
