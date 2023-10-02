@@ -8,5 +8,6 @@ pip install git+https://github.com/labianca/pylabianca
 ```
 
 ## docs
-See the [introductory notebook](doc/intro_overview.ipynb) for a general overview using Osort output.
+Online docs are currently under construction.
+See the [introductory notebook](doc/intro_overview.ipynb) for a general overview using Osort output.  
 Another broad overview uses fieldtrip sanoke spike data from non-human primates: [notebook](doc/fieldtrip_example.ipynb)
