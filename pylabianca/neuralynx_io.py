@@ -70,7 +70,28 @@ MILLIVOLT_SCALING = (1000, u'mV')
 MICROVOLT_SCALING = (1000000, u'µV')
 
 
-def read_header(fid):
+def read_header(filename):
+    '''Reads and parses the header of a Neuralynx file.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the file.
+
+    Returns
+    -------
+    header : dict
+        Dictionary representing the header.
+    '''
+    file_path = os.path.abspath(file_path)
+    with open(file_path, 'rb') as fid:
+        raw_header = read_raw_header(fid)
+
+    header = parse_header(raw_header)
+    return header
+
+
+def read_raw_header(fid):
     # Read the raw header data (16 kb) from the file object fid. Restores the position in the file object after reading.
     pos = fid.tell()
     fid.seek(0)
@@ -243,7 +264,7 @@ def load_ncs(file_path, load_time=True, rescale_data=True, signal_scaling=MICROV
     # Load the given file as a Neuralynx .ncs continuous acquisition file and extract the contents
     file_path = os.path.abspath(file_path)
     with open(file_path, 'rb') as fid:
-        raw_header = read_header(fid)
+        raw_header = read_raw_header(fid)
         records = read_records(fid, NCS_RECORD)
 
     header = parse_header(raw_header)
@@ -285,7 +306,7 @@ def load_nev(file_path):
     # Load the given file as a Neuralynx .nev event file and extract the contents
     file_path = os.path.abspath(file_path)
     with open(file_path, 'rb') as fid:
-        raw_header = read_header(fid)
+        raw_header = read_raw_header(fid)
         records = read_records(fid, NEV_RECORD)
 
     header = parse_header(raw_header)
