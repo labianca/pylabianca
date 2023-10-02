@@ -183,7 +183,7 @@ def read_combinato(path, label=None, alignment='both'):
     '''Read spikes from combinato sorting output.
 
     Note that groups are read as single units, the class information is stored
-    inside the Spikes object.
+    inside the Spikes object in `.cellinfo` attribute.
 
     Parameters
     ----------
