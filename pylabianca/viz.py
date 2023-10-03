@@ -650,37 +650,41 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
 def auto_multipanel(n_to_show, ax=None, figsize=None):
     '''Create a multipanel figure that fits at least ``n_to_show`` axes.'''
     n = np.sqrt(n_to_show)
+    n_left = 0
 
     if ax is None:
         n *= 1.25
         n_cols = int(np.round(n))
         n_rows = int(np.ceil(n_to_show / n))
-        n_left = (n_cols * n_rows) - n_to_show
 
-        # check if one less row works better
-        n_cols_try,  = n_cols + 1, n_rows - 1
-        n_left_try1 = (n_cols_try * n_rows_try) - n_to_show
-        try1_good = n_left_try1 > 0 and l_left_try1 < n_left
-        n_left_try1 += (1 - try1_good) * 100
+        if n_to_show > 1:
+            n_left = (n_cols * n_rows) - n_to_show
 
-        # also check if one less column is better
-        n_cols_try2, n_rows_try2 = n_cols - 1, n_rows + 1
-        n_left_try2 = (n_cols_try2 * n_rows_try2) - n_to_show
-        try2_good = n_left_try2 > 0 and l_left_try2 < n_left
-        n_left_try2 += (1 - try2_good) * 100
+            # check if one less row works better
+            n_cols_try, n_rows_try = n_cols + 1, n_rows - 1
+            n_left_try1 = (n_cols_try * n_rows_try) - n_to_show
+            try1_good = n_left_try1 > 0 and n_left_try1 < n_left
+            n_left_try1 += (1 - try1_good) * 100
 
-        if try1_good or try2_good:
-            if n_left_try2 < n_left_try1:
-                n_cols, n_rows = n_cols_try2, n_rows_try2
-            else:
-                n_cols, n_rows = n_cols_try, n_rows_try
+            # also check if one less column is better
+            n_cols_try2, n_rows_try2 = n_cols - 1, n_rows + 1
+            n_left_try2 = (n_cols_try2 * n_rows_try2) - n_to_show
+            try2_good = n_left_try2 > 0 and n_left_try2 < n_left
+            n_left_try2 += (1 - try2_good) * 100
 
-        if figsize is None:
-            if n_cols == 1 and n_rows == 1:
-                figsize = None
-            elif n_rows > 2 or n_cols > 2:
-                # some calculation
-                figsize = (n_cols * 1.35 * 1.5, n_rows * 1.5)
+            if try1_good or try2_good:
+                if n_left_try2 < n_left_try1:
+                    n_cols, n_rows = n_cols_try2, n_rows_try2
+                else:
+                    n_cols, n_rows = n_cols_try, n_rows_try
+
+            n_left = (n_cols * n_rows) - n_to_show
+            if figsize is None:
+                if n_cols == 1 and n_rows == 1:
+                    figsize = None
+                elif n_rows > 2 or n_cols > 2:
+                    # some calculation
+                    figsize = (n_cols * 1.35 * 1.5, n_rows * 1.5)
 
         fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=figsize,
                                constrained_layout=True)
