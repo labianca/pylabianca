@@ -223,8 +223,9 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
             aspect='auto'
         )
         if labels:
-            use_ax[idx].set_xlabel(f'Time ({time_unit})', fontsize=14)
-            use_ax[idx].set_ylabel('Amplitude ($\mu$V)', fontsize=14)
+            use_ax[idx].set_xlabel(f'Time ({time_unit})')
+            use_ax[idx].set_ylabel('Amplitude ($\mu$V)')
+            use_ax[idx].set_title(spk.cell_names[unit_idx])
 
     return ax
 
