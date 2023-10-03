@@ -689,6 +689,11 @@ def auto_multipanel(n_to_show, ax=None, figsize=None):
         fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=figsize,
                                constrained_layout=True)
 
+        if n_left > 0:
+            for this_ax in ax.ravel()[-n_left:]:
+                this_ax.set_xticks([])
+                this_ax.set_yticks([])
+
     return ax
 
 
