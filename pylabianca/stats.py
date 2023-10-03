@@ -5,14 +5,14 @@ import numpy as np
 # CHANGE THE api - the first argument could be a list of arrays or an xarray
 def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
                      return_pvalue=True, return_distribution=True, n_jobs=1):
-    import sarna
+    import borsar
 
     n_groups = len(arrays)
     tail = 'both' if n_groups == 2 else 'pos'
-    stat_fun = sarna.cluster._find_stat_fun(n_groups=n_groups, paired=paired,
+    stat_fun = borsar.stats._find_stat_fun(n_groups=n_groups, paired=paired,
                                             tail=tail)
 
-    thresh, dist = sarna.cluster._compute_threshold_via_permutations(
+    thresh, dist = borsar.stats._compute_threshold_via_permutations(
         arrays, paired=paired, tail=tail, stat_fun=stat_fun,
         return_distribution=True, n_permutations=n_perm, progress=progress,
         n_jobs=n_jobs)
@@ -110,7 +110,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     pval : numpy.ndarray
         List of p values from anova.
     '''
-    from sarna.cluster import permutation_cluster_test_array
+    from borsar.cluster import permutation_cluster_test_array
 
     # TODO: check if theres is a condition dimension (if so -> paired)
     arrays = [arr.values for _, arr in frate.groupby(compare)]
