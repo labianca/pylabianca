@@ -201,7 +201,7 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
 
     picks = _deal_with_picks(spk, picks)
     n_picks = len(picks)
-    ax = auto_multipanel(n_picks)
+    ax = auto_multipanel(n_picks, ax=ax)
     use_ax = _simplify_axes(ax)
 
     time_unit = 'samples' if times is None else 'ms'
