@@ -115,7 +115,10 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
     return scores
 
 
-def run_decoding(arr, target, decode_across='time', n_splits=6, C=1.,
+# CONSIDER: decim=None by default, decim=1 as no decimation may be confusing
+# CONSIDER: supporting ``select`` to select conditions (useful only when a
+#           dictionary of xarrays is passed, so multiple subjects)
+def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
                  scoring='accuracy', n_jobs=1, time_generalization=False,
                  random_state=None, clf=None, n_pca=0, feature_selection=None):
     '''Perform decoding analysis using xarray as input.
@@ -132,6 +135,9 @@ def run_decoding(arr, target, decode_across='time', n_splits=6, C=1.,
         this dimension a separate decoding will be performed. The default is
         ``'time'`` - which slides the decoding classifier across the time
         dimension.
+    decim : int
+        Decimation for the ``decode_across`` dimension. Default's to ``1``,
+        which does not perform decimation.
     n_splits : int | str
         Number of cross-validation splits. If ``'loo'``, leave-one-out
         cross-validation is used.
@@ -164,13 +170,13 @@ def run_decoding(arr, target, decode_across='time', n_splits=6, C=1.,
         cross-validation folds).
     '''
     import xarray as xr
-    assert isinstance(arr, xarray.DataArray)
+    assert isinstance(arr, xr.DataArray)
     assert decode_across in arr.dims
 
-    orig_dims = arr.dims.tolist()
+    orig_dims = list(arr.dims)
 
-    X, y = frate_to_sklearn(frate, target=target, select=select,
-                            decim=decim)
+    X, y, time_dim = frate_to_sklearn(
+        arr, target=target, select=None, decim=decim)
     scores = run_decoding_array(
         X, y, n_splits=n_splits, C=C, scoring=scoring, n_jobs=n_jobs,
         time_generalization=time_generalization, random_state=random_state,
@@ -182,14 +188,14 @@ def run_decoding(arr, target, decode_across='time', n_splits=6, C=1.,
     coords = {'fold': np.arange(n_splits)}
     if time_generalization:
         dims = ['fold', 'train_' + decode_across, 'test_' + decode_across]
-        coords[dims[1]] = arr.coords[decode_across].values
-        coords[dims[2]] = arr.coords[decode_across].values
+        coords[dims[1]] = time_dim
+        coords[dims[2]] = time_dim
     else:
         dims = ['fold'] + [decode_across]
-        coords[decode_across] = arr.coords[decode_across].values
+        coords[decode_across] = time_dim
 
     scores = xr.DataArray(
-        scores, dims=dims, coords=coords,
+        scores, dims=dims, coords=coords, name=name,
     )
     return scores
 
