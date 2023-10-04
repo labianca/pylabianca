@@ -367,6 +367,63 @@ def join_subjects(Xs, ys, random_state=None, shuffle=True):
     return X, y
 
 
+# CONSIDER: to not have to copy arr, we can allow `target` to get a vector of
+#           values
+def permute(arr, decoding_fun, target=None, n_permutations=200, n_jobs=1,
+            average_folds=True, arguments=dict()):
+    import pandas as pd
+    import xarray as xr
+
+    scores = list()
+    arr = arr.copy()  # we copy to modify target
+    target_coord = arr.coords[target].values
+
+    if 'target' not in arguments:
+        arguments['target'] = targets
+
+    if n_jobs > 1:
+        from joblib import Parallel, delayed
+
+        # perocess in parallel only at the top (permutation) level
+        arguments['n_jobs'] = 1
+
+        scores = Parallel(n_jobs=n_jobs)(
+            delayed(_do_permute)(
+                arr, decoding_fun, target_coord,
+                average_folds=average_folds,
+                arguments=arguments
+            )
+            for perm_idx in range(n_permutations)
+        )
+    else:
+        for _ in range(n_permutations):
+            score = _do_permute(
+                arr, decoding_fun, target_coord, average_folds=average_folds,
+                arguments=arguments)
+            scores.append(score)
+
+    # join the results
+    if isinstance(scores[0], xr.DataArray):
+        perm = pd.Index(np.arange(n_permutations), name='permutation')
+        scores = xr.concat(scores, perm)
+    else:
+        scores = np.stack(scores, axis=0)
+    return scores
+
+
+def _do_permute(arr, decoding_fun, target_coord, average_folds=True,
+                arguments=dict()):
+    # permute target
+    np.random.shuffle(target_coord)
+
+    scr = decoding_fun(arr, **arguments)
+
+    if average_folds:
+        scr = scr.mean(dim='fold')
+
+    return scr
+
+
 def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
                       time=None, arguments=dict(), n_resamples=20, n_jobs=1,
                       permute=False, select_trials=None, decim=None):
