@@ -478,6 +478,7 @@ def _do_resample(Xs, ys, decoding_fun, arguments, permute=False, time=None):
 
 
 def _count_trials(Xs):
+    '''Check trials foe each array in the list.'''
     # check n trials (across subjects)
 
     n_tri = np.array([X.shape[0] for X in Xs])
@@ -488,6 +489,7 @@ def _count_trials(Xs):
 
 
 def shuffle_trials(*arrays, random_state=None):
+    '''Perform the same trial shuffling for multiple arrays.'''
     n_arrays = len(arrays)
     array_len = [len(x) for x in arrays]
     if n_arrays > 1:
@@ -507,6 +509,17 @@ def shuffle_trials(*arrays, random_state=None):
 
 
 def select_n_best_cells(X, y, select_n=1):
+    '''Select n best cells (used on training data).
+
+    Parameters
+    ----------
+    X : numpy.ndarray
+        sklearn X array: ``n_observations x n_features (x n_samples)``.
+    y : numpy.ndarray
+        Vector of class id to predict.
+    select_n : int
+        The number of best-performing units to select.
+    '''
     from scipy.stats import ttest_ind
 
     t_val_per_cell, _ = np.abs(ttest_ind(X[y], X[~y]))
@@ -523,13 +536,13 @@ def select_n_best_cells(X, y, select_n=1):
 
 
 def correlation(X1, X2):
+    '''Correlate two arrays.'''
     ncols1 = X1.shape[1]
     rval = np.corrcoef(X1, X2, rowvar=False)
     rval_sel = rval[:ncols1, ncols1:]
     return rval_sel
 
 
-# TODO: add option to correlate with single-trials, not only class-averages
 class maxCorrClassifier(BaseEstimator):
     '''Simple implementation of maxCorr classifier.'''
     def __init__(self):
