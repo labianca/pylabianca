@@ -6,10 +6,9 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 
 
-# TODO: decimation should likely be done outside of this function
-def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
-                 n_jobs=1, time_generalization=False, random_state=None,
-                 clf=None, n_pca=0, feature_selection=None):
+def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
+                       n_jobs=1, time_generalization=False, random_state=None,
+                       clf=None, n_pca=0, feature_selection=None):
     '''Perform decoding analysis.
 
     Parameters
@@ -113,6 +112,85 @@ def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
         scores.append(score)
 
     scores = np.stack(scores, axis=0)
+    return scores
+
+
+def run_decoding(arr, target, decode_across='time', n_splits=6, C=1.,
+                 scoring='accuracy', n_jobs=1, time_generalization=False,
+                 random_state=None, clf=None, n_pca=0, feature_selection=None):
+    '''Perform decoding analysis using xarray as input.
+
+    Parameters
+    ----------
+    arr : xarray.DataArray
+        The data to use in classification. Should contain a ``'trials'``
+        dimension and a dimension consistent with ``decode_across``.
+    target : str
+        Name of the variable to use as target.
+    decode_across : str
+        Name of the dimension to perform decoding across. For each element of
+        this dimension a separate decoding will be performed. The default is
+        ``'time'`` - which slides the decoding classifier across the time
+        dimension.
+    n_splits : int | str
+        Number of cross-validation splits. If ``'loo'``, leave-one-out
+        cross-validation is used.
+    C : float
+        Inverse of regularization strength.
+    scoring : str
+        Scoring metric.
+    n_jobs : int
+        Number of jobs to run in parallel.
+    time_generalization : bool
+        Whether to perform time generalization (training and testing also
+        on different time points).
+    random_state : int or None
+        Random state for cross-validation.
+    clf : None or sklearn classifier / pipeline
+        If None, a linear SVM classifier with standard scaling is used.
+    n_pca : int
+        Number of principal components to use for dimensionality reduction. If
+        0 (default), no dimensionality reduction is performed.
+    feature_selection : function | None
+        Function that takes ``X`` and ``y`` array from training set and
+        returns a boolean array of shape (n_features,) that indicates which
+        features to use for training. If None (default), no feature selection
+        is performed.
+
+    Returns
+    -------
+    scores : xarray
+        Decoding scores. The first dimension should consist of folds (separate
+        cross-validation folds).
+    '''
+    import xarray as xr
+    assert isinstance(arr, xarray.DataArray)
+    assert decode_across in arr.dims
+
+    orig_dims = arr.dims.tolist()
+
+    X, y = frate_to_sklearn(frate, target=target, select=select,
+                            decim=decim)
+    scores = run_decoding_array(
+        X, y, n_splits=n_splits, C=C, scoring=scoring, n_jobs=n_jobs,
+        time_generalization=time_generalization, random_state=random_state,
+        clf=clf, n_pca=n_pca, feature_selection=feature_selection
+    )
+
+    # combine into xarray output
+    name = scoring
+    coords = {'fold': np.arange(n_splits)}
+    if time_generalization:
+        dims = ['fold', 'train_' + decode_across, 'test_' + decode_across]
+        coords[dims[1]] = arr.coords[decode_across].values
+        coords[dims[2]] = arr.coords[decode_across].values
+    else:
+        dims = ['fold'] + [decode_across]
+        coords[decode_across] = arr.coords[decode_across].values
+
+    scores = xr.DataArray(
+        scores, dims=dims, coords=coords,
+    )
     return scores
 
 
