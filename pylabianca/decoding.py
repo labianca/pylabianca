@@ -6,10 +6,9 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 
 
-# TODO: decimation should likely be done outside of this function
-def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
-                 n_jobs=1, time_generalization=False, random_state=None,
-                 clf=None, n_pca=0, feature_selection=None):
+def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
+                       n_jobs=1, time_generalization=False, random_state=None,
+                       clf=None, n_pca=0, feature_selection=None):
     '''Perform decoding analysis.
 
     Parameters
@@ -113,6 +112,91 @@ def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
         scores.append(score)
 
     scores = np.stack(scores, axis=0)
+    return scores
+
+
+# CONSIDER: decim=None by default, decim=1 as no decimation may be confusing
+# CONSIDER: supporting ``select`` to select conditions (useful only when a
+#           dictionary of xarrays is passed, so multiple subjects)
+def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
+                 scoring='accuracy', n_jobs=1, time_generalization=False,
+                 random_state=None, clf=None, n_pca=0, feature_selection=None):
+    '''Perform decoding analysis using xarray as input.
+
+    Parameters
+    ----------
+    arr : xarray.DataArray
+        The data to use in classification. Should contain a ``'trials'``
+        dimension and a dimension consistent with ``decode_across``.
+    target : str
+        Name of the variable to use as target.
+    decode_across : str
+        Name of the dimension to perform decoding across. For each element of
+        this dimension a separate decoding will be performed. The default is
+        ``'time'`` - which slides the decoding classifier across the time
+        dimension.
+    decim : int
+        Decimation for the ``decode_across`` dimension. Default's to ``1``,
+        which does not perform decimation.
+    n_splits : int | str
+        Number of cross-validation splits. If ``'loo'``, leave-one-out
+        cross-validation is used.
+    C : float
+        Inverse of regularization strength.
+    scoring : str
+        Scoring metric.
+    n_jobs : int
+        Number of jobs to run in parallel.
+    time_generalization : bool
+        Whether to perform time generalization (training and testing also
+        on different time points).
+    random_state : int or None
+        Random state for cross-validation.
+    clf : None or sklearn classifier / pipeline
+        If None, a linear SVM classifier with standard scaling is used.
+    n_pca : int
+        Number of principal components to use for dimensionality reduction. If
+        0 (default), no dimensionality reduction is performed.
+    feature_selection : function | None
+        Function that takes ``X`` and ``y`` array from training set and
+        returns a boolean array of shape (n_features,) that indicates which
+        features to use for training. If None (default), no feature selection
+        is performed.
+
+    Returns
+    -------
+    scores : xarray
+        Decoding scores. The first dimension should consist of folds (separate
+        cross-validation folds).
+    '''
+    import xarray as xr
+    assert isinstance(arr, xr.DataArray)
+    assert decode_across in arr.dims
+
+    orig_dims = list(arr.dims)
+
+    X, y, time_dim = frate_to_sklearn(
+        arr, target=target, select=None, decim=decim)
+    scores = run_decoding_array(
+        X, y, n_splits=n_splits, C=C, scoring=scoring, n_jobs=n_jobs,
+        time_generalization=time_generalization, random_state=random_state,
+        clf=clf, n_pca=n_pca, feature_selection=feature_selection
+    )
+
+    # combine into xarray output
+    name = scoring
+    coords = {'fold': np.arange(n_splits)}
+    if time_generalization:
+        dims = ['fold', 'train_' + decode_across, 'test_' + decode_across]
+        coords[dims[1]] = time_dim
+        coords[dims[2]] = time_dim
+    else:
+        dims = ['fold'] + [decode_across]
+        coords[decode_across] = time_dim
+
+    scores = xr.DataArray(
+        scores, dims=dims, coords=coords, name=name,
+    )
     return scores
 
 
@@ -283,6 +367,63 @@ def join_subjects(Xs, ys, random_state=None, shuffle=True):
     return X, y
 
 
+# CONSIDER: to not have to copy arr, we can allow `target` to get a vector of
+#           values
+def permute(arr, decoding_fun, target=None, n_permutations=200, n_jobs=1,
+            average_folds=True, arguments=dict()):
+    import pandas as pd
+    import xarray as xr
+
+    scores = list()
+    arr = arr.copy()  # we copy to modify target
+    target_coord = arr.coords[target].values
+
+    if 'target' not in arguments:
+        arguments['target'] = targets
+
+    if n_jobs > 1:
+        from joblib import Parallel, delayed
+
+        # perocess in parallel only at the top (permutation) level
+        arguments['n_jobs'] = 1
+
+        scores = Parallel(n_jobs=n_jobs)(
+            delayed(_do_permute)(
+                arr, decoding_fun, target_coord,
+                average_folds=average_folds,
+                arguments=arguments
+            )
+            for perm_idx in range(n_permutations)
+        )
+    else:
+        for _ in range(n_permutations):
+            score = _do_permute(
+                arr, decoding_fun, target_coord, average_folds=average_folds,
+                arguments=arguments)
+            scores.append(score)
+
+    # join the results
+    if isinstance(scores[0], xr.DataArray):
+        perm = pd.Index(np.arange(n_permutations), name='permutation')
+        scores = xr.concat(scores, perm)
+    else:
+        scores = np.stack(scores, axis=0)
+    return scores
+
+
+def _do_permute(arr, decoding_fun, target_coord, average_folds=True,
+                arguments=dict()):
+    # permute target
+    np.random.shuffle(target_coord)
+
+    scr = decoding_fun(arr, **arguments)
+
+    if average_folds:
+        scr = scr.mean(dim='fold')
+
+    return scr
+
+
 def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
                       time=None, arguments=dict(), n_resamples=20, n_jobs=1,
                       permute=False, select_trials=None, decim=None):
@@ -400,6 +541,7 @@ def _do_resample(Xs, ys, decoding_fun, arguments, permute=False, time=None):
 
 
 def _count_trials(Xs):
+    '''Check trials foe each array in the list.'''
     # check n trials (across subjects)
 
     n_tri = np.array([X.shape[0] for X in Xs])
@@ -410,6 +552,7 @@ def _count_trials(Xs):
 
 
 def shuffle_trials(*arrays, random_state=None):
+    '''Perform the same trial shuffling for multiple arrays.'''
     n_arrays = len(arrays)
     array_len = [len(x) for x in arrays]
     if n_arrays > 1:
@@ -429,6 +572,17 @@ def shuffle_trials(*arrays, random_state=None):
 
 
 def select_n_best_cells(X, y, select_n=1):
+    '''Select n best cells (used on training data).
+
+    Parameters
+    ----------
+    X : numpy.ndarray
+        sklearn X array: ``n_observations x n_features (x n_samples)``.
+    y : numpy.ndarray
+        Vector of class id to predict.
+    select_n : int
+        The number of best-performing units to select.
+    '''
     from scipy.stats import ttest_ind
 
     t_val_per_cell, _ = np.abs(ttest_ind(X[y], X[~y]))
@@ -445,13 +599,13 @@ def select_n_best_cells(X, y, select_n=1):
 
 
 def correlation(X1, X2):
+    '''Correlate two arrays.'''
     ncols1 = X1.shape[1]
     rval = np.corrcoef(X1, X2, rowvar=False)
     rval_sel = rval[:ncols1, ncols1:]
     return rval_sel
 
 
-# TODO: add option to correlate with single-trials, not only class-averages
 class maxCorrClassifier(BaseEstimator):
     '''Simple implementation of maxCorr classifier.'''
     def __init__(self):
