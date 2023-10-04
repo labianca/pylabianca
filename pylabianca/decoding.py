@@ -58,7 +58,8 @@ def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
 
     if n_pca > 0:
         if clf is not None:
-            raise ValueError('Cannot use PCA and a custom classifier.')
+            raise ValueError('Cannot use PCA and a custom classifier.'
+                             ' You would have to construct you own pipeline.')
 
         from sklearn.decomposition import PCA
         pca = PCA(n_components=n_pca)
@@ -117,9 +118,7 @@ def run_decoding(X, y, n_splits=6, C=1., scoring='accuracy',
 
 def frate_to_sklearn(frate, target=None, select=None,
                      cell_names=None, time_idx=None, decim=10):
-    '''Format frates xarray into sklearn X, y data arrays.
-
-    Can concatenate conditions if needed.
+    '''Formats xarray into sklearn X, y data arrays.
     '''
     if target is None:
         raise ValueError('You have to specify specify target.')

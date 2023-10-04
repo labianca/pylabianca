@@ -615,17 +615,38 @@ def _save_spk_to_mm_matlab_format(spk, path):
     savemat(path, data)
 
 
-def add_region_from_channels_table(spk, channel_info, source_column='area',
-                                   target_column='region'):
-    '''Add brain region information to Spikes from channel info excel table.
+def _get_chan_num(chan):
+    from numbers import Integral
+    if isinstance(chan, Integral):
+        return chan
+    else:
+        return int(''.join([char for char in chan if char.isdigit()]))
+
+
+def add_region_from_channel_ranges(spk, channel_info, source_column='area',
+                                   target_column='region',
+                                   channel_column='channel'):
+    '''Add brain region information to Spikes from channel ranges info table.
 
     Parameters
     ----------
     spk : Spikes | SpikeEpochs
-        Spikes object whose cell metadata (``.cellinfo``) should be filled
-        with brain region information from the table.
+        Spikes object whose cell metadata (``.cellinfo``) will be filled
+        with information from the table. The ``.cellinfo`` is expected to
+        contain channel information in column ``'channel'``. The channel
+        information should be either an integer or string, but for strings
+        non-numeric values are removed and the remaining numeric values are
+        concatenated and turned into integer.
     channel_info : pandas.DataFrame
         Dataframe containing brain region info for specified channel ranges.
+        The expected format of this table is the following:
+        * ``'channel start'`` column specifying starting values of a channel
+          range (for example microwires belonging to the same Behnke-Fried
+          electrode).
+        * ``'channel end'`` column specifying ending values of a channel range.
+
+        The column specifyng region for given channel range chan be set using
+        ``source_column`` argument.
     '''
     assert isinstance(spk.cellinfo, pd.DataFrame)
     assert 'channel' in spk.cellinfo.columns
@@ -636,7 +657,7 @@ def add_region_from_channels_table(spk, channel_info, source_column='area',
     channel_info = channel_info.loc[numeric_rows, :]
 
     for chan in chans:
-        chan_num = int(''.join([char for char in chan if char.isdigit()]))
+        chan_num = _get_chan_num(chan)
         msk = (channel_info['channel start'] <= chan_num) & (
             channel_info['channel end'] >= chan_num)
         region = channel_info.loc[msk, source_column].values[0]
