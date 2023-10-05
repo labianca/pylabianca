@@ -67,7 +67,7 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
 
         for pick in picks:
             times, frt = func(
-                spk.time[pick], spk.trial[pick], [tmin, tmax],
+                spk.time[pick], spk.trial[pick], np.array([tmin, tmax]),
                 spk.n_trials, winlen=winlen, step=step)
             frate.append(frt)
             cell_names.append(spk.cell_names[pick])
@@ -82,6 +82,7 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
 def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
                               n_trials, winlen=0.25, step=0.05):
     half_win = winlen / 2
+    window_limits = np.array([-half_win, half_win])
     used_range = time_limits[1] - time_limits[0]
     n_steps = int(np.floor((used_range - winlen) / step + 1))
 
@@ -91,7 +92,7 @@ def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
     frate = np.zeros((n_trials, n_steps))
 
     for step_idx in range(n_steps):
-        win_lims = times[step_idx] + np.array([-half_win, half_win])
+        win_lims = times[step_idx] + window_limits
         msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
         in_tri, count = np.unique(tri, return_counts=True)

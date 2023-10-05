@@ -6,17 +6,18 @@ from numba.extending import overload
 @numba.jit(nopython=True)
 def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
                               n_trials, winlen=0.25, step=0.05):
-    halfwin = winlen / 2
+    half_win = winlen / 2
+    window_limits = np.array([-half_win, half_win])
     epoch_len = time_limits[1] - time_limits[0]
     n_steps = int(np.floor((epoch_len - winlen) / step + 1))
 
-    fr_tstart = time_limits[0] + halfwin
-    fr_tend = time_limits[1] - halfwin + step * 0.001
+    fr_tstart = time_limits[0] + half_win
+    fr_tend = time_limits[1] - half_win + step * 0.001
     times = np.arange(fr_tstart, fr_tend, step=step)
     frate = np.zeros((n_trials, n_steps))
 
     for step_idx in range(n_steps):
-        winlims = times[step_idx] + np.array([-halfwin, halfwin])
+        winlims = times[step_idx] + window_limits
         msk = (spike_times >= winlims[0]) & (spike_times < winlims[1])
         tri = spike_trials[msk]
         intri, count = np.unique(tri, return_counts=True)
