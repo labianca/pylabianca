@@ -2,7 +2,8 @@ from typing import Type
 import numpy as np
 import pandas as pd
 
-from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
+from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
+                    _get_trial_boundaries)
 from .spike_rate import compute_spike_rate, _spike_density
 from .spike_distance import compare_spike_times
 
@@ -503,28 +504,26 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     '''
     picks = _deal_with_picks(spk, picks)
     sample_time = 1 / sfreq
+    half_sample = sample_time / 2
     tmin, tmax = spk.time_limits
     times = np.arange(tmin, tmax + 0.01 * sample_time, step=sample_time)
+    time_bins = np.concatenate(
+        [times - half_sample, [times[-1] + half_sample]])
 
     n_cells = len(picks)
     n_times = len(times)
     trials_raw = np.zeros((spk.n_trials, n_cells, n_times), dtype='int')
 
     for idx, cell_idx in enumerate(picks):
-        from_idx = 0
-        for this_tri in range(spk.n_trials):
-            ix = np.where(spk.trial[cell_idx][from_idx:] == this_tri)[0]
-            if len(ix) == 0:
-                continue
+        trial_boundaries, tri_num = _get_trial_boundaries(spk, cell_idx)
+        for ix, this_tri in enumerate(tri_num):
 
-            ix = ix[-1] + 1
-            spike_times = spk.time[cell_idx][from_idx:from_idx + ix]
-            sample_ix = (np.abs(times[:, np.newaxis]
-                                - spike_times[np.newaxis, :]).argmin(axis=0))
-            t_smp, n_spikes = np.unique(sample_ix, return_counts=True)
-            trials_raw[this_tri, idx, t_smp] = n_spikes
+            spike_times = spk.time[cell_idx][
+                trial_boundaries[ix]:trial_boundaries[ix + 1]]
+            trials_raw[this_tri, idx, :] = np.histogram(
+                spike_times, bins=time_bins
+            )[0]
 
-            from_idx = from_idx + ix
     return times, trials_raw
 
 
