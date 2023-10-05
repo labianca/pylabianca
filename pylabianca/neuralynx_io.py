@@ -70,7 +70,7 @@ MILLIVOLT_SCALING = (1000, u'mV')
 MICROVOLT_SCALING = (1000000, u'µV')
 
 
-def read_header(filename):
+def read_header(file_path):
     '''Reads and parses the header of a Neuralynx file.
 
     Parameters

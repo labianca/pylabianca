@@ -138,6 +138,7 @@ def _check_timestamps(timestamps):
 
 
 def _get_waveforms(data):
+    '''Get waveforms from a FieldTrip file.'''
     sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
 
     if 'waveform' in data.dtype.names:
