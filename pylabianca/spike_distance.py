@@ -201,10 +201,10 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
                 trial_boundaries2[idx2]:trial_boundaries2[idx2 + 1]]
 
         time_diffs = times2[:, None] - times1[None, :]
-        n_diffs = time_diffs.shape[0]
-        ind = np.diag_indices(n_diffs)
 
         if autocorr:
+            n_diffs = time_diffs.shape[0]
+            ind = np.diag_indices(n_diffs)
             time_diffs[ind] = np.nan
 
         time_diffs = time_diffs.ravel()
@@ -338,6 +338,9 @@ def _spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
     return xcorr
 
 
+# - [ ] silence warnings
+# - [ ] add more arguments that could be passed to elephant
+# - [ ]
 def _spike_xcorr_elephant(spk, cell_idx1, cell_idx2, sfreq=500, winlen=0.1,
                           kernel_winlen=0.025, shift_predictor=False):
     from scipy.signal import correlate
