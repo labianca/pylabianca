@@ -207,6 +207,7 @@ def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50,
                             rich_output=False):
     """Decide whether waveform polarity is positive, negative or unknown.
 
+    This may be useful to detect units/clusters with bad alignment.
     The decision is based on comparing baselined min and max average waveform
     peak values. The value for the peak away from alignment point is calculated
     from single spike waveforms to simulate alignment and reduce bias (30
@@ -296,6 +297,7 @@ def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50,
 
 
 def _realign_waveforms(waveforms, pad_nans=False, reject=True):
+    '''Realign waveforms. Used in ``realign_waveforms()`` function.'''
     mean_wv = np.nanmean(waveforms, axis=0)
     min_idx, max_idx = np.argmin(mean_wv), np.argmax(mean_wv)
 
