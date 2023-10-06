@@ -609,9 +609,28 @@ def correlation(X1, X2):
 class maxCorrClassifier(BaseEstimator):
     '''Simple implementation of maxCorr classifier.'''
     def __init__(self):
+        '''Create an instance of maxCorr classifier.'''
         pass
 
     def fit(self, X, y, scoring=None):
+        '''Fit maxCorr to training data.
+
+        Parameters
+        ----------
+        X : np.array
+            Training data to use in classification. n_observations x n_features
+            numpy array.
+        y : np.array
+            Target classes to classify. n_observations vector.
+        scoring : str | None
+            Scikit-learn scoring method.
+
+        Returns
+        -------
+        self : pylabianca.decoding.maxCorr
+            Fit classifier to training data. Works in-place so the output
+            does not have to be stored (but it's useful for chaining).
+        '''
         X, y = check_X_y(X, y)
         self.classes_ = unique_labels(y)
         self.class_averages_ = list()
@@ -628,6 +647,20 @@ class maxCorrClassifier(BaseEstimator):
         return self
 
     def predict(self, X):
+        '''
+        Predict classes.
+
+        Parameters
+        ----------
+        X : numpy.array
+            Test data to use in predicting classes. Should be an
+            n_observations x n_features numpy array.
+
+        Returns
+        -------
+        y_pred : numpy.array
+            Vector of predicted classes.
+        '''
         # Check if fit has been called
         check_is_fitted(self)
         X = check_array(X)
@@ -662,6 +695,19 @@ class maxCorrClassifier(BaseEstimator):
         return y_pred
 
     def score(self, X=None, Y=None):
+        '''
+        Score classification.
+
+        The scoring provided at initialization is used.
+
+        Parameters
+        ----------
+        X : numpy.array
+            Test data to use in predicting classes. Should be an
+            n_observations x n_features numpy array.
+        y : numpy.array
+            Correct class labels. n_observations vector.
+        '''
         from sklearn.metrics import get_scorer
 
         scorer = get_scorer(self.scoring)
