@@ -200,9 +200,39 @@ def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
     return scores
 
 
+# TODO: later may be useful to make it accept arrays with different dimension
+#       names
 def frate_to_sklearn(frate, target=None, select=None,
                      cell_names=None, time_idx=None, decim=10):
-    '''Formats xarray into sklearn X, y data arrays.
+    '''Formats xarray.DataArray into sklearn X and y data arrays.
+
+    Parameters
+    ----------
+    frate : xarray.DataArray
+        The data to turn in sklearn X and y format. Should contain a
+        ``'trials'``, ``'cell'`` and ``'time'`` dimension.
+    target : str
+        Name of the variable to use as target.
+    select : str | None
+        Condition query to subselect trials. If ``None`` no trial selection
+        is performed (all trials are used).
+    cell_names : list of str | None
+        Cell names to select.
+    time_idx : int | array of int | None
+        Select specific time point or timepoints. If ``None``, no specific
+        timepoints are picked (apart from decimation controlled by ``decim``).
+    decim : int
+        Decimation factor.
+
+    Returns
+    -------
+    X : numpy.ndarray
+        2D array of n_observations x n_features (x n_times) shape. The time
+        dimension is added only when it is present in the input xarray.
+    y : numpy.ndarray
+        1D array of n_observations length with target categories to classify.
+    time : numpy.ndarray
+        1D array of time labels after decimation.
     '''
     if target is None:
         raise ValueError('You have to specify specify target.')
@@ -227,15 +257,15 @@ def frate_to_sklearn(frate, target=None, select=None,
         fr = fr.isel(time=time_idx)
 
     if has_time:
-        full_time = fr.time.values[::decim]
+        time = fr.time.values[::decim]
         X = fr.values[..., ::decim]
     else:
-        full_time = None
+        time = None
         X = fr.values
 
     y = fr.coords[target].values
 
-    return X, y, full_time
+    return X, y, time
 
 
 def frates_dict_to_sklearn(frates, target=None, select=None,
@@ -250,8 +280,6 @@ def frates_dict_to_sklearn(frates, target=None, select=None,
         Dictionary of the form {subject_string: firing rate xarray}.
     target : str
         Name of the variable to use as target.
-    cond : str
-        Epoch type / condition to choose.
     select : str, optional
         Query string to select trials. Default is ``None``, which does not
         subselect trials (all trials are used).
@@ -261,6 +289,8 @@ def frates_dict_to_sklearn(frates, target=None, select=None,
     time_idx : int, optional
         Time index or time range to use (as time indices). Defaults to
         ``None``, which uses all time points.
+    decim : int
+        Decimation factor.
 
     Returns
     -------
