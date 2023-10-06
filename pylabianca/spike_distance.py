@@ -214,8 +214,12 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
     return xcorr, bins
 
 
+# TODO: max_lag cannot be longer than epoch time window and preferrably
+#       it is < 1 / 2 epoch length ...
+# TODO: when gauss_fwhm is set, calculate trim before and adjust max_lag
+#       so that it is left in after convolution
 def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
-                      bins=None):
+                      bins=None, gauss_fwhm=None):
     '''FIXME'''
     from .spikes import SpikeEpochs
     from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
@@ -263,6 +267,21 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     # calc bin_centers
     bin_widths = np.diff(bins)
     bin_centers = bins[:-1] + bin_widths
+
+    # smooth with gaussian if needed
+    # TODO: DRY with _spike_density
+    if gauss_fwhm is not None:
+        from scipy.signal import correlate
+        from .spike_rate import _gauss_sd_from_FWHM
+
+        gauss_sd = _gauss_sd_from_FWHM(gauss_fwhm)
+        winlen = gauss_sd * 6
+        gauss_sd = gauss_sd * sfreq
+        win_smp, trim = _symmetric_window_samples(winlen, sfreq)
+        kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
+
+        bin_centers = bin_centers[trim:-trim]
+        xcorrs = correlate(xcorrs, kernel[None, None, :], mode='valid')
 
     # construct xarr
     xcorrs = _turn_spike_rate_to_xarray(
