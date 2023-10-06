@@ -75,7 +75,16 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
     frate = np.stack(frate, axis=0)
     frate = _turn_spike_rate_to_xarray(times, frate, spk,
                                         cell_names=cell_names)
+    frate = _add_frate_info(frate)
+
     return frate
+
+
+def _add_frate_info(arr, dep='rate'):
+    arr.name = f'firing {dep}'
+    arr.attrs['unit'] = "Hz"
+    arr.attrs['coord_units'] = {'time': 's'}
+    return arr
 
 
 # ENH: speed up by using previous mask in the next step to pre-select spikes

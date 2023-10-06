@@ -4,7 +4,7 @@ import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _get_trial_boundaries)
-from .spike_rate import compute_spike_rate, _spike_density
+from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import compare_spike_times
 
 
@@ -252,6 +252,8 @@ class SpikeEpochs():
         xarr = _turn_spike_rate_to_xarray(
             tms, cnt.transpose((1, 0, 2)), self,
             cell_names=self.cell_names[picks])
+        xarr = _add_frate_info(xarr, dep='density')
+
         return xarr
 
     def n_spikes(self, per_epoch=False):

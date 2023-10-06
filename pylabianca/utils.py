@@ -112,7 +112,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
                     'cell', spike_epochs.cellinfo[col].iloc[ch_idx])
 
     firing = xr.DataArray(frate, dims=dims, coords=coords,
-                          name='firing rate', attrs=attrs)
+                          attrs=attrs)
     return firing
 
 
