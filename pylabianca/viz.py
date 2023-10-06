@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 
 # TODO - title is now removed, so for groupby it would be good to specify the
 #        groupby coord name in legend "title"
-# TODO - ! x_dim='auto' (infers which is the likely x dimension) !
 # TODO - ! also support mask !
 # TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
 # TODO - get y axis from xarray data name (?)
@@ -479,7 +478,7 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
     else:
         assert(len(ax) == 2)
         fig = ax[0].figure
-    plot_spike_rate(this_frate, groupby=groupby, ax=ax[0])
+    plot_shaded(this_frate, groupby=groupby, ax=ax[0])
 
     # add highlight
     if df_clst is not None:
