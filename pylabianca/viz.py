@@ -2,15 +2,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+# TODO - title is now removed, so for groupby it would be good to specify the
+#        groupby coord name in legend "title"
 # TODO - ! x_dim='auto' (infers which is the likely x dimension) !
 # TODO - ! also support mask !
 # TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
 # TODO - get y axis from xarray data name (?)
 # TODO - the info about "one other dimension" (that is reduced) seems to be no
 #        longer accurate
-def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
-                    x_dim='time', legend=True, legend_pos=None, colors=None,
-                    labels=True):
+# def plot_spike_rate
+
+def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
+                x_dim=None, legend=True, legend_pos=None, colors=None,
+                labels=True):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -49,26 +53,109 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
     ax : matplotlib.Axes
         Axis with the plot.
     '''
-    if ax is None:
-        _, ax = plt.subplots()
+    # auto-infer reduce_dim
+    # ---------------------
+    if reduce_dim is None:
+        auto_reduce_dims = ['trial', 'fold', 'perm', 'permutation', 'cell']
+        for dimname in auto_reduce_dims:
+            if dimname in arr.coords:
+                reduce_dim = dimname
+                break
 
-    if ('cell' in frate.coords and not reduce_dim == 'cell'
-        and len(frate.cell.shape) > 0):
-        if len(frate.coords['cell'] == 1):
-            frate = frate.isel(cell=0)
+    if ('cell' in arr.coords and not reduce_dim == 'cell'
+        and len(arr.cell.shape) > 0):
+        if len(arr.coords['cell'] == 1):
+            arr = arr.isel(cell=0)
+        elif reduce_dim is None:
+            reduce_dim = 'cell'
         else:
             msg = ('DataArray contains more than one cell to plot - this is '
                     'not supported.')
             raise RuntimeError(msg)
 
+    # if reduce_dim is still None - use the first dim for 2d array
+    # TODO
+
+    # auto-infer x_dim
+    # ----------------
+    # try time, freq, frequency, lag by default
+    if x_dim is None:
+        auto_x_dims = ['trial', 'fold', 'perm', 'permutation']
+        for dimname in auto_x_dims:
+            if dimname in arr.coords:
+                x_dim = dimname
+                break
+
+    # if reduce_dim is still None - use the last dim for 2d array
+    # TODO
+
+    ax = plot_xarray_shaded(
+        arr, reduce_dim=reduce_dim, x_dim=x_dim, groupby=groupby, ax=ax,
+        legend=legend, legend_pos=legend_pos, colors=colors
+    )
+
+    if labels:
+        xlabel = x_dim.capitalize()
+        if 'coord_units' in arr.attrs:
+            if x_dim in arr.attrs['coord_units']:
+                this_unit = arr.attrs['coord_units'][x_dim]
+                xlabel += f' ({this_unit})'
+        ax.set_xlabel(xlabel, fontsize=14)
+
+        if arr.name is not None:
+            ylabel = arr.name.capitalize()
+            if 'unit' in arr.attrs:
+                this_unit = arr.attrs['unit']
+                ylabel += f' ({this_unit})'
+        ax.set_ylabel(ylabel, fontsize=14)
+
+    return ax
+
+
+# TODO: allow different error shades
+def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
+                       ax=None, legend=True, legend_pos=None, colors=None):
+    """
+    arr : xarray.DataArray
+        Xarray with at least two dimensions: one is plotted along the x axis
+        (this is controlled with ``x_dim`` argument); the other is reduced
+        by averaging (see ``reduce_dim`` argument below). The averaged
+        dimension also gives rise to the standard error of the mean, which is
+        plotted as a shaded area.
+    reduce_dim : str
+        The dimension to reduce (average). The standard error is also computed
+        along this dimension. The default is ``'trial'``.
+    x_dim : str
+        Dimension to use for the x axis. The default is ``'time'``.
+    groupby : str | None
+        The dimension (or sub-dimension) to use as grouping variable plotting
+        the spike rate into separate lines. The default is ``None``, which
+        does not perform grouping.
+    ax : matplotlib.Axes | None
+        Axis to plot into. The default is ``None`` which creates an new axis.
+    legend : bool
+        Whether to plot the legend.
+    legend_pos : str | None
+        Legend position (standard matplotlib names like "upper left"). Defaults
+        to ``None`` which uses ``'best'`` position.
+    colors : list of arrays | dictionary of arrays | None
+        List of RGB arrays to use as colors for condition groups. Can also be
+        a dictionary linking condition names / values and RBG arrays. Default
+        is ``None`` which uses the default matplotlib color cycle.
+    """
+    assert reduce_dim is not None
+
+    if ax is None:
+        _, ax = plt.subplots()
+
     # compute mean, std and n
     if groupby is not None:
-        frate = frate.groupby(groupby)
+        arr = arr.groupby(groupby)
 
     # calculate standard error of the mean
-    avg = frate.mean(dim=reduce_dim)
-    std = frate.std(dim=reduce_dim)
-    n = frate.count(dim=reduce_dim)
+    avg = arr.mean(dim=reduce_dim)
+    std = arr.std(dim=reduce_dim)
+    n = arr.count(dim=reduce_dim)
     std_err = std / np.sqrt(n)
     ci_low = avg - std_err
     ci_high = avg + std_err
@@ -109,19 +196,9 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
         ax.fill_between(avg.coords[x_dim], ci_low, ci_high, linewidth=0,
                         alpha=0.3, **add_arg)
 
-
     if groupby is not None and legend:
         pos = 'best' if legend_pos is None else legend_pos
         ax.legend(title=f'{groupby}:', loc=pos)
-
-    if labels:
-        if x_dim == 'time':
-            ax.set_xlabel('Time (s)', fontsize=14)
-
-        ax.set_ylabel('Spike rate (Hz)', fontsize=14)
-        add_txt = '' if groupby is None else f' grouped by {groupby}'
-        ttl = 'Firing rate' + add_txt
-        ax.set_title(ttl, fontsize=16)
 
     return lines[0].axes
 
