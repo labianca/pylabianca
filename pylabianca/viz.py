@@ -80,7 +80,7 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     # ----------------
     # try time, freq, frequency, lag by default
     if x_dim is None:
-        auto_x_dims = ['trial', 'fold', 'perm', 'permutation']
+        auto_x_dims = ['time', 'frequency', 'freq', 'lag']
         for dimname in auto_x_dims:
             if dimname in arr.coords:
                 x_dim = dimname
