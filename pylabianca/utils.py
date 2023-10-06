@@ -37,7 +37,8 @@ def _deal_with_picks(spk, picks):
 # CONSIDER: changing the array dim order to: trials, cells, times
 #           (mne-python-like)
 def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
-                               tri=None, copy_cellinfo=True):
+                               tri=None, copy_cellinfo=True,
+                               x_dim_name='time'):
     '''Turn spike rate data to xarray.
 
     Parameters
@@ -69,6 +70,8 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         metadata correctly.
     copy_cellinfo : bool
         Whether to copy ``spike_epochs.cellinfo`` to xarray.
+    x_dim_name : str
+        Name of the last dimension. Defaults to ``'time'``.
 
     Returns
     -------
@@ -84,8 +87,8 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     dims = [dimname]
     attrs = None
     if isinstance(times, np.ndarray):
-        dims.append('time')
-        coords['time'] = times
+        dims.append(x_dim_name)
+        coords[x_dim_name] = times
     else:
         attrs = {'timewindow': times}
 
