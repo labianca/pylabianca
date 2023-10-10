@@ -150,6 +150,10 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
     ----------
     spk : pylabianca.spikes.SpikeEpochs
         SpikeEpochs object to use.
+    cell_idx1 : ...
+        List of cell indices or names to perform cross- and auto- correlations
+        for. All combinations of cells will be used.
+    cell_idx2 : ...
     sfreq : float
         Sampling frequency of the bins. The bin width will be ``1 / sfreq``
         seconds. Used only when ``bins is None``. Defaults to ``500.``.
@@ -220,7 +224,36 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
 #       so that it is left in after convolution
 def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
                       bins=None, gauss_fwhm=None):
-    '''FIXME'''
+    '''Compute cross-correlation histogram for each trial.
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        SpikeEpochs to compute cross-correlation for.
+    picks1 : ...
+        List of cell indices or names to perform cross- and auto- correlations
+        for. All combinations of cells will be used.
+    picks2 : ...
+        ...
+    sfreq : float
+        Sampling frequency of the bins. The bin width will be ``1 / sfreq``
+        seconds. Used only when ``bins is None``. Defaults to ``500.``.
+    max_lag : float
+        Maximum lag in seconds. Used only when ``bins is None``. Defaults
+        to ``0.2``.
+    bins : numpy array | None
+        Array representing edges of the histogram bins. If ``None`` (default)
+        the bins are constructed based on ``sfreq`` and ``max_lag``.
+    gauss_fwhm : float | None
+        Full-width at half maximum of the gaussian kernel to convolve the
+        cross-correlation histograms with. Defaults to ``None`` which ommits
+        convolution.
+
+    Returns
+    -------
+    xcorr : xarray.DataArray
+        ...
+    '''
     from .spikes import SpikeEpochs
     from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
     assert isinstance(spk, SpikeEpochs)
@@ -290,7 +323,7 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     xcorrs.attrs['coord_units'] = {'lag': 's'}
 
     # add cell1_idx etc.
-    xcorrs.assign_coords(
+    xcorrs = xcorrs.assign_coords(
         {'cell1_name': ('cell', cell1_name),
          'cell2_name': ('cell', cell2_name),
          'cell1_idx': ('cell', cell1_idx),
