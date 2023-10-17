@@ -591,13 +591,19 @@ def _convert_spk_to_mm_matlab_format(spk):
     n_units = len(spk)
 
     data = dict()
-    for fld in ['cluster_id', 'alignment', 'channel', 'threshold']:
-        col_name = fld.split('_')[0]
+    has_cellinfo = spk.cellinfo is not None
 
-        # extract values from dataframe column and make sure it is N x 1
-        data[fld] = spk.cellinfo.loc[:, col_name].values[:, None]
+    if has_cellinfo:
+        columns = spk.cellinfo.columns
+        for fld in ['cluster_id', 'alignment', 'channel', 'threshold']:
+            col_name = fld.split('_')[0]
+            if col_name in columns:
+                # extract values from dataframe column
+                # and make sure it is N x 1
+                data[fld] = spk.cellinfo.loc[:, col_name].values[:, None]
 
-    # other cellinfo columns
+        # other cellinfo columns
+        # TODO
 
     data['timestamp'] = np.empty((n_units, 1), dtype='object')
     data['waveform'] = np.empty((n_units, 1), dtype='object')
