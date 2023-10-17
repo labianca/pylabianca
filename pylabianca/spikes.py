@@ -415,7 +415,10 @@ class SpikeEpochs():
                             'select elements of SpikeEpochs')
 
         newtime, newtrial = list(), list()
-        new_metadata = new_metadata.reset_index(drop=True)
+        if self.metadata is not None:
+            new_metadata = new_metadata.reset_index(drop=True)
+        else:
+            new_metadata = None
 
         has_waveform = self.waveform is not None
         waveform = list() if has_waveform else None
@@ -434,7 +437,7 @@ class SpikeEpochs():
 
         new_cellinfo = None if self.cellinfo is None else self.cellinfo.copy()
         return SpikeEpochs(newtime, newtrial, time_limits=self.time_limits,
-                           n_trials=new_metadata.shape[0],
+                           n_trials=len(tri_idx),
                            cell_names=self.cell_names.copy(),
                            metadata=new_metadata, cellinfo=new_cellinfo,
                            waveform=waveform)
