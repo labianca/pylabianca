@@ -401,3 +401,70 @@ def _get_trial_boundaries(spk, cell_idx):
     tri_num = spk.trial[cell_idx][trial_boundaries[:-1]]
 
     return trial_boundaries, tri_num
+
+
+# TODO - this can be made more universal
+def find_cells_by_cluster_id(spk, cluster_ids, channel=None):
+    '''Find cell indices that create given clusters on specific channel.'''
+    cell_idx = list()
+    if isinstance(cluster_ids, int):
+        cluster_ids = [cluster_ids]
+
+    for cl in cluster_ids:
+        is_cluster = spk.cellinfo.cluster == cl
+        if channel is not None:
+            is_channel = spk.cellinfo.channel == channel
+            idxs = np.where(is_cluster & is_channel)[0]
+        else:
+            idxs = np.where(is_cluster)[0]
+
+        if len(idxs) == 1:
+            cell_idx.append(idxs[0])
+        else:
+            raise ValueError('Found 0 or > 1 cluster IDs.')
+
+    return cell_idx
+
+
+def read_drop_info(path):
+    '''Reads (channels, cluster id) pairs to drop from a text file.
+
+    The text file should follow a structure:
+    channel_name1: [cluster_id1, cluster_id2, ...]
+    channel_name2: [cluster_id1, cluster_id2, ...]
+
+    Parameters
+    ----------
+    path : str
+        Path to the text file.
+
+    Returns
+    -------
+    to_drop : list
+        List of (channel, cluster_id) tuples representing all such pairs
+        read from the text file.
+    '''
+    # read merge info
+    with open(path) as file:
+        text = file.readlines()
+
+    # drop info is organized into channels / cluster ids
+    to_drop = list()
+    for line in text:
+        channel = line.split(', ')[0]
+        idx1, idx2 = line.find('['), line.find(']') + 1
+        clusters = eval(line[idx1:idx2])
+        for cluster in clusters:
+            to_drop.append((channel, cluster))
+
+    return to_drop
+
+
+def drop_cells_by_channel_and_cluster_id(spk, to_drop):
+    '''Works in place!'''
+    # find cell idx by channel + cluster ID
+    cell_idx = list()
+    for channel, cluster in to_drop:
+        this_idx = find_cells_by_cluster_id(spk, cluster, channel=channel)[0]
+        cell_idx.append(this_idx)
+    spk.drop_cells(cell_idx)
