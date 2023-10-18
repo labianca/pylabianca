@@ -435,8 +435,8 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     return ax
 
 
-def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
-                min_pval=0.001, ax=None):
+def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
+                pvals=None, pick=0, p_threshold=0.05, min_pval=0.001, ax=None):
     '''Plot average spike rate and spike raster.
 
     spk : pylabianca.spikes.SpikeEpochs
@@ -448,7 +448,19 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
         How to group the plots. If None, no grouping is done.
     df_clst : pandas.DataFrame | None
         DataFrame with cluster time ranges and p values. If None, no cluster
-        information is shown.
+        information is shown. This argument is to support results obtained
+        with ``pylabianca.selectivity.cluster_based_selectivity()``, but one
+        can also use the more conventional ``clusters``, ``pvals`` and
+        ``p_threshold``.
+    clusters : list of np.array
+        List of boolean arrays, where each array contains cluster membership
+        information (which points along the last array dimension contribute
+        to the given cluster).
+    pvals : list-like
+        List or array of cluster p values.
+    p_threshold : float
+        Alpha significance threshold. Clusters with p value below this
+        threshold will be shown.
     pick : int | str
         Name or index of the cell to plot.
     min_pval : float
@@ -481,13 +493,16 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
     plot_shaded(this_frate, groupby=groupby, ax=ax[0])
 
     # add highlight
-    if df_clst is not None:
-        this_clst = df_clst.query(f'neuron == "{cell_name}"')
-        pvals = this_clst.pval.values
-        masks = [_create_mask_from_window_str(twin, this_frate)
-                 for twin in this_clst.window.values]
-        add_highlights(this_frate, masks, pvals, ax=ax[0],
-                       min_pval=min_pval)
+    add_highlight = (df_clst is not None) or (
+        clusters is not None and pvals is not None)
+    if add_highlight:
+        if df_clst is not None:
+            this_clst = df_clst.query(f'neuron == "{cell_name}"')
+            pvals = this_clst.pval.values
+            clusters = [_create_mask_from_window_str(twin, this_frate)
+                        for twin in this_clst.window.values]
+        add_highlights(this_frate, clusters, pvals, ax=ax[0],
+                       p_threshold=p_threshold, min_pval=min_pval)
 
     plot_raster(spk.copy().pick_cells(cell_name), pick=0,
                 groupby=groupby, ax=ax[1])

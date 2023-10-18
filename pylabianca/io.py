@@ -476,10 +476,12 @@ def read_osort(path, waveform=True, channels='all', format='mm',
 
     # the sfreq here refers to timestamp frequency, not the sampling frequency
     # of the signal
-    if waveform is not None:
+    if waveform:
         n_samples = waveforms[0].shape[1]
         samples_per_ms = 100
         waveform_time = np.arange(n_samples) / samples_per_ms
+    else:
+        waveform_time = None
 
     return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveforms,
                   waveform_time=waveform_time)

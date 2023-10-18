@@ -409,7 +409,7 @@ def permute(arr, decoding_fun, target=None, n_permutations=200, n_jobs=1,
     target_coord = arr.coords[target].values
 
     if 'target' not in arguments:
-        arguments['target'] = targets
+        arguments['target'] = target
 
     if n_jobs > 1:
         from joblib import Parallel, delayed
