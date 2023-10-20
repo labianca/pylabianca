@@ -129,6 +129,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
 
 # ENH: move to sarna/borsar sometime
+# ENH: allow for standard arrays (and perm_index)
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
                                          adjacency=None):
     '''Performs a cluster-based test from precalculated permutations.
@@ -145,10 +146,13 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     assert isinstance(data, xr.DataArray)
     assert isinstance(perm_data, xr.DataArray)
     assert tail in ['both', 'pos', 'neg']
-    assert 'perm' in perm_data.dims
+    dim_names = ['perm', 'permutation']
+    has_dim = [dimname in perm_data.dims for dimname in dim_names]
+    assert any(has_dim)
+    perm_dim_name = dim_names[np.where(has_dim)[0][0]]
 
     percentiles = [97.5, 2.5] if tail == 'both' else [95, 5]
-    perm_dim = perm_data.dims.index('perm')
+    perm_dim = perm_data.dims.index(perm_dim_name)
     n_perms = perm_data.shape[perm_dim]
     thresholds = np.percentile(perm_data, percentiles, axis=perm_dim)
 
@@ -168,8 +172,8 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     cluster_distr_pos = list()
     cluster_distr_neg = list()
 
-    for perm_idx in perm_data.coords['perm'].data:
-        perm_stat = perm_data.sel(perm=perm_idx)
+    for perm_idx in perm_data.coords[perm_dim_name].data:
+        perm_stat = perm_data.sel({perm_dim_name: perm_idx})
 
         perm_clusters, perm_cluster_stats = borsar.find_clusters(
             perm_stat.values, thresholds, backend='borsar',
