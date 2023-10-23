@@ -782,8 +782,7 @@ def auto_multipanel(n_to_show, ax=None, figsize=None):
 
         if n_left > 0:
             for this_ax in ax.ravel()[-n_left:]:
-                this_ax.set_xticks([])
-                this_ax.set_yticks([])
+                this_ax.axis('off')
 
     return ax
 
