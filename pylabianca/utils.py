@@ -34,10 +34,11 @@ def _deal_with_picks(spk, picks):
     return picks
 
 
-# TODO: consider changing the array dim order to: trials, cells, times
-#       (mne-python-like)
+# CONSIDER: changing the array dim order to: trials, cells, times
+#           (mne-python-like)
 def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
-                               tri=None, copy_cellinfo=True):
+                               tri=None, copy_cellinfo=True,
+                               x_dim_name='time'):
     '''Turn spike rate data to xarray.
 
     Parameters
@@ -48,12 +49,14 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         describing the time window if static window was used.
     frate : numpy array
         Numpy array with firing rate, with the following dimensions:
+
         * 3d ``n_cells x n_trials x n_times`` (``cell_names`` has to be not
           None)
         * 2d ``n_cells x n_trials`` (``cell_names`` not None and ``times``
           as string)
         * 2d ``n_trials x n_times`` (``cell_names`` is None and ``times``
           is an array)
+
     spike_epochs : SpikeEpochs object
         SpikeEpochs object.
     cell_names : list-like of str | None
@@ -67,6 +70,8 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         metadata correctly.
     copy_cellinfo : bool
         Whether to copy ``spike_epochs.cellinfo`` to xarray.
+    x_dim_name : str
+        Name of the last dimension. Defaults to ``'time'``.
 
     Returns
     -------
@@ -82,8 +87,8 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     dims = [dimname]
     attrs = None
     if isinstance(times, np.ndarray):
-        dims.append('time')
-        coords['time'] = times
+        dims.append(x_dim_name)
+        coords[x_dim_name] = times
     else:
         attrs = {'timewindow': times}
 
@@ -110,7 +115,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
                     'cell', spike_epochs.cellinfo[col].iloc[ch_idx])
 
     firing = xr.DataArray(frate, dims=dims, coords=coords,
-                          name='firing rate', attrs=attrs)
+                          attrs=attrs)
     return firing
 
 
@@ -205,6 +210,7 @@ def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50,
                             rich_output=False):
     """Decide whether waveform polarity is positive, negative or unknown.
 
+    This may be useful to detect units/clusters with bad alignment.
     The decision is based on comparing baselined min and max average waveform
     peak values. The value for the peak away from alignment point is calculated
     from single spike waveforms to simulate alignment and reduce bias (30
@@ -291,3 +297,174 @@ def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50,
                   'min_idx': min_val_idx, 'max_idx': max_val_idx,
                   'align_idx': align_idx, 'align_sign': align_sign}
         return output
+
+
+def _realign_waveforms(waveforms, pad_nans=False, reject=True):
+    '''Realign waveforms. Used in ``realign_waveforms()`` function.'''
+    mean_wv = np.nanmean(waveforms, axis=0)
+    min_idx, max_idx = np.argmin(mean_wv), np.argmax(mean_wv)
+
+    if min_idx < max_idx:
+        waveforms *= -1
+        mean_wv *= -1
+        min_idx, max_idx = max_idx, min_idx
+
+    # checking slope
+    # --------------
+    if reject:
+        slope = np.nansum(np.diff(waveforms[:, :max_idx], axis=1), axis=1)
+        bad_slope = slope < 0
+
+    # realigning
+    # ----------
+    spike_max = np.argmax(waveforms, axis=1)
+    new_waveforms = np.empty(waveforms.shape)
+    new_waveforms.fill(np.nan)
+
+    unique_mx = np.unique(spike_max)
+
+    if reject:
+        n_samples = waveforms.shape[1]
+        max_dist = int(n_samples / 5)
+        dist_to_peak = np.abs(spike_max - max_idx)
+        bad_peak_dist = dist_to_peak > max_dist
+
+        unique_mx = unique_mx[np.abs(unique_mx - max_idx) <= max_dist]
+
+    for uni_ix in unique_mx:
+        diff_idx = max_idx - uni_ix
+        spk_msk = spike_max == uni_ix
+
+        if diff_idx == 0:
+            new_waveforms[spk_msk, :] = waveforms[spk_msk, :]
+        elif diff_idx > 0:
+            # indiv peak too early
+            new_waveforms[spk_msk, diff_idx:] = waveforms[spk_msk, :-diff_idx]
+
+            if not pad_nans:
+                new_waveforms[spk_msk, :diff_idx] = (
+                    waveforms[spk_msk, [0]][:, None])
+        else:
+            # indiv peak too late
+            new_waveforms[spk_msk, :diff_idx] = waveforms[spk_msk, -diff_idx:]
+
+            if not pad_nans:
+                new_waveforms[spk_msk, diff_idx:] = (
+                    waveforms[spk_msk, [diff_idx - 1]][:, None])
+
+    waveforms_to_reject = (np.where(bad_slope | bad_peak_dist)[0]
+                           if reject else None)
+
+    return new_waveforms, waveforms_to_reject
+
+
+def realign_waveforms(spk, picks=None, min_spikes=10, reject=True):
+    '''Realign single waveforms compared to average waveform. Works in place.
+
+    Parameters
+    ----------
+    spk :  pylabianca.Spikes | pylabianca.SpikeEpochs
+        Spikes or SpikeEpochs object.
+    picks : int | str | list-like of int | list-like of str
+        The units to realign waveforms for.
+    min_spikes : int
+        Minimum number of spikes to try realigning the waveform.
+    reject : bool
+        Also remove waveforms and
+    '''
+    picks = _deal_with_picks(spk, picks)
+    for cell_idx in picks:
+        waveforms = spk.waveform[cell_idx]
+        if waveforms is not None and len(waveforms) > min_spikes:
+            waveforms, reject_idx = _realign_waveforms(waveforms)
+            spk.waveform[cell_idx] = waveforms
+
+            # reject spikes
+            # TODO: could be made a separate function one day
+            n_reject = len(reject_idx)
+            if n_reject > 0:
+                msg = (f'Removing {n_reject} bad waveforms for cell'
+                       f'{spk.cell_names[cell_idx]}.')
+                print(msg)
+
+                spk.waveform[cell_idx] = np.delete(
+                    spk.waveform[cell_idx], reject_idx, axis=0)
+                spk.timestamps[cell_idx] = np.delete(
+                    spk.timestamps[cell_idx], reject_idx)
+
+
+def _get_trial_boundaries(spk, cell_idx):
+    n_spikes = len(spk.trial[cell_idx])
+    trial_boundaries = np.where(np.diff(spk.trial[cell_idx]))[0] + 1
+    trial_boundaries = np.concatenate(
+        [[0], trial_boundaries, [n_spikes]])
+    tri_num = spk.trial[cell_idx][trial_boundaries[:-1]]
+
+    return trial_boundaries, tri_num
+
+
+# TODO - this can be made more universal
+def find_cells_by_cluster_id(spk, cluster_ids, channel=None):
+    '''Find cell indices that create given clusters on specific channel.'''
+    cell_idx = list()
+    if isinstance(cluster_ids, int):
+        cluster_ids = [cluster_ids]
+
+    for cl in cluster_ids:
+        is_cluster = spk.cellinfo.cluster == cl
+        if channel is not None:
+            is_channel = spk.cellinfo.channel == channel
+            idxs = np.where(is_cluster & is_channel)[0]
+        else:
+            idxs = np.where(is_cluster)[0]
+
+        if len(idxs) == 1:
+            cell_idx.append(idxs[0])
+        else:
+            raise ValueError('Found 0 or > 1 cluster IDs.')
+
+    return cell_idx
+
+
+def read_drop_info(path):
+    '''Reads (channels, cluster id) pairs to drop from a text file.
+
+    The text file should follow a structure:
+    channel_name1: [cluster_id1, cluster_id2, ...]
+    channel_name2: [cluster_id1, cluster_id2, ...]
+
+    Parameters
+    ----------
+    path : str
+        Path to the text file.
+
+    Returns
+    -------
+    to_drop : list
+        List of (channel, cluster_id) tuples representing all such pairs
+        read from the text file.
+    '''
+    # read merge info
+    with open(path) as file:
+        text = file.readlines()
+
+    # drop info is organized into channels / cluster ids
+    to_drop = list()
+    for line in text:
+        channel = line.split(', ')[0]
+        idx1, idx2 = line.find('['), line.find(']') + 1
+        clusters = eval(line[idx1:idx2])
+        for cluster in clusters:
+            to_drop.append((channel, cluster))
+
+    return to_drop
+
+
+def drop_cells_by_channel_and_cluster_id(spk, to_drop):
+    '''Works in place!'''
+    # find cell idx by channel + cluster ID
+    cell_idx = list()
+    for channel, cluster in to_drop:
+        this_idx = find_cells_by_cluster_id(spk, cluster, channel=channel)[0]
+        cell_idx.append(this_idx)
+    spk.drop_cells(cell_idx)

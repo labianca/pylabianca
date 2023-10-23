@@ -28,26 +28,29 @@ import pylabianca as pln
 # channel
 # if you leave it as None, the first channel will be estimated from
 # selected units, which may be incorrect
-first_channel = 64
+first_channel = 129
 
 # the directory with sorting results - that is after manual curation and
 # export using updateSORTINGresults_mm matlab function located in
 # psy_screenning-\helpers\sorting_utils)
-data_dir = (r'D:\Dropbox\PROJ\Labianka\sorting\Kasia_debug\sub-U03_ses-main_task-retrocue_run-01_ieeg')
+data_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9XZ8l1'
+            'O\switchorder\derivatives\sorting\sub-U05\ses-main\sub-U05_'
+            'ses-main_task-switchorder_run-01_sorter-osort_norm-False')
 
 # whether to plot figures and where to save them
 save_fig = True
-save_fig_dir = (r'D:\Dropbox\PROJ\Labianka\sorting\Kasia_debug\figures')
+save_fig_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9'
+                'XZ8l1O\switchorder\derivatives\sel_ref\sub-U05\ses-main')
 
 # data format - 'standard' or 'mm' (depends on how you exported the curated units)
-data_format = 'standard'
+data_format = 'mm'
 
 # minimum coincidence threshold for coincidence cluster formation
-coincidence_threshold = 0.3
+coincidence_threshold = 0.25
 
 # minimum number of different-channel units in a coincidence cluster to
 # classify it as a reference cluster
-min_ref_channels = 3
+min_ref_channels = 2
 
 # weights
 # -------

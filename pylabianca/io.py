@@ -1,6 +1,7 @@
 import os
 import os.path as op
 from pathlib import Path
+from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -8,93 +9,8 @@ import pandas as pd
 from .spikes import SpikeEpochs, Spikes
 
 
-# TODO - consider moving gammbur specific code to GammBur...
-def prepare_gammbur_metadata(df, trial_indices=None):
-    '''Prepare behavioral data from GammBur.
-
-    This function is specific to GammBur project. It names columns
-    appropriately and sets their dtypes.
-    '''
-    if isinstance(df, np.ndarray):
-        df = pd.DataFrame(df)
-
-    # set column names
-    df.columns = ['dig1', 'dig2', 'dig3', 'ifcorrect', 'load', 'ifout',
-                  'probe', 'RT']
-
-    # set dtypes
-    int_cols = ['dig1', 'dig2', 'dig3', 'load', 'probe']
-    col_types = {col: 'int' for col in int_cols}
-    col_types.update({col: 'bool' for col in ['ifcorrect', 'ifout']})
-    df = df.astype(col_types)
-
-    # set RT to seconds
-    df['RT'] = df['RT'] / 1000
-
-    if trial_indices is None:
-        n_trials = df.shape[0]
-        trial_indices = np.arange(n_trials)
-
-    df.loc[:, 'trial'] = trial_indices
-    return df
-
-
-def read_gammbur(subject_id=None, fname=None, kind='spikes', verbose=True):
-    '''Read GammBur fieldtrip data format straight from the .mat file.
-
-    Parameters
-    ----------
-    fname : str | pathlib.Path
-        File name or full filepath to the ``.mat`` file.
-    kind : str
-        The data kind to read. Currently ``'spikes'`` and ``'lfp'`` are
-        supported.
-    verbose : bool
-        Verbosity level.
-
-    Returns
-    -------
-    data : mne.Epochs | SpikeEpochs
-        Object containing the data.
-    '''
-    if fname is None and subject_id is not None:
-        fname = find_file_name_gammbur(subject_id)
-    if kind == 'spikes':
-        return _read_spikes_gammbur(fname)
-    elif kind == 'lfp':
-        return _read_lfp_gammbur(fname, verbose=verbose)
-    else:
-        raise ValueError('The data kind to read has to be "spikes" or "lfp"')
-
-
-def find_file_name_gammbur(subject_id, data_dir='cleandata'):
-    """Find the GammBur file name for a given subject."""
-    import sarna
-
-    dropbox_dir = Path(sarna.proj.find_dropbox())
-    proj_dir = dropbox_dir / 'PROJ' / 'Labianka' / 'GammBur'
-    data_dir = proj_dir / data_dir
-    assert op.isdir(data_dir)
-    fls = os.listdir(data_dir)
-
-    subj_id_txt = '{:02d}'.format(subject_id)
-    fname = [f for f in fls if f.startswith(subj_id_txt)][0]
-    fname = data_dir / fname
-    return fname
-
-
-def read_raw_gammbur(subject_id=None, fname=None):
-    """Read raw GammBur spikes data."""
-    if fname is None and subject_id is not None:
-        fname = find_file_name_gammbur(subject_id, data_dir='cleandataraw')
-    spk, events = read_raw_spikes(fname, data_name='ft_format')
-    spk.metadata = prepare_gammbur_metadata(spk.metadata)
-    return spk, events
-
-
-# TODO
-# - [ ] read waveform too...
-def read_spikes(fname, data_name='spike'):
+# TODO - trialinfo columns ...
+def read_filedtrip(fname, data_name='spike', kind='raw', waveform=True):
     '''Read fieldtrip SpikeTrials format.
 
     Parameters
@@ -104,6 +20,12 @@ def read_spikes(fname, data_name='spike'):
     data_name : str
         The name of the saved variable - this can be arbitrary so it is
         necessary to specify. ``'spike'`` by default.
+    kind : str
+        Data format to read. Can be:
+        * ``'raw'`` for FieldTrip raw spikes format
+        * ``'trials'`` or ``'epochs'`` for FieldTrip SpikeTrials format
+    waveform : bool
+        Whether to read waveforms. Defaults to ``True``.
 
     Returns
     -------
@@ -112,113 +34,149 @@ def read_spikes(fname, data_name='spike'):
     '''
     from scipy.io import loadmat
 
+    accept_kind = ['epochs', 'trials', 'raw']
+    if kind not in accept_kind:
+        msg = (f'`kind` has to be one of {accept_kind}, got {kind}.')
+        raise ValueError(msg)
+
     data = loadmat(fname, squeeze_me=True, variable_names=data_name)[data_name]
+
     cell_names = data['label'].item()
-    time = data['time'].item()
-    trial = data['trial'].item() - 1
-    trialtime = data['trialtime'].item()
-    trialinfo = data['trialinfo'].item()
 
-    msg = 'All trials have to be of the same length'
-    assert (trialtime == trialtime[[0]]).all(), msg
-
-    n_trials = trialtime.shape[0]
-    time_limits = trialtime[0]
-    trialinfo = pd.DataFrame(trialinfo)
-
-    # create SpikeEpochs
-    spk = SpikeEpochs(time, trial, time_limits, n_trials=n_trials,
-                      metadata=trialinfo, cell_names=cell_names)
-    spk.filename = fname
-    return spk
-
-
-def _read_spikes_gammbur(fname):
-    '''GammBur-specific function that reads spikes and formats metadata.'''
-    spikes = read_spikes(fname, data_name='spikes')
-    spikes.metadata = prepare_gammbur_metadata(spikes.metadata)
-    return spikes
-
-
-def _read_lfp_gammbur(fname, verbose=True):
-    '''GammBur-specific function that reads lfp data and formats metadata.'''
-    import mne
-    from scipy.io import loadmat
-
-    sfreq = 500  # assumed LFP sampling frequency
-    ch_names = ['dlpfc0{}'.format(idx) for idx in range(1, 5)]
-    ch_names += ['hippo01', 'hippo02']
-    info = mne.create_info(ch_names, sfreq, ch_types='seeg', verbose=verbose)
-
-    matfile = loadmat(fname, squeeze_me=True, simplify_cells=True)
-    has_lfp = ('lfp' in matfile) and (len(matfile['lfp']) > 0)
-
-    if has_lfp:
-        epochs = mne.io.read_epochs_fieldtrip(fname, info, data_name='lfp')
-        tri_idx = _prepare_trial_indices(
-            epochs, matfile['removed_tri_lfp'] - 1)
-        epochs.metadata = prepare_gammbur_metadata(
-            epochs.metadata, trial_indices=tri_idx)
-        return epochs
+    if waveform:
+        waveform, waveform_time = _get_waveforms(data)
     else:
-        # given file does not contain lfp
-        return None
+        waveform, waveform_time = None, None
 
-
-def read_raw_spikes(fname, data_name='spikes'):
-    '''Read raw spikes fieldtrip format.
-
-    Parameters
-    ----------
-    fname : str
-        Filename / path to the file.
-    data_name : str
-        Name of the variable stored in the .mat file.
-
-    Returns
-    -------
-    spk : Spikes
-        Spikes object.
-    events : np.ndarray | None
-        If ``.events`` field is present in the mat file ``events`` contain
-        64 bit numpy array of the shape n_events x 2. Otherwise it is ``None``.
-    '''
-    from scipy.io import loadmat
-    data = loadmat(fname, squeeze_me=True, variable_names=data_name)[data_name]
-
-    cell_names = data['label'].item()
-    timestamps = data['timestamp'].item()
-    trialinfo = data['trialinfo'].item()
-    fields = data['cellinfo'].item().dtype.names
+    if 'trialinfo' in data.dtype.names:
+        trialinfo = data['trialinfo'].item()
+        trialinfo = pd.DataFrame(trialinfo)
+    else:
+        trialinfo = None
 
     if 'cellinfo' in data.dtype.names:
         data_dct = dict()
+        fields = data['cellinfo'].item().dtype.names
         for fld in fields:
             data_dct[fld] = data['cellinfo'].item()[fld].item()
         cellinfo = pd.DataFrame(data_dct)
     else:
         cellinfo = None
 
-    sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
-    trialinfo = data['trialinfo'].item()
+    if kind in ['trials', 'epochs']:
+        spk = _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo,
+                                  waveform, waveform_time)
+    elif kind == 'raw':
+        spk = _read_ft_spikes_raw(data, cell_names, cellinfo,
+                                  waveform, waveform_time)
 
-    if 'events' in data.dtype.names:
-        events = data['events'].item().astype('int64')
-    else:
-        events = None
+    spk.filename = fname
+    return spk
+
+
+# TODO
+# - [ ] read waveform too...
+def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
+                        waveform_time):
+    '''Read fieldtrip SpikeTrials format.
+
+    Returns
+    -------
+    spk : SpikeEpochs
+        SpikeEpochs object.
+    '''
+
+    time = data['time'].item()
+    trial = data['trial'].item() - 1
+    trialtime = data['trialtime'].item()
+
+    msg = 'All trials have to be of the same length'
+    assert (trialtime == trialtime[[0]]).all(), msg
+
+    n_trials = trialtime.shape[0]
+    time_limits = trialtime[0]
+
+    # create SpikeEpochs
+    spk = SpikeEpochs(time, trial, time_limits, n_trials=n_trials,
+                      metadata=trialinfo, cell_names=cell_names,
+                      cellinfo=cellinfo, waveform=waveform,
+                      waveform_time=waveform_time)
+
+    return spk
+
+
+def _read_ft_spikes_raw(data, cell_names, cellinfo, waveform,
+                        waveform_time):
+    '''Read raw spikes fieldtrip format.
+
+    Returns
+    -------
+    spk : Spikes
+        Spikes object.
+
+    '''
+    timestamps = data['timestamp'].item()
+    timestamps = _check_timestamps(timestamps)
+    sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
 
     # create Spikes
     spk = Spikes(timestamps, sfreq, cell_names=cell_names,
-                 metadata=trialinfo, cellinfo=cellinfo)
-    return spk, events
+                 cellinfo=cellinfo, waveform=waveform,
+                 waveform_time=waveform_time)
+    return spk
 
 
-def _prepare_trial_indices(epochs, removed_idx):
-    n_removed = len(removed_idx)
-    n_all_tri = epochs.metadata.shape[0] + n_removed
-    tri_idx = np.arange(n_all_tri)
-    tri_idx = np.delete(tri_idx, removed_idx)
-    return tri_idx
+def _check_timestamps(timestamps):
+    from numbers import Integral
+
+    n_units = len(timestamps)
+    for ix in range(n_units):
+        if isinstance(timestamps[ix], Integral):
+            timestamps[ix] = np.array([timestamps[ix]])
+
+    return timestamps
+
+
+def _get_waveforms(data):
+    '''Get waveforms from a FieldTrip file.'''
+    sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
+
+    if 'waveform' in data.dtype.names:
+        waveforms = data['waveform'].item()
+        new_waveforms = list()
+        n_units = len(waveforms)
+        for ix in range(n_units):
+            this_waveform = waveforms[ix]
+
+            if (isinstance(this_waveform, np.ndarray)
+                and len(this_waveform) > 0):
+
+                # we currently take only the first lead
+                if this_waveform.ndim > 2:
+                    this_waveform = this_waveform[0]
+                elif this_waveform.ndim == 1:
+                    # only one waveform, squeezed
+                    this_waveform = this_waveform[:, None]
+                new_waveforms.append(this_waveform.T)
+            else:
+                new_waveforms.append(None)
+
+        waveform_length = [x.shape[1] for x in new_waveforms if x is not None]
+        same_lengths = all(waveform_length[0] == x
+                           for x in waveform_length[1:])
+
+        if same_lengths:
+            # waveform time in ms
+            waveform_time = np.arange(waveform_length[0]) / (sfreq / 1000)
+        else:
+            warn('Not all waveforms have the same number of samples, '
+                 'waveforms are therefore ignored. Got the following waveform'
+                 f'lengths: {waveform_length}.')
+            waveforms, waveform_time = None, None
+    else:
+        waveforms, waveform_time = None, None
+
+    return new_waveforms, waveform_time
 
 
 # TODO: add progressbar?
@@ -226,7 +184,7 @@ def read_combinato(path, label=None, alignment='both'):
     '''Read spikes from combinato sorting output.
 
     Note that groups are read as single units, the class information is stored
-    inside the Spikes object.
+    inside the Spikes object in `.cellinfo` attribute.
 
     Parameters
     ----------
@@ -518,12 +476,20 @@ def read_osort(path, waveform=True, channels='all', format='mm',
 
     # the sfreq here refers to timestamp frequency, not the sampling frequency
     # of the signal
-    return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveforms)
+    if waveform:
+        n_samples = waveforms[0].shape[1]
+        samples_per_ms = 100
+        waveform_time = np.arange(n_samples) / samples_per_ms
+    else:
+        waveform_time = None
+
+    return Spikes(timestamp, sfreq=1e6, cellinfo=cellinfo, waveform=waveforms,
+                  waveform_time=waveform_time)
 
 
-def read_neuralynx_events(path, events_file='Events.nev', format='dataframe',
+def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
                           first_timestamp_from='CSC130.ncs'):
-    '''Turn neuralynx events file to a simple dataframe.
+    '''Read neuralynx events file as a simple array or dataframe.
 
     Parameters
     ----------
@@ -627,13 +593,19 @@ def _convert_spk_to_mm_matlab_format(spk):
     n_units = len(spk)
 
     data = dict()
-    for fld in ['cluster_id', 'alignment', 'channel', 'threshold']:
-        col_name = fld.split('_')[0]
+    has_cellinfo = spk.cellinfo is not None
 
-        # extract values from dataframe column and make sure it is N x 1
-        data[fld] = spk.cellinfo.loc[:, col_name].values[:, None]
+    if has_cellinfo:
+        columns = spk.cellinfo.columns
+        for fld in ['cluster_id', 'alignment', 'channel', 'threshold']:
+            col_name = fld.split('_')[0]
+            if col_name in columns:
+                # extract values from dataframe column
+                # and make sure it is N x 1
+                data[fld] = spk.cellinfo.loc[:, col_name].values[:, None]
 
-    # other cellinfo columns
+        # other cellinfo columns
+        # TODO
 
     data['timestamp'] = np.empty((n_units, 1), dtype='object')
     data['waveform'] = np.empty((n_units, 1), dtype='object')
@@ -652,18 +624,41 @@ def _save_spk_to_mm_matlab_format(spk, path):
     savemat(path, data)
 
 
-def add_region_from_channels_table(spk, channel_info, source_column='area',
-                                   target_column='region'):
-    '''Add brain region information to Spikes from channel info excel table.
+def _get_chan_num(chan):
+    from numbers import Integral
+    if isinstance(chan, Integral):
+        return chan
+    else:
+        return int(''.join([char for char in chan if char.isdigit()]))
+
+
+def add_region_from_channel_ranges(spk, channel_info, source_column='area',
+                                   target_column='region',
+                                   channel_column='channel'):
+    '''Add brain region information to Spikes from channel ranges info table.
 
     Parameters
     ----------
     spk : Spikes | SpikeEpochs
-        Spikes object whose cell metadata (``.cellinfo``) should be filled
-        with brain region information from the table.
+        Spikes object whose cell metadata (``.cellinfo``) will be filled
+        with information from the table. The ``.cellinfo`` is expected to
+        contain channel information in column ``'channel'``. The channel
+        information should be either an integer or string, but for strings
+        non-numeric values are removed and the remaining numeric values are
+        concatenated and turned into integer.
     channel_info : pandas.DataFrame
         Dataframe containing brain region info for specified channel ranges.
+        The expected format of this table is the following:
+        * ``'channel start'`` column specifying starting values of a channel
+          range (for example microwires belonging to the same Behnke-Fried
+          electrode).
+        * ``'channel end'`` column specifying ending values of a channel range.
+
+        The column specifyng region for given channel range chan be set using
+        ``source_column`` argument.
     '''
+    assert isinstance(spk.cellinfo, pd.DataFrame)
+    assert 'channel' in spk.cellinfo.columns
     chans = spk.cellinfo.channel.unique()
 
     numeric_rows = [isinstance(x, (int, float))
@@ -671,7 +666,7 @@ def add_region_from_channels_table(spk, channel_info, source_column='area',
     channel_info = channel_info.loc[numeric_rows, :]
 
     for chan in chans:
-        chan_num = int(''.join([char for char in chan if char.isdigit()]))
+        chan_num = _get_chan_num(chan)
         msk = (channel_info['channel start'] <= chan_num) & (
             channel_info['channel end'] >= chan_num)
         region = channel_info.loc[msk, source_column].values[0]

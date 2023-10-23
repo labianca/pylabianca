@@ -2,15 +2,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# TODO - ! x_dim='auto' (infers which is the likely x dimension) !
+# TODO - title is now removed, so for groupby it would be good to specify the
+#        groupby coord name in legend "title"
 # TODO - ! also support mask !
 # TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
 # TODO - get y axis from xarray data name (?)
 # TODO - the info about "one other dimension" (that is reduced) seems to be no
 #        longer accurate
-def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
-                    x_dim='time', legend=True, legend_pos=None, colors=None,
-                    labels=True):
+# def plot_spike_rate
+
+def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
+                x_dim=None, legend=True, legend_pos=None, colors=None,
+                labels=True):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -49,26 +52,109 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
     ax : matplotlib.Axes
         Axis with the plot.
     '''
-    if ax is None:
-        _, ax = plt.subplots()
+    # auto-infer reduce_dim
+    # ---------------------
+    if reduce_dim is None:
+        auto_reduce_dims = ['trial', 'fold', 'perm', 'permutation', 'cell']
+        for dimname in auto_reduce_dims:
+            if dimname in arr.coords:
+                reduce_dim = dimname
+                break
 
-    if ('cell' in frate.coords and not reduce_dim == 'cell'
-        and len(frate.cell.shape) > 0):
-        if len(frate.coords['cell'] == 1):
-            frate = frate.isel(cell=0)
+    if ('cell' in arr.coords and not reduce_dim == 'cell'
+        and len(arr.cell.shape) > 0):
+        if len(arr.coords['cell'] == 1):
+            arr = arr.isel(cell=0)
+        elif reduce_dim is None:
+            reduce_dim = 'cell'
         else:
             msg = ('DataArray contains more than one cell to plot - this is '
                     'not supported.')
             raise RuntimeError(msg)
 
+    # if reduce_dim is still None - use the first dim for 2d array
+    # TODO
+
+    # auto-infer x_dim
+    # ----------------
+    # try time, freq, frequency, lag by default
+    if x_dim is None:
+        auto_x_dims = ['time', 'frequency', 'freq', 'lag']
+        for dimname in auto_x_dims:
+            if dimname in arr.coords:
+                x_dim = dimname
+                break
+
+    # if reduce_dim is still None - use the last dim for 2d array
+    # TODO
+
+    ax = plot_xarray_shaded(
+        arr, reduce_dim=reduce_dim, x_dim=x_dim, groupby=groupby, ax=ax,
+        legend=legend, legend_pos=legend_pos, colors=colors
+    )
+
+    if labels:
+        xlabel = x_dim.capitalize()
+        if 'coord_units' in arr.attrs:
+            if x_dim in arr.attrs['coord_units']:
+                this_unit = arr.attrs['coord_units'][x_dim]
+                xlabel += f' ({this_unit})'
+        ax.set_xlabel(xlabel, fontsize=14)
+
+        if arr.name is not None:
+            ylabel = arr.name.capitalize()
+            if 'unit' in arr.attrs:
+                this_unit = arr.attrs['unit']
+                ylabel += f' ({this_unit})'
+        ax.set_ylabel(ylabel, fontsize=14)
+
+    return ax
+
+
+# TODO: allow different error shades
+def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
+                       ax=None, legend=True, legend_pos=None, colors=None):
+    """
+    arr : xarray.DataArray
+        Xarray with at least two dimensions: one is plotted along the x axis
+        (this is controlled with ``x_dim`` argument); the other is reduced
+        by averaging (see ``reduce_dim`` argument below). The averaged
+        dimension also gives rise to the standard error of the mean, which is
+        plotted as a shaded area.
+    reduce_dim : str
+        The dimension to reduce (average). The standard error is also computed
+        along this dimension. The default is ``'trial'``.
+    x_dim : str
+        Dimension to use for the x axis. The default is ``'time'``.
+    groupby : str | None
+        The dimension (or sub-dimension) to use as grouping variable plotting
+        the spike rate into separate lines. The default is ``None``, which
+        does not perform grouping.
+    ax : matplotlib.Axes | None
+        Axis to plot into. The default is ``None`` which creates an new axis.
+    legend : bool
+        Whether to plot the legend.
+    legend_pos : str | None
+        Legend position (standard matplotlib names like "upper left"). Defaults
+        to ``None`` which uses ``'best'`` position.
+    colors : list of arrays | dictionary of arrays | None
+        List of RGB arrays to use as colors for condition groups. Can also be
+        a dictionary linking condition names / values and RBG arrays. Default
+        is ``None`` which uses the default matplotlib color cycle.
+    """
+    assert reduce_dim is not None
+
+    if ax is None:
+        _, ax = plt.subplots()
+
     # compute mean, std and n
     if groupby is not None:
-        frate = frate.groupby(groupby)
+        arr = arr.groupby(groupby)
 
     # calculate standard error of the mean
-    avg = frate.mean(dim=reduce_dim)
-    std = frate.std(dim=reduce_dim)
-    n = frate.count(dim=reduce_dim)
+    avg = arr.mean(dim=reduce_dim)
+    std = arr.std(dim=reduce_dim)
+    n = arr.count(dim=reduce_dim)
     std_err = std / np.sqrt(n)
     ci_low = avg - std_err
     ci_high = avg + std_err
@@ -109,19 +195,9 @@ def plot_spike_rate(frate, reduce_dim='trial', groupby=None, ax=None,
         ax.fill_between(avg.coords[x_dim], ci_low, ci_high, linewidth=0,
                         alpha=0.3, **add_arg)
 
-
     if groupby is not None and legend:
         pos = 'best' if legend_pos is None else legend_pos
         ax.legend(title=f'{groupby}:', loc=pos)
-
-    if labels:
-        if x_dim == 'time':
-            ax.set_xlabel('Time (s)', fontsize=14)
-
-        ax.set_ylabel('Spike rate (Hz)', fontsize=14)
-        add_txt = '' if groupby is None else f' grouped by {groupby}'
-        ttl = 'Firing rate' + add_txt
-        ax.set_title(ttl, fontsize=16)
 
     return lines[0].axes
 
@@ -149,7 +225,7 @@ def check_modify_progressbar(pbar, total=None):
     '''
     if isinstance(pbar, bool):
         if pbar:
-            from tqdm.auto import tqdm
+            from tqdm import tqdm
             pbar = tqdm(total=total)
         else:
             from sarna.utils import EmptyProgressbar
@@ -168,12 +244,11 @@ def check_modify_progressbar(pbar, total=None):
 
 
 # TODO:
-# - [ ] ! fix x axis units !
 # - [ ] kind='line' ?
 # - [ ] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
-def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
-                  y_bins=100):
+def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
+                  y_bins=100, times=None):
     '''Plot waveform heatmap for one cell.
 
     Parameters
@@ -198,33 +273,43 @@ def plot_waveform(spk, pick=0, upsample=False, ax=None, labels=True,
     ax : matplotlib.Axes
         Axis with the waveform plot.
     '''
+    from .utils import _deal_with_picks
 
-    hist, _, ybins, time_edges = _calculate_waveform_density_image(
-        spk, pick, upsample, y_bins
-    )
-    max_alpha = np.percentile(hist[hist > 0], 45)
-    max_lim = np.percentile(hist[hist > 0], 99)
+    picks = _deal_with_picks(spk, picks)
+    n_picks = len(picks)
+    ax = auto_multipanel(n_picks, ax=ax)
+    use_ax = _simplify_axes(ax)
 
-    alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
-    alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
-    alpha_sum[alpha_sum > 1] = 1
+    time_unit = 'samples' if times is None else 'ms'
 
-    if ax is None:
-        _, ax = plt.subplots()
+    for idx, unit_idx in enumerate(picks):
+        hist, _, ybins, time_edges = _calculate_waveform_density_image(
+            spk, unit_idx, upsample, y_bins, times=times
+        )
+        max_alpha = np.percentile(hist[hist > 0], 45)
+        max_lim = np.percentile(hist[hist > 0], 99)
 
-    ax.imshow(hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
-              extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
-              aspect='auto')
-    if labels:
-        ax.set_xlabel('Time (ms)', fontsize=14)
-        ax.set_ylabel('Amplitude ($\mu$V)', fontsize=14)
+        alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
+        alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
+        alpha_sum[alpha_sum > 1] = 1
+
+        use_ax[idx].imshow(
+            hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
+            extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
+            aspect='auto'
+        )
+        if labels:
+            use_ax[idx].set_xlabel(f'Time ({time_unit})')
+            use_ax[idx].set_ylabel('Amplitude ($\mu$V)')
+            use_ax[idx].set_title(spk.cell_names[unit_idx])
+
     return ax
 
 
 def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
-                                      density=True, y_range=None):
+                                      density=True, y_range=None, times=None):
     '''Helps in calculating 2d density histogram of the waveforms.'''
-    from pylabianca.utils import _deal_with_picks
+    from .utils import _deal_with_picks
 
     pick = _deal_with_picks(spk, pick)[0]
     n_spikes, n_samples = spk.waveform[pick].shape
@@ -246,13 +331,16 @@ def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
 
     x_coords = np.tile(np.arange(n_samples), (n_spikes, 1))
 
-    # assume default osort times
-    sfreq = 32_000
     # sample_time = 1000 / sfreq  (combinato)
-    sample_time = 1000 / sfreq / 4  # (assume 4x upsampling)
-    sample_edge = -94  # -19 for combinato
-    time_edges = [sample_edge * sample_time,
-                  (n_samples / upsample + (sample_edge - 1)) * sample_time]
+    # sample_time = 1 if times is None else np.diff(times).mean()
+    # sample_edge = -94  # -19 for combinato
+    # time_edges = [sample_edge * sample_time,
+    #               (n_samples / upsample + (sample_edge - 1)) * sample_time]
+
+    if times is not None:
+        time_edges = [times[0], times[-1]]
+    else:
+        time_edges = [0, n_samples / upsample]
 
     xs = x_coords.ravel()
     ys = waveform.ravel()
@@ -347,8 +435,8 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     return ax
 
 
-def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
-                min_pval=0.001, ax=None):
+def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
+                pvals=None, pick=0, p_threshold=0.05, min_pval=0.001, ax=None):
     '''Plot average spike rate and spike raster.
 
     spk : pylabianca.spikes.SpikeEpochs
@@ -360,7 +448,19 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
         How to group the plots. If None, no grouping is done.
     df_clst : pandas.DataFrame | None
         DataFrame with cluster time ranges and p values. If None, no cluster
-        information is shown.
+        information is shown. This argument is to support results obtained
+        with ``pylabianca.selectivity.cluster_based_selectivity()``, but one
+        can also use the more conventional ``clusters``, ``pvals`` and
+        ``p_threshold``.
+    clusters : list of np.array
+        List of boolean arrays, where each array contains cluster membership
+        information (which points along the last array dimension contribute
+        to the given cluster).
+    pvals : list-like
+        List or array of cluster p values.
+    p_threshold : float
+        Alpha significance threshold. Clusters with p value below this
+        threshold will be shown.
     pick : int | str
         Name or index of the cell to plot.
     min_pval : float
@@ -390,16 +490,19 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, pick=0,
     else:
         assert(len(ax) == 2)
         fig = ax[0].figure
-    plot_spike_rate(this_frate, groupby=groupby, ax=ax[0])
+    plot_shaded(this_frate, groupby=groupby, ax=ax[0])
 
     # add highlight
-    if df_clst is not None:
-        this_clst = df_clst.query(f'neuron == "{cell_name}"')
-        pvals = this_clst.pval.values
-        masks = [_create_mask_from_window_str(twin, this_frate)
-                 for twin in this_clst.window.values]
-        add_highlights(this_frate, masks, pvals, ax=ax[0],
-                       min_pval=min_pval)
+    add_highlight = (df_clst is not None) or (
+        clusters is not None and pvals is not None)
+    if add_highlight:
+        if df_clst is not None:
+            this_clst = df_clst.query(f'neuron == "{cell_name}"')
+            pvals = this_clst.pval.values
+            clusters = [_create_mask_from_window_str(twin, this_frate)
+                        for twin in this_clst.window.values]
+        add_highlights(this_frate, clusters, pvals, ax=ax[0],
+                       p_threshold=p_threshold, min_pval=min_pval)
 
     plot_raster(spk.copy().pick_cells(cell_name), pick=0,
                 groupby=groupby, ax=ax[1])
@@ -467,7 +570,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     ax : matplotlib.Axes
         Axis with the plot.
     '''
-    import sarna
+    from borsar.viz import highlight
     try:
         import xarray as xr
         has_xarray = True
@@ -511,19 +614,12 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         ax.set_ylim([ylm[0], ylm[1] + 2 * y_step])
 
         sig_idx = np.where(pvals_significant)[0]
-
         sig_clusters = [clusters[ix] for ix in sig_idx]
 
-        try:
-            sarna.viz.highlight(
-                x_coords, sig_clusters, axis=ax,
-                bottom_bar=True, bottom_extend=bottom_extend
-            )
-        except TypeError:
-            sarna.viz.highlight(
-                x_coords, sig_clusters, ax=ax,
-                bottom_bar=True, bottom_extend=bottom_extend
-            )
+        borsar.viz.highlight(
+            x_coords, sig_clusters, ax=ax,
+            bottom_bar=True, bottom_extend=bottom_extend
+        )
 
         texts = list()
         for ix in clusters_x_sorting:
@@ -640,3 +736,130 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
     dns = vals.mean()
 
     return dns
+
+
+def auto_multipanel(n_to_show, ax=None, figsize=None):
+    '''Create a multipanel figure that fits at least ``n_to_show`` axes.'''
+    n = np.sqrt(n_to_show)
+    n_left = 0
+
+    if ax is None:
+        n *= 1.25
+        n_cols = int(np.round(n))
+        n_rows = int(np.ceil(n_to_show / n))
+
+        if n_to_show > 1:
+            n_left = (n_cols * n_rows) - n_to_show
+
+            # check if one less row works better
+            n_cols_try, n_rows_try = n_cols + 1, n_rows - 1
+            n_left_try1 = (n_cols_try * n_rows_try) - n_to_show
+            try1_good = n_left_try1 > 0 and n_left_try1 < n_left
+            n_left_try1 += (1 - try1_good) * 100
+
+            # also check if one less column is better
+            n_cols_try2, n_rows_try2 = n_cols - 1, n_rows + 1
+            n_left_try2 = (n_cols_try2 * n_rows_try2) - n_to_show
+            try2_good = n_left_try2 > 0 and n_left_try2 < n_left
+            n_left_try2 += (1 - try2_good) * 100
+
+            if try1_good or try2_good:
+                if n_left_try2 < n_left_try1:
+                    n_cols, n_rows = n_cols_try2, n_rows_try2
+                else:
+                    n_cols, n_rows = n_cols_try, n_rows_try
+
+            n_left = (n_cols * n_rows) - n_to_show
+            if figsize is None:
+                if n_cols == 1 and n_rows == 1:
+                    figsize = None
+                elif n_rows > 2 or n_cols > 2:
+                    # some calculation
+                    figsize = (n_cols * 1.35 * 1.5, n_rows * 1.5)
+
+        fig, ax = plt.subplots(nrows=n_rows, ncols=n_cols, figsize=figsize,
+                               constrained_layout=True)
+
+        if n_left > 0:
+            for this_ax in ax.ravel()[-n_left:]:
+                this_ax.set_xticks([])
+                this_ax.set_yticks([])
+
+    return ax
+
+
+def _simplify_axes(ax):
+    if isinstance(ax, list):
+        axes = np.array(ax)
+    elif isinstance(ax, np.ndarray):
+        axes = ax.ravel()
+    else:
+        axes = np.array([ax])
+    return axes
+
+
+def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
+             max_isi=None, ax=None):
+    '''Plot inter-spike intervals (ISIs).
+
+    Parameters
+    ----------
+    spk : pylabianca.spikes.Spikes
+        Spikes object to use.
+    picks : int | str | list of int | list of str | None
+        Which cells to plot. If ``None`` all cells are plotted.
+    unit : str
+        Time unit to use when plotting the ISIs. Can be ``'ms'`` or ``'s'``.
+    bins : int | None
+        Number of bins to use for the histograms. If ``None`` the number of
+        bins is automatically determined.
+    min_spikes : int
+        Minimum number of spikes required to plot the ISI histogram.
+    max_isi : float | None
+        Maximum ISI time to plot. If ``None`` the maximum ISI is set to 0.1 for
+        ``unit == 's'`` and 100 for ``unit == 'ms'``.
+    ax : matplotlib.Axes | None
+        Axis to plot to. If ``None`` a new figure is created.
+
+    Returns
+    -------
+    ax : matplotlib.Axes
+        Axes with the plot.
+    '''
+    from .utils import _deal_with_picks
+    from .spikes import Spikes
+
+    msg = 'Currently only Spikes are supported in ``plot_isi()``.'
+    assert(isinstance(spk, Spikes)), msg
+
+    assert unit in ['s', 'ms']
+    picks = _deal_with_picks(spk, picks)
+    n_picks = len(picks)
+    ax = auto_multipanel(n_picks)
+
+    div = 1000 if unit == 'ms' else 1
+    if max_isi is None:
+        max_isi = 100 if unit == 'ms' else 0.1
+
+    axes = _simplify_axes(ax)
+    n_axes = len(axes)
+    for idx, unit_idx in enumerate(picks):
+        stamps = spk.timestamps[unit_idx]
+
+        if len(stamps) > min_spikes:
+            isi = np.diff(stamps / (spk.sfreq / div))
+            isi = isi[isi < max_isi]
+            n_isi = len(isi)
+            use_bins = (bins if bins is not None
+                        else min(250, int(n_isi / 100)))
+            axes[idx].hist(isi, bins=use_bins)
+            axes[idx].set_ylabel('Count', fontsize=12)
+            axes[idx].set_xlabel(f'ISI ({unit})', fontsize=12)
+        axes[idx].set_title(spk.cell_names[unit_idx], fontsize=12)
+
+    if n_axes > n_picks:
+        for ix in range(n_picks, n_axes):
+            axes[ix].set_xticks([])
+            axes[ix].set_yticks([])
+
+    return ax

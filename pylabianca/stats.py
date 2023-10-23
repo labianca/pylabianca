@@ -5,14 +5,14 @@ import numpy as np
 # CHANGE THE api - the first argument could be a list of arrays or an xarray
 def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
                      return_pvalue=True, return_distribution=True, n_jobs=1):
-    import sarna
+    import borsar
 
     n_groups = len(arrays)
     tail = 'both' if n_groups == 2 else 'pos'
-    stat_fun = sarna.cluster._find_stat_fun(n_groups=n_groups, paired=paired,
+    stat_fun = borsar.stats._find_stat_fun(n_groups=n_groups, paired=paired,
                                             tail=tail)
 
-    thresh, dist = sarna.cluster._compute_threshold_via_permutations(
+    thresh, dist = borsar.stats._compute_threshold_via_permutations(
         arrays, paired=paired, tail=tail, stat_fun=stat_fun,
         return_distribution=True, n_permutations=n_perm, progress=progress,
         n_jobs=n_jobs)
@@ -110,7 +110,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     pval : numpy.ndarray
         List of p values from anova.
     '''
-    from sarna.cluster import permutation_cluster_test_array
+    from borsar.cluster import permutation_cluster_test_array
 
     # TODO: check if theres is a condition dimension (if so -> paired)
     arrays = [arr.values for _, arr in frate.groupby(compare)]
@@ -129,6 +129,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
 
 # ENH: move to sarna/borsar sometime
+# ENH: allow for standard arrays (and perm_index)
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
                                          adjacency=None):
     '''Performs a cluster-based test from precalculated permutations.
@@ -170,10 +171,13 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     assert isinstance(data, xr.DataArray)
     assert isinstance(perm_data, xr.DataArray)
     assert tail in ['both', 'pos', 'neg']
-    assert 'perm' in perm_data.dims
+    dim_names = ['perm', 'permutation']
+    has_dim = [dimname in perm_data.dims for dimname in dim_names]
+    assert any(has_dim)
+    perm_dim_name = dim_names[np.where(has_dim)[0][0]]
 
     percentiles = [97.5, 2.5] if tail == 'both' else [95, 5]
-    perm_dim = perm_data.dims.index('perm')
+    perm_dim = perm_data.dims.index(perm_dim_name)
     n_perms = perm_data.shape[perm_dim]
     thresholds = np.percentile(perm_data, percentiles, axis=perm_dim)
 
@@ -193,8 +197,8 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     cluster_distr_pos = list()
     cluster_distr_neg = list()
 
-    for perm_idx in perm_data.coords['perm'].data:
-        perm_stat = perm_data.sel(perm=perm_idx)
+    for perm_idx in perm_data.coords[perm_dim_name].data:
+        perm_stat = perm_data.sel({perm_dim_name: perm_idx})
 
         perm_clusters, perm_cluster_stats = borsar.find_clusters(
             perm_stat.values, thresholds, backend='borsar',

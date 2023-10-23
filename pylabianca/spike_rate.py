@@ -67,7 +67,7 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
 
         for pick in picks:
             times, frt = func(
-                spk.time[pick], spk.trial[pick], [tmin, tmax],
+                spk.time[pick], spk.trial[pick], np.array([tmin, tmax]),
                 spk.n_trials, winlen=winlen, step=step)
             frate.append(frt)
             cell_names.append(spk.cell_names[pick])
@@ -75,13 +75,23 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
     frate = np.stack(frate, axis=0)
     frate = _turn_spike_rate_to_xarray(times, frate, spk,
                                         cell_names=cell_names)
+    frate = _add_frate_info(frate)
+
     return frate
+
+
+def _add_frate_info(arr, dep='rate'):
+    arr.name = f'firing {dep}'
+    arr.attrs['unit'] = "Hz"
+    arr.attrs['coord_units'] = {'time': 's'}
+    return arr
 
 
 # ENH: speed up by using previous mask in the next step to pre-select spikes
 def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
                               n_trials, winlen=0.25, step=0.05):
     half_win = winlen / 2
+    window_limits = np.array([-half_win, half_win])
     used_range = time_limits[1] - time_limits[0]
     n_steps = int(np.floor((used_range - winlen) / step + 1))
 
@@ -91,7 +101,7 @@ def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
     frate = np.zeros((n_trials, n_steps))
 
     for step_idx in range(n_steps):
-        win_lims = times[step_idx] + np.array([-half_win, half_win])
+        win_lims = times[step_idx] + window_limits
         msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
         in_tri, count = np.unique(tri, return_counts=True)

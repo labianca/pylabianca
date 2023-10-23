@@ -2,17 +2,19 @@ from typing import Type
 import numpy as np
 import pandas as pd
 
-from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
-from .spike_rate import compute_spike_rate, _spike_density
-from .spike_distance import compare_spike_times
+from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
+                    _get_trial_boundaries)
+from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
+from .spike_distance import compare_spike_times, xcorr_hist_trials
 
 
 # TODO:
 # - [ ] index by trial?
-# - [ ] object of type 'SpikeEpochs' has no len() !
+# - [ ] len(spk_epochs) currently gives number of units, not epochs ...
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
-                 waveform=None, cell_names=None, metadata=None, cellinfo=None):
+                 waveform=None, waveform_time=None, cell_names=None,
+                 metadata=None, cellinfo=None):
         '''Create ``SpikeEpochs`` object for convenient storage, analysis and
         visualization of spikes data.
 
@@ -38,6 +40,9 @@ class SpikeEpochs():
             cells fire for the last few trials).
         waveform : list of numpy ndarrays | None
             List of spikes x samples waveform arrays.
+        waveform_time : np.ndarray | None
+            One-dimensional array of time values in milliseconds for
+            consecutive samples of the waveform.
         cell_names : list of str | None
             String identifiers of cells. First string corresponds to first
             cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
@@ -81,10 +86,11 @@ class SpikeEpochs():
             assert cellinfo.shape[0] == n_cells
 
         if waveform is not None:
-            _check_waveforms(self.time, waveform)
+            _check_waveforms(self.time, waveform, waveform_time)
 
         self.n_trials = n_trials
         self.waveform = waveform
+        self.waveform_time = waveform_time
         self.cell_names = cell_names
         self.metadata = metadata
         self.cellinfo = cellinfo
@@ -246,7 +252,45 @@ class SpikeEpochs():
         xarr = _turn_spike_rate_to_xarray(
             tms, cnt.transpose((1, 0, 2)), self,
             cell_names=self.cell_names[picks])
+        xarr = _add_frate_info(xarr, dep='density')
+
         return xarr
+
+    def xcorr(self, picks=None, picks2=None, sfreq=500., max_lag=0.2,
+              bins=None, gauss_fwhm=None):
+        """
+        Calculate cross-correlation histogram.
+
+        Parameters
+        ----------
+        picks : ...
+            List of cell indices or names to perform cross- and auto- correlations
+            for. All combinations of cells will be used.
+        picks2 : ...
+            ...
+        sfreq : float
+            Sampling frequency of the bins. The bin width will be ``1 / sfreq``
+            seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
+        max_lag : float
+            Maximum lag in seconds. Used only when ``bins is None``. Defaults
+            to ``0.2``.
+        bins : numpy array | None
+            Array representing edges of the histogram bins. If ``None`` (default)
+            the bins are constructed based on ``sfreq`` and ``max_lag``.
+        gauss_fwhm : float | None
+            Full-width at half maximum of the gaussian kernel to convolve the
+            cross-correlation histograms with. Defaults to ``None`` which ommits
+            convolution.
+
+        Returns
+        -------
+        xcorr : xarray.DataArray
+            ...
+        """
+        return xcorr_hist_trials(
+            self, picks=picks, picks2=picks2, sfreq=sfreq, max_lag=max_lag,
+              bins=bins, gauss_fwhm=gauss_fwhm
+        )
 
     def n_spikes(self, per_epoch=False):
         """Calculate number of spikes per cell (per epoch).
@@ -371,7 +415,10 @@ class SpikeEpochs():
                             'select elements of SpikeEpochs')
 
         newtime, newtrial = list(), list()
-        new_metadata = new_metadata.reset_index(drop=True)
+        if self.metadata is not None:
+            new_metadata = new_metadata.reset_index(drop=True)
+        else:
+            new_metadata = None
 
         has_waveform = self.waveform is not None
         waveform = list() if has_waveform else None
@@ -390,12 +437,12 @@ class SpikeEpochs():
 
         new_cellinfo = None if self.cellinfo is None else self.cellinfo.copy()
         return SpikeEpochs(newtime, newtrial, time_limits=self.time_limits,
-                           n_trials=new_metadata.shape[0],
+                           n_trials=len(tri_idx),
                            cell_names=self.cell_names.copy(),
                            metadata=new_metadata, cellinfo=new_cellinfo,
                            waveform=waveform)
 
-    def plot_waveform(self, pick=0, upsample=False, ax=None, labels=True):
+    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -410,8 +457,8 @@ class SpikeEpochs():
             Axis to plot to. By default opens a new figure.
         '''
         from .viz import plot_waveform
-        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
-                             labels=labels)
+        return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
+                             labels=labels, times=self.waveform_time)
 
 
 def _epoch_spikes(timestamps, event_times, tmin, tmax):
@@ -498,34 +545,32 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     '''
     picks = _deal_with_picks(spk, picks)
     sample_time = 1 / sfreq
+    half_sample = sample_time / 2
     tmin, tmax = spk.time_limits
     times = np.arange(tmin, tmax + 0.01 * sample_time, step=sample_time)
+    time_bins = np.concatenate(
+        [times - half_sample, [times[-1] + half_sample]])
 
     n_cells = len(picks)
     n_times = len(times)
     trials_raw = np.zeros((spk.n_trials, n_cells, n_times), dtype='int')
 
     for idx, cell_idx in enumerate(picks):
-        from_idx = 0
-        for this_tri in range(spk.n_trials):
-            ix = np.where(spk.trial[cell_idx][from_idx:] == this_tri)[0]
-            if len(ix) == 0:
-                continue
+        trial_boundaries, tri_num = _get_trial_boundaries(spk, cell_idx)
+        for ix, this_tri in enumerate(tri_num):
 
-            ix = ix[-1] + 1
-            spike_times = spk.time[cell_idx][from_idx:from_idx + ix]
-            sample_ix = (np.abs(times[:, np.newaxis]
-                                - spike_times[np.newaxis, :]).argmin(axis=0))
-            t_smp, n_spikes = np.unique(sample_ix, return_counts=True)
-            trials_raw[this_tri, idx, t_smp] = n_spikes
+            spike_times = spk.time[cell_idx][
+                trial_boundaries[ix]:trial_boundaries[ix + 1]]
+            trials_raw[this_tri, idx, :] = np.histogram(
+                spike_times, bins=time_bins
+            )[0]
 
-            from_idx = from_idx + ix
     return times, trials_raw
 
 
 class Spikes(object):
-    def __init__(self, timestamps, sfreq, cell_names=None, metadata=None,
-                 cellinfo=None, waveform=None):
+    def __init__(self, timestamps, sfreq, cell_names=None,
+                 cellinfo=None, waveform=None, waveform_time=None):
         '''Create ``Spikes`` object for convenient storage, analysis and
         visualization of spikes data.
 
@@ -543,12 +588,13 @@ class Spikes(object):
             cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
             Optional, the default (``None``) names the first cell
             ``'cell000'``, the second cell ``'cell001'`` and so on.
-        metadata : pandas.DataFrame | None
-            DataFrame with trial-level metadata.
         cellinfo : pandas.DataFrame | None
             Additional cell information.
         waveform : list of np.ndarray
             List of spikes x samples waveform arrays.
+        waveform_time : np.ndarray | None
+            One-dimensional array of time values in milliseconds for
+            consecutive samples of the waveform.
         '''
         n_cells = len(timestamps)
         self.timestamps = timestamps
@@ -559,14 +605,15 @@ class Spikes(object):
                                    for idx in range(n_cells)])
 
         self.cell_names = cell_names
-        self.metadata = metadata
         self.cellinfo = cellinfo
 
         if waveform is not None:
-            _check_waveforms(timestamps, waveform)
+            _check_waveforms(timestamps, waveform, waveform_time)
             self.waveform = waveform
+            self.waveform_time = waveform_time
         else:
             self.waveform = None
+            self.waveform_time = None
 
     def __repr__(self):
         '''Text representation of SpikeEpochs.'''
@@ -625,17 +672,8 @@ class Spikes(object):
 
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
                           cell_names=self.cell_names, cellinfo=self.cellinfo,
-                          n_trials=len(events), waveform=waveforms)
-
-        # TODO: this should be removed later on, as Spike metadata should not
-        #       be supported, metadata should be provided during or after
-        #       epoching
-        if self.metadata is not None:
-            if spk.n_trials == self.metadata.shape[0]:
-                spk.metadata = self.metadata
-            else:
-                pass
-                # raise warning ...
+                          n_trials=len(events), waveform=waveforms,
+                          waveform_time=self.waveform_time)
 
         return spk
 
@@ -733,7 +771,7 @@ class Spikes(object):
         self = _sort_spikes(self, by)
         return self
 
-    def plot_waveform(self, pick=0, upsample=False, ax=None, labels=True):
+    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -753,8 +791,8 @@ class Spikes(object):
             Axis with waveform heatmap.
         '''
         from .viz import plot_waveform
-        return plot_waveform(self, pick=pick, upsample=upsample, ax=ax,
-                             labels=labels)
+        return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
+                             labels=labels, times=self.waveform_time)
 
     def to_epochs(self, pad_timestamps=10_000):
         '''Turn Spike object into one-epoch SpikeEpochs representation.'''
@@ -832,12 +870,36 @@ class Spikes(object):
         write_spikes(self, path)
 
 
-def _check_waveforms(times, waveform):
+def _check_waveforms(times, waveform, waveform_time):
     '''Safety checks for waveform data.'''
-    assert len(times) == len(waveform)
-    n_spikes_times = np.array([len(x) for x in times])
-    n_spikes_waveform = np.array([x.shape[0] for x in waveform])
+    n_waveforms = len(waveform)
+    assert len(times) == n_waveforms
+
+    ignore_waveforms = [x is None for x in waveform]
+    n_spikes_times = np.array(
+        [len(x) for x, ign in zip(times, ignore_waveforms) if not ign])
+    n_spikes_waveform = np.array(
+        [x.shape[0] for x, ign in zip(waveform, ignore_waveforms) if not ign])
     assert (n_spikes_times == n_spikes_waveform).all()
+
+    if waveform_time is not None:
+        n_times = len(waveform_time)
+        check_waveforms = np.where(~np.array(ignore_waveforms))[0]
+        n_times_wvfm_arr = [waveform[ix].shape[1]
+                            for ix in check_waveforms]
+
+        if n_waveforms > 1:
+            msg = ('If `waveform_time` is passed, waveforms for each unit '
+                   'need to have the same number of samples (second dimension'
+                   ').')
+            assert all([n_times_wvfm_arr[0] == x
+                        for x in n_times_wvfm_arr[1:]]), msg
+
+        if not n_times == n_times_wvfm_arr[0]:
+            msg = ('Length of `waveform_times` and the second dimension of '
+                   '`waveform` must be equal.')
+            raise RuntimeError(msg)
+
 
 
 def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):

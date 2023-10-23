@@ -70,7 +70,28 @@ MILLIVOLT_SCALING = (1000, u'mV')
 MICROVOLT_SCALING = (1000000, u'µV')
 
 
-def read_header(fid):
+def read_header(file_path):
+    '''Reads and parses the header of a Neuralynx file.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the file.
+
+    Returns
+    -------
+    header : dict
+        Dictionary representing the header.
+    '''
+    file_path = os.path.abspath(file_path)
+    with open(file_path, 'rb') as fid:
+        raw_header = read_raw_header(fid)
+
+    header = parse_header(raw_header)
+    return header
+
+
+def read_raw_header(fid):
     # Read the raw header data (16 kb) from the file object fid. Restores the position in the file object after reading.
     pos = fid.tell()
     fid.seek(0)
@@ -78,6 +99,21 @@ def read_header(fid):
     fid.seek(pos)
 
     return raw_hdr
+
+
+def _get_field_value(hdr_lines, field_name):
+    line_idx = [idx for idx, txt in enumerate(hdr_lines)
+                if txt.startswith(field_name)]
+
+    if len(line_idx) == 0:
+        warnings.warn(f'Could not find {field_name} in Neuralynx header.')
+        idx = None
+        value = None
+    else:
+        idx = line_idx[0]
+        value = ' '.join(hdr_lines[idx].split(' ')[1:])
+
+    return idx, value
 
 
 def parse_header(raw_hdr):
@@ -95,25 +131,55 @@ def parse_header(raw_hdr):
 
     # Try to read the original file path
     try:
-        assert hdr_lines[1].split()[1:3] == ['File', 'Name']
-        hdr[u'FileName']  = ' '.join(hdr_lines[1].split()[3:])
-        # hdr['save_path'] = hdr['FileName']
+        try:
+            assert hdr_lines[1].split()[1:3] == ['File', 'Name']
+            hdr[u'FileName']  = ' '.join(hdr_lines[1].split()[3:])
+            new_way = False
+            # hdr['save_path'] = hdr['FileName']
+        except AssertionError:
+            field_name = '-OriginalFileName'
+            _, value = _get_field_value(hdr_lines, field_name)
+            hdr[u'FileName'] = value
+            new_way = True
     except:
         warnings.warn('Unable to parse original file path from Neuralynx header: ' + hdr_lines[1])
+        new_way = True
 
     # Process lines with file opening and closing times
-    hdr[u'TimeOpened'] = hdr_lines[2][3:]
-    hdr[u'TimeOpened_dt'] = parse_neuralynx_time_string(hdr_lines[2])
-    hdr[u'TimeClosed'] = hdr_lines[3][3:]
-    hdr[u'TimeClosed_dt'] = parse_neuralynx_time_string(hdr_lines[3])
+    if new_way:
+        parse_rest_from = 1
+        time_fields = list()
+        ix, hdr[u'TimeCreated'] = _get_field_value(hdr_lines, '-TimeCreated')
+        time_fields.append(ix)
+        hdr[u'TimeOpened_dt'] = parse_neuralynx_time_string_new(
+            hdr[u'TimeCreated'])
+
+        ix, hdr[u'TimeClosed'] = _get_field_value(hdr_lines, '-TimeClosed')
+        time_fields.append(ix)
+        hdr[u'TimeClosed_dt'] = parse_neuralynx_time_string_new(
+            hdr[u'TimeClosed'])
+    else:
+        parse_rest_from = 4
+        hdr[u'TimeOpened'] = hdr_lines[2][3:]
+        hdr[u'TimeOpened_dt'] = parse_neuralynx_time_string(hdr_lines[2])
+        hdr[u'TimeClosed'] = hdr_lines[3][3:]
+        hdr[u'TimeClosed_dt'] = parse_neuralynx_time_string(hdr_lines[3])
+
 
     # Read the parameters, assuming "-PARAM_NAME PARAM_VALUE" format
-    for line in hdr_lines[4:]:
+    for line_idx, line in enumerate(hdr_lines[parse_rest_from:]):
         try:
-            name, value = line[1:].split()  # Ignore the dash and split PARAM_NAME and PARAM_VALUE
-            hdr[name] = value
+            # Ignore the dash and split PARAM_NAME and PARAM_VALUE
+            parts = line[1:].split()
+            name = parts[0]
+            value = ' '.join(parts[1:])
+            if not new_way or (line_idx + parse_rest_from) not in time_fields:
+                hdr[name] = value
         except:
-            warnings.warn('Unable to parse parameter line from Neuralynx header: ' + line)
+            if not new_way or (line_idx + parse_rest_from) not in time_fields:
+                warnings.warn(
+                    'Unable to parse parameter line from Neuralynx header: '
+                    + line)
 
     return hdr
 
@@ -159,6 +225,21 @@ def parse_neuralynx_time_string(time_string):
                                  tmp_microsecond)
 
 
+def parse_neuralynx_time_string_new(time_string):
+    # Parse a datetime object from the idiosyncratic time string in Neuralynx file headers
+    try:
+        if time_string == 'File was not closed properly':
+            return None
+        else:
+            tmp_date = [int(x) for x in time_string.split()[0].split('/')]
+            tmp_time = [int(x) for x in time_string.split()[-1].split(':')]
+            date_list = tmp_date + tmp_time
+            return datetime.datetime(*date_list)
+    except:
+        warnings.warn('Unable to parse time string from Neuralynx header: ' + time_string)
+        return None
+
+
 def check_ncs_records(records):
     # Check that all the records in the array are "similar" (have the same sampling frequency etc.
     dt = np.diff(records['TimeStamp'])
@@ -183,7 +264,7 @@ def load_ncs(file_path, load_time=True, rescale_data=True, signal_scaling=MICROV
     # Load the given file as a Neuralynx .ncs continuous acquisition file and extract the contents
     file_path = os.path.abspath(file_path)
     with open(file_path, 'rb') as fid:
-        raw_header = read_header(fid)
+        raw_header = read_raw_header(fid)
         records = read_records(fid, NCS_RECORD)
 
     header = parse_header(raw_header)
@@ -225,7 +306,7 @@ def load_nev(file_path):
     # Load the given file as a Neuralynx .nev event file and extract the contents
     file_path = os.path.abspath(file_path)
     with open(file_path, 'rb') as fid:
-        raw_header = read_header(fid)
+        raw_header = read_raw_header(fid)
         records = read_records(fid, NEV_RECORD)
 
     header = parse_header(raw_header)
