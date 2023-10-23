@@ -132,12 +132,37 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
                                          adjacency=None):
     '''Performs a cluster-based test from precalculated permutations.
-    
+
     This function should get data ready for cluster-based permutation test
     WITHOUT the need to perform any statistical tests - so if t test between
     boots of two regions are done for example, then this should be done
     OUTSIDE of this function (the function should receive the t values in
     such case), also boot averages should be done OUTSIDE.
+
+    Parameters
+    ----------
+    data : xarray.DataArray
+        Data array with observations as the first dimension (for example
+        trials for between-trials analysis or cells for between-cells
+        analysis).
+    perm_data : xarray.DataArray
+        Data array with permutations. Should contain a dimension named
+        ``'perm'``.
+    tail : str
+        Which tail to use for the test. Can be ``'both'``, ``'pos'`` or
+        ``'neg'``.
+    adjacency : numpy.ndarray
+        Adjacency matrix for clustering. If ``None`` then lattice adjacency is
+        used.
+
+    Returns
+    -------
+    clusters : list of numpy.ndarray
+        List of cluster memberships.
+    cluster_stats : numpy.ndarray
+        Cluster statistics.
+    cluster_pval : numpy.ndarray
+        Cluster p values.
     '''
     import xarray as xr
     import borsar
