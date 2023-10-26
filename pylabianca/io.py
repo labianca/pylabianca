@@ -655,6 +655,86 @@ def read_events_plexon_nex(path):
     return read_events_neo(reader, format='mne')
 
 
+def read_spikes_neo(reader, waveform=True):
+    spike_info = reader.header['spike_channels']
+    n_units = spike_info.shape[0]
+    cell_info = pd.DataFrame(spike_info)
+
+    timestamp_frate = cell_info.wf_sampling_rate.values.copy()
+    tstmp_uni = np.unique(timestamp_frate[timestamp_frate > 0])
+    assert len(tstmp_uni) == 1
+    timestamp_frate = tstmp_uni[0]
+
+    from warnings import warn
+
+    waveform = True
+
+    min_spikes = 10
+    use_cells = np.zeros(n_units, dtype=bool)
+    waveforms = list() if waveform else None
+    timestamps = list()
+
+
+    for ch_idx in range(n_units):
+        tmstmp = reader.get_spike_timestamps(spike_channel_index=ch_idx)
+        if min_spikes > 0:
+            n_spk = len(tmstmp)
+            if n_spk < min_spikes:
+                continue
+
+        timestamps.append(np.asarray(tmstmp))
+        use_cells[ch_idx] = True
+
+        if waveform:
+            wvfm = reader.get_spike_raw_waveforms(spike_channel_index=ch_idx)
+            has_wvfm = wvfm is not None
+
+            if has_wvfm:
+                wvfm_size = wvfm.shape
+                if len(wvfm_size) == 3:
+                    # middle dim is the lead dimension
+                    n_leads = wvfm_size[1]
+                    if n_leads > 1:
+                        # warn that we take only the first one
+                        warn('Currently if there are multiple leads only the '
+                             'waveforms corresponding to the first one are '
+                             'read.')
+                    wvfm = wvfm.squeeze(axis=1)
+                else:
+                    wvfm = np.asarray(wvfm)
+
+                # add to waveforms list:
+                waveforms.append(wvfm * cell_info.loc[ch_idx, 'wf_gain'])
+            else:
+                waveforms.append(wvfm)
+
+    cell_info = cell_info.loc[use_cells, :]
+    cell_names = cell_info.name.values.copy()
+
+    if waveform:
+        waveform_samples = np.array([x.shape[-1] for x in waveforms
+                                    if x is not None])
+        assert (waveform_samples[0] == waveform_samples).all()
+        waveform_samples = waveform_samples[0]
+        waveform_time = np.arange(waveform_samples) / (timestamp_frate / 1_000)
+    else:
+        waveform_time = None
+
+    spk = pln.spikes.Spikes(
+        timestamps, sfreq=timestamp_frate, cell_names=cell_names,
+        cellinfo=cell_info, waveform=waveforms, waveform_time=waveform_time
+    )
+    return spk
+
+
+# TODO: waveforms seem to be read incorrectly for fieldtrip
+# sample plexon nex
+def read_plexon_nex(path):
+    import neo
+    reader = neo.io.NeuroExplorerIO(filename=path)
+    return read_spikes_neo(reader, format='mne')
+
+
 # TODO - make sure we can save and write more cellinfo columns
 #        (and unit names)
 def _convert_spk_to_mm_matlab_format(spk):
