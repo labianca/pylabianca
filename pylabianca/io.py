@@ -587,6 +587,74 @@ def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
     return events
 
 
+def read_events_neo(reader, format='mne'):
+    '''Read events from a neo reader connected to a file.
+
+    Parameters
+    ----------
+    reader : neo.io.BaseIO
+        Neo reader connected to a file.
+    format : "mne"
+        How to format the events:
+        * ``"mne"`` - array in mne-python format
+
+        At the moment only ``"mne"`` format is supported.
+
+    Returns
+    -------
+    events : numpy.ndarray
+        n_events by 3 array in mne-python format (first column - timestamps,
+        last columns - trigger values).
+    '''
+    assert format == 'mne', 'Only "mne" format is supported at the moment.'
+    event_chan = reader.header['event_channels']
+    n_event_ch = len(event_chan)
+
+    events = [reader.get_event_timestamps(event_channel_index=idx)
+              for idx in range(n_event_ch)]
+
+    # for mne format, we only save events with event_id:
+    event_times = list()
+    event_ids = list()
+
+    for timestamp, _, event_id in events:
+        event_unique = np.unique(event_id)
+        if len(event_unique) > 0 and not (event_unique == '').all():
+            event_times.append(np.asarray(timestamp))
+            event_id = np.asarray(event_id).astype(int)
+            event_ids.append(event_id)
+
+    n_elements = len(event_times)
+    if n_elements == 0:
+        # no events to return - rasie error
+        raise RuntimeError('No events in the file.')
+    elif n_elements == 1:
+        event_times = event_times[0]
+        event_ids = event_ids[0]
+    else:
+        event_times = np.concatenate(event_times)
+        event_ids = np.concatenate(event_ids)
+
+        # sort by trigger time
+        idx = np.argsort(event_times)
+        event_times = event_times[idx]
+        event_ids = event_ids[idx]
+
+    # construct MNE-Python triggers array:
+    n_events = len(event_times)
+    events = np.zeros((n_events, 3), dtype=event_times.dtype)
+    events[:, 0] = event_times
+    events[:, -1] = event_ids
+
+    return events
+
+
+def read_events_plexon_nex(path):
+    import neo
+    reader = neo.io.NeuroExplorerIO(filename=path)
+    return read_events_neo(reader, format='mne')
+
+
 # TODO - make sure we can save and write more cellinfo columns
 #        (and unit names)
 def _convert_spk_to_mm_matlab_format(spk):
