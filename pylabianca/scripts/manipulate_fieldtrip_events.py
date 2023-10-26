@@ -16,13 +16,12 @@ import pylabianca as pln
 # we read matlab file with events
 data_dir = r'C:\Users\Asus\Dropbox\Sarenka\PROJECTS\pylabianca\ft_data'
 event_fname = 'p029_sort_final_01_events.mat'
-events_mat = loadmat(op.join(data_dir, event_fname),
-                     squeeze_me=True)['event']
+events = pln.io.read_events_plexon_nex(op.join(data_dir, event_fname))
 
 # and then format the events into mne-python events array
-event_time = events_mat['timestamp'].astype('int64')
-event_id = events_mat['value'].astype('int64')
-del events_mat
+event_time = events[:, 0]
+event_id = events[:, -1]
+
 
 # %%
 # target changes first: 20001, 20003
