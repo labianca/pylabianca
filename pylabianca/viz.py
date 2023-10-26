@@ -4,12 +4,9 @@ import matplotlib.pyplot as plt
 
 # TODO - title is now removed, so for groupby it would be good to specify the
 #        groupby coord name in legend "title"
-# TODO - ! also support mask !
 # TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
-# TODO - get y axis from xarray data name (?)
 # TODO - the info about "one other dimension" (that is reduced) seems to be no
 #        longer accurate
-# def plot_spike_rate
 
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
