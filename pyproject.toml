@@ -1,0 +1,53 @@
+[project]
+name = "pylabianca"
+version = "0.1"
+description = "Package for analysis of single-neuron spike data."
+maintainers = [
+    { name = "Mikołaj Magnuski", email = "mmagnuski@swps.edu.pl" },
+]
+
+license = { text = "BSD-3-Clause" }
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.8"
+keywords = [
+    "neuroscience",
+    "brain",
+]
+
+dependencies = [
+    "numpy >= 1.15.4",
+    "scipy >= 1.7.1",
+    "matplotlib >= 3.5.0",
+    "pandas",
+    "scikit-learn",
+    "mne >= 1.0.0",
+    "borsar",
+    "h5io",
+    "h5py",
+    "xlrd",
+    "xarray"
+]
+
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved",
+    "Programming Language :: Python",
+    "Topic :: Software Development",
+    "Topic :: Scientific/Engineering",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+]
+
+[project.optional-dependencies]
+all = ["neo", "joblib", "numba", "tqdm"]
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+Homepage = "https://github.com/labianca/pylabianca"
