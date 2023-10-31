@@ -2,7 +2,11 @@
 Python tools for spike and LFP analysis.
 
 ## installation
-Currently - just install directly from github (you will need git for that, and of course do it from your terminal/console):
+`pylabianca` can be installed using `pip`:
+```
+pip install pylabianca
+```
+To get most up-to-date version you can also install directly from github:
 ```
 pip install git+https://github.com/labianca/pylabianca
 ```
