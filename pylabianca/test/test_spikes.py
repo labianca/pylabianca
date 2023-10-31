@@ -50,14 +50,14 @@ def test_crop():
 
 def test_repr():
     spk = create_fake_spikes()
-    shouldbe = '<SpikeEpochs, 2 epochs, 2 cells, 12.0 spikes/cell on average>'
-    assert str(spk) == shouldbe
+    should_be = '<SpikeEpochs, 2 epochs, 2 cells, 12.0 spikes/cell on average>'
+    assert str(spk) == should_be
 
 
 def test_pick_cells():
     spk = create_fake_spikes()
     assert len(spk.time) == 2
-    spk.picks_cells('cell001')
+    spk.pick_cells('cell001')
     assert len(spk.time) == 1
     assert spk.time[0][0] == -0.22
 
@@ -69,13 +69,13 @@ def test_pick_cells_cellinfo_query():
     spk = create_random_spikes(cellinfo=cellinfo)
 
     spk2 = deepcopy(spk)
-    spk2.picks_cells(query='cell_idx > 18')
+    spk2.pick_cells(query='cell_idx > 18')
     assert len(spk2.time) == 2
     assert spk2.cellinfo.shape[0] == 2
     assert (spk2.cellinfo.letter.values == np.array(['c', 'd'])).all()
 
     spk3 = deepcopy(spk)
-    spk3.picks_cells(query="letter in ['a', 'c']")
+    spk3.pick_cells(query="letter in ['a', 'c']")
     assert len(spk3.time) == 2
     assert len(spk3.time[1]) == len(spk.time[2])
     assert (spk3.cellinfo.cell_idx.values == [10, 20]).all()
