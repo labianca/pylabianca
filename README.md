@@ -14,7 +14,8 @@ pip install git+https://github.com/labianca/pylabianca
 ## docs
 Online docs are currently under construction.  
 
-You can get the example human data [here](https://www.dropbox.com/scl/fo/wevgovmxv8qrl52w12b6z/h?rlkey=1je64v2h1h6zyqhzmhiykpqqu&dl=0).
+You can get the example human data [here](https://www.dropbox.com/scl/fo/wevgovmxv8qrl52w12b6z/h?rlkey=1je64v2h1h6zyqhzmhiykpqqu&dl=0).  
+The preprocessed FieldTrip data are available [here](https://www.dropbox.com/scl/fo/i6q4e0ix805dds92jibmw/h?rlkey=cfdm1730qubqwb64zj1j02tvt&dl=0).
 
 Below you can find jupyter notebook examples showcasing `pylabianca` features.
 * [introductory notebook](doc/intro_overview.ipynb) - a general overview using human intracranial spike data (sorted with Osort).  
