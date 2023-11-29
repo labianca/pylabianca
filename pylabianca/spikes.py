@@ -460,6 +460,66 @@ class SpikeEpochs():
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
                              labels=labels, times=self.waveform_time)
 
+    def apply(self, func, picks=None, per_trial=True, args=None, kwargs=None):
+        '''Apply a function to each cell and trial.
+
+        Parameters
+        ----------
+        func : callable
+            Function to apply to each cell.
+        picks : int | str | list-like of int | list-like of str | None
+            Cell indices or names to apply the function to. Optional, the
+            default (``None``) applies the function to all cells.
+        per_trial : bool
+            Whether to apply the function to each trial separately. Defaults
+            to ``True``.
+        args : list | None
+            Positional arguments to pass to the function. Defaults to ``None``.
+        kwargs : dict | None
+            Keyword arguments to pass to the function. Defaults to ``None``.
+
+        Returns
+        -------
+        out : list
+            List of outputs from the function.
+        '''
+        from .io import to_spiketools
+
+        if args is None:
+            args = list()
+        if kwargs is None:
+            kwargs = dict()
+
+        picks = _deal_with_picks(self, picks)
+
+        out = list()
+        max_trials = self.n_trials
+        for pick in picks:
+            # ENH: add `to_spiketools()` method !
+            # trials = self.to_spiketools(pick)
+            trials = to_spiketools(self, pick)
+
+            if per_trial:
+                trial_list = list()
+                for tri in trials:
+                    value = func(tri, *args, **kwargs)
+                    trial_list.append(value)
+                # else:
+                #     trial_list.append(np.nan)
+                out.append(np.array(trial_list))
+            else:
+                trial_list = func(trials, *args, **kwargs)
+                out.append(trial_list)
+
+        out = np.stack(out, axis=0)
+
+        # attempt to convert to xarray
+        names = [self.cell_names[pick] for pick in picks]
+        out = _turn_spike_rate_to_xarray(
+            None, out, self, cell_names=names)
+
+        return out
+
 
 def _epoch_spikes(timestamps, event_times, tmin, tmax):
     '''Epoch spike data with respect to event timestamps.
