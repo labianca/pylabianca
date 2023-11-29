@@ -812,7 +812,23 @@ def from_spiketools(inst, kind='trials'):
 
 
 def to_spiketools(spk_epochs, picks=None):
-    msg = ('Only exporting SpikeEpochs to spiketools is supported. You can'
+    '''Convert pylabianca SpikeEpochs to list of arrays.
+
+    Parameters
+    ----------
+    spk_epochs : SpikeEpochs
+        SpikeEpochs object to convert.
+    picks : None | list of ints
+        Which units to convert. If ``None``, all units are converted.
+
+    Returns
+    -------
+    inst : list of arrays
+        List of arrays containing spike times. Each array corresponds to one
+        trial. When multiple picks are provided, the output is a list of lists
+        of arrays (where outermost list elements correspond to units).
+    '''
+    msg = ('Only exporting SpikeEpochs to spiketools is supported. You can '
            'convert Spikes to SpikeEpochs beforehand by using '
            '``.to_epochs()`` method of Spikes.')
     assert isinstance(spk_epochs, SpikeEpochs), msg
