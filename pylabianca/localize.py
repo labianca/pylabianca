@@ -104,7 +104,10 @@ def find_scans(subject, paths):
     ct_file = op.join(ct_dir, ct_fname)
 
     mri_dir = op.join(paths['subjects_dir'], subject, 'mri')
-    mri_file = [f for f in os.listdir(mri_dir) if 'T1' in f][0]
+    try:
+        mri_file = [f for f in os.listdir(mri_dir) if 'T1' in f][0]
+    except FileNotFoundError:
+        mri_file = None
 
     return ct_dir, ct_file, mri_dir, mri_file
 
@@ -299,7 +302,6 @@ def read_create_channel_positions(subject, paths, ending='_micro'):
 
     fname_base = f'{subject}_channel_positions_ieeg' + ending
     coreg_dir = op.join(paths['anat_dir'], 'derivatives', 'coreg', subject)
-
 
     info_fname = op.join(coreg_dir, fname_base + '.fif')
     info_fname2 = op.join(coreg_dir, fname_base + '_Karolina.fif')
