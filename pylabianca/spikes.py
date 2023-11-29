@@ -886,8 +886,24 @@ class Spikes(object):
         return plot_isi(self, picks=None, unit='ms', bins=None, min_spikes=100,
                         max_isi=None, ax=None)
 
-    def to_epochs(self, pad_timestamps=10_000):
-        '''Turn Spike object into one-epoch SpikeEpochs representation.'''
+    # TODO: pad_timestamps could be thrown away if we read / store recording
+    #       start for example or allow another keyword argument for recording
+    #       start timestamp.
+    def to_epochs(self, pad_timestamps=0):
+        '''Turn Spike object into one-epoch SpikeEpochs representation.
+
+        Spike object does not know the start and end time of the recording, so
+        when using ``.to_epochs()`` method it assumes that the earliest spike
+        timestamp marks the start of the recording and has the time of 0.
+
+        Parameters
+        ----------
+        pad_timestamps : int
+            By default the earliest spike will have a time of `0.` seconds.
+            ``pad_timestamps`` can be used to change that by setting the
+            recording start as the earliest spike timestamp MINUS
+            ``pad_timestamps``. Defaults to 0.
+        '''
         min_stamp = (int(min([min(x) for x in self.timestamps]))
                      - pad_timestamps)
         max_stamp = (int(max([max(x) for x in self.timestamps]))
