@@ -163,7 +163,6 @@ def read_compute_ct_alignment(subject, paths, CT_orig, T1, plot=False):
         CT_aligned = mne.transforms.apply_volume_registration(
             CT_orig, T1, manual_reg_affine, cval='1%')
 
-
         # optimize further starting from pre-alignment
         reg_affine, _ = mne.transforms.compute_volume_registration(
             CT_orig, T1, pipeline=['rigid'],
@@ -375,8 +374,13 @@ def project_channel_positions_to_voxels(T1, info, stat_map=True,
 
     T_orig = T1.header.get_vox2ras_tkr()
 
-    ch_pos = borsar.channels.get_ch_pos(info)
-    ch_names = np.asarray(info.ch_names)
+    if isinstance(info, mne.Info):
+        ch_pos = borsar.channels.get_ch_pos(info)
+        ch_names = np.asarray(info.ch_names)
+        ch_pos = ch_pos * 1000  # meters → millimeters
+    else:
+        # otherwise, assume N x 3 array
+        ch_pos = info
 
     # take only non-nan positions
     good_pos = ~ (np.isnan(ch_pos).any(axis=1))
@@ -390,8 +394,7 @@ def project_channel_positions_to_voxels(T1, info, stat_map=True,
         ch_pos = ch_pos[micro_ch_mask]
 
     # find channel positions in voxels
-    ch_pos_mm = ch_pos * 1000  # meters → millimeters
-    pos_vox = mne.transforms.apply_trans(np.linalg.inv(T_orig), ch_pos_mm)
+    pos_vox = mne.transforms.apply_trans(np.linalg.inv(T_orig), ch_pos)
 
     if stat_map:
         coords = np.indices(T1.shape)
