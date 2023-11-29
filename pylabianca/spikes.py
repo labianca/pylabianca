@@ -794,6 +794,38 @@ class Spikes(object):
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
                              labels=labels, times=self.waveform_time)
 
+    def plot_isi(self, picks=None, unit='ms', bins=None, min_spikes=100,
+                 max_isi=None, ax=None):
+        '''Plot inter-spike intervals (ISIs).
+
+        Parameters
+        ----------
+        spk : pylabianca.spikes.Spikes
+            Spikes object to use.
+        picks : int | str | list of int | list of str | None
+            Which cells to plot. If ``None`` all cells are plotted.
+        unit : str
+            Time unit to use when plotting the ISIs. Can be ``'ms'`` or ``'s'``.
+        bins : int | None
+            Number of bins to use for the histograms. If ``None`` the number of
+            bins is automatically determined.
+        min_spikes : int
+            Minimum number of spikes required to plot the ISI histogram.
+        max_isi : float | None
+            Maximum ISI time to plot. If ``None`` the maximum ISI is set to 0.1 for
+            ``unit == 's'`` and 100 for ``unit == 'ms'``.
+        ax : matplotlib.Axes | None
+            Axis to plot to. If ``None`` a new figure is created.
+
+        Returns
+        -------
+        ax : matplotlib.Axes
+            Axes with the plot.
+        '''
+        from .viz import plot_isi
+        return plot_isi(self, picks=None, unit='ms', bins=None, min_spikes=100,
+                        max_isi=None, ax=None)
+
     def to_epochs(self, pad_timestamps=10_000):
         '''Turn Spike object into one-epoch SpikeEpochs representation.'''
         min_stamp = (int(min([min(x) for x in self.timestamps]))
