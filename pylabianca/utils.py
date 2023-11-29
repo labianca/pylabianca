@@ -149,21 +149,28 @@ def _gauss_kernel_samples(window, gauss_sd):
     return kernel
 
 
-# TODO: add offsets to spike-centered neurons
-def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
+# TODO: allow for mne epochs as input
+# TODO: add offsets to spike-centered neurons (not sure what this meant)
+def spike_centered_windows(spk, arr, picks=None, time=None, sfreq=None,
+                           winlen=0.1):
     '''Cut out windows from signal centered on spike times.
 
     Parameters
     ----------
     spk : pylabianca.SpikeEpochs
         Spike epochs object.
-    cell_idx : int
-        Index of the cell providing spikes.
     arr : np.ndarray | xarray.DataArray
         Array with the signal to be cut out. The dimesions should be
         ``n_trials x n_channels x n_times``.
-    time : np.ndarray
-        Coordinates of the time axis.
+    picks : int | str | list-like of int | list-like of str | None
+        Cells providing spikes centering windows.
+    time : None | str | np.ndarray
+        Time information for ``arr`` input:
+        * if ``arr`` is an ``np.ndarray`` then ``time`` should be an array
+          of time points for each sample of the time dimension.
+        * if ``arr`` is an ``xarray.DataArray`` then ``time`` can be either
+          a name of the time dimension or ``None`` - in the latter case the
+          time coordinates are taken from ``'time'`` coordinate of ``arr``.
     sfreq : float
         Sampling frequency.
     winlen : float
@@ -176,6 +183,42 @@ def spike_centered_windows(spk, cell_idx, arr, time, sfreq, winlen=0.1):
     '''
     import xarray as xr
     from borsar.utils import find_index
+
+    # check inputs
+    picks = _deal_with_picks(spk, picks)
+
+    if isinstance(arr, xr.DataArray):
+        if time is None:
+            if 'time' not in arr.coords:
+                raise ValueError('When ``time=None`` the ``arr`` xarray has '
+                                 'to contain a coordinate named "time". '
+                                 'Alternatively, pass the name of the time '
+                                 'coordinate in ``time`` input argument.')
+            time = arr.coords['time'].values
+        else:
+            if isinstance(time, str):
+                if time not in arr.coords:
+                    raise ValueError(f'Coordinate named "{time}" not found in '
+                                     '``arr`` xarray.')
+                time = arr.coords[time].values
+            else:
+                raise ValueError('When ``arr`` is an xarray ``time`` input '
+                                 'argument has to be either ``None`` or a '
+                                 f'string, got {type(time)}.')
+    elif isinstance(arr, np.ndarray):
+        if time is None:
+            raise ValueError('When ``arr`` is an ndarray ``time`` input '
+                                'argument has to be an array of time points '
+                                'for each sample of the time dimension.')
+    else:
+        raise ValueError('``arr`` has to be either an xarray or an '
+                            f'ndarray, got {type(arr)}.')
+
+    if sfreq is None:
+        sfreq = 1 / np.diff(time).mean()
+
+    # TEMP:
+    cell_idx = picks[0]
 
     spike_centered = list()
     window_samples, half_win = _symmetric_window_samples(winlen, sfreq)
