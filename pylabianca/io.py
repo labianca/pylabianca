@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .spikes import SpikeEpochs, Spikes
+from .utils import _deal_with_picks, _get_trial_boundaries
 
 
 # TODO - trialinfo columns ...
@@ -770,6 +771,73 @@ def _save_spk_to_mm_matlab_format(spk, path):
 
     data = _convert_spk_to_mm_matlab_format(spk)
     savemat(path, data)
+
+
+# TODO: could use ``kind='auto'``, especially if we add support for
+#       Unit or Session objects
+def from_spiketools(inst, kind='trials'):
+    '''Convert spiketools array representation to pylabianca objects.
+
+    spiketools is another python package for spike analysis. You can find it
+    here: https://spiketools.github.io/spiketools/
+
+    Parameters
+    ----------
+    inst : list of arrays
+        List of arrays containing spike times. Each array corresponds to one
+        trial when ``kind='trials'``.
+    kind : 'trials' | ...
+        Kind of spiketools representation. Can be:
+        * ``'trials'`` - list of arrays with spike times for each trial
+        * ``'times'`` - single array with spike times
+    '''
+    if kind == 'times':
+        assert inst.ndim == 1
+        assert isinstance(inst, np.ndarray)
+        assert all([isinstance(x, np.ndarray) for x in inst])
+        inst = [inst]
+
+    if kind == 'trials':
+        assert isinstance(inst, list)
+        assert all([isinstance(x, np.ndarray) for x in inst])
+        assert all([x.ndim == 1 for x in inst])
+
+    trial_ids = [np.ones(len(x), dtype=int) * idx
+                    for idx, x in enumerate(trial_spikes)]
+    trial_ids = np.concatenate(trial_ids)
+    spike_times = np.concatenate(trial_spikes)
+
+    spk_epochs = SpikeEpochs([spike_times], [trial_ids])
+    return spk_epochs
+
+
+def to_spiketools(spk_epochs, picks=None):
+    msg = ('Only exporting SpikeEpochs to spiketools is supported. You can'
+           'convert Spikes to SpikeEpochs beforehand by using '
+           '``.to_epochs()`` method of Spikes.')
+    assert isinstance(spk_epochs, SpikeEpochs), msg
+    picks = _deal_with_picks(spk_epochs, picks)
+    one_unit = len(picks) == 1
+
+    max_trials = spk_epochs.n_trials
+    unit_list = list()
+    for idx in picks:
+        trial_list = list()
+        tri_limits, tri_ids = _get_trial_boundaries(spk_epochs, 0)
+        tri_enum = 0
+        for tri in range(max_trials):
+            if tri in tri_ids:
+                lim1, lim2 = tri_limits[tri_enum:tri_enum + 2]
+                trial_list.append(spk_epochs.time[idx][lim1:lim2])
+                tri_enum += 1
+            else:
+                trial_list.append(np.array([]))
+        unit_list.append(trial_list)
+
+    if one_unit:
+        return unit_list[0]
+    else:
+        return unit_list
 
 
 def _get_chan_num(chan):
