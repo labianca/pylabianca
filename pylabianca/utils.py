@@ -3,7 +3,20 @@ import pandas as pd
 
 
 def _deal_with_picks(spk, picks):
-    '''Deal with various formats in which ``picks`` can be passed.'''
+    '''Deal with various formats in which ``picks`` can be passed.
+
+    Parameters
+    ----------
+    spk : pylabianca.Spikes | pylabianca.SpikeEpochs
+        Spikes or SpikeEpochs object.
+    picks : int | str | list-like of int | list-like of str | None
+        The units to pick.
+
+    Returns
+    -------
+    picks : list
+        List of indices of the picked cells.
+    '''
     has_str = False
     if picks is None:
         # pick all cells by default
@@ -36,6 +49,8 @@ def _deal_with_picks(spk, picks):
 
 # CONSIDER: changing the array dim order to: trials, cells, times
 #           (mne-python-like)
+# CHANGE name to something more general - it is now used for xarray and decoding
+#        results (and more in the future)
 def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
                                tri=None, copy_cellinfo=True,
                                x_dim_name='time'):
