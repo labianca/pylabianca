@@ -803,9 +803,9 @@ def from_spiketools(inst, kind='trials'):
         assert all([x.ndim == 1 for x in inst])
 
     trial_ids = [np.ones(len(x), dtype=int) * idx
-                    for idx, x in enumerate(trial_spikes)]
+                    for idx, x in enumerate(inst)]
     trial_ids = np.concatenate(trial_ids)
-    spike_times = np.concatenate(trial_spikes)
+    spike_times = np.concatenate(inst)
 
     spk_epochs = SpikeEpochs([spike_times], [trial_ids])
     return spk_epochs
