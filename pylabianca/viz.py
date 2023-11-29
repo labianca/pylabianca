@@ -90,6 +90,15 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         legend=legend, legend_pos=legend_pos, colors=colors
     )
 
+    # clean up ax title if groupby is used
+    if groupby is not None:
+        title = ax.get_title()
+        if groupby in title and ', ' in title:
+            title = title.split(', ')
+            title = [x for x in title if not x.startswith(groupby)]
+            title = ', '.join(title)
+            ax.set_title(title)
+
     if labels:
         xlabel = x_dim.capitalize()
         if 'coord_units' in arr.attrs:
