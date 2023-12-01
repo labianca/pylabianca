@@ -154,9 +154,9 @@ def _gauss_kernel_samples(window, gauss_sd):
     return kernel
 
 
-# TODO: allow for mne epochs as input
-# TODO: add offsets to spike-centered neurons (not sure what this meant)
-def spike_centered_windows(spk, arr, picks=None, time=None, sfreq=None,
+# ENH: allow for asymmetric windows (like in fieldtrip)
+# ENH: inherit metadata from spike_epochs?
+def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
                            winlen=0.1):
     '''Cut out windows from signal centered on spike times.
 
@@ -164,11 +164,11 @@ def spike_centered_windows(spk, arr, picks=None, time=None, sfreq=None,
     ----------
     spk : pylabianca.SpikeEpochs
         Spike epochs object.
-    arr : np.ndarray | xarray.DataArray
-        Array with the signal to be cut out. The dimesions should be
+    arr : np.ndarray | xarray.DataArray | mne.Epochs
+        Array with the signal to be cut out. The dimensions should be
         ``n_trials x n_channels x n_times``.
-    picks : int | str | list-like of int | list-like of str | None
-        Cells providing spikes centering windows.
+    pick : int | str
+        Cell providing spikes centering windows.
     time : None | str | np.ndarray
         Time information for ``arr`` input:
         * if ``arr`` is an ``np.ndarray`` then ``time`` should be an array
@@ -176,10 +176,15 @@ def spike_centered_windows(spk, arr, picks=None, time=None, sfreq=None,
         * if ``arr`` is an ``xarray.DataArray`` then ``time`` can be either
           a name of the time dimension or ``None`` - in the latter case the
           time coordinates are taken from ``'time'`` coordinate of ``arr``.
-    sfreq : float
-        Sampling frequency.
+        * if ``arr`` is an ``mne.Epochs`` object then ``time`` is ignored.
+    sfreq : float | None
+        Sampling frequency. Inferred from analog signal time dimension if not
+        provided (or taken from ``.info['sfreq']`` if ``arr`` is ``mne.Epochs``
+        ).
     winlen : float
-        Window length in seconds.
+        Window length in seconds. This is the full window length: a window
+        length of ``0.1`` means that the window will start 0.05 seconds before
+        and end 0.05 seconds after the spike time. Defaults to ``0.1``.
 
     Returns
     -------
@@ -190,7 +195,11 @@ def spike_centered_windows(spk, arr, picks=None, time=None, sfreq=None,
     from borsar.utils import find_index
 
     # check inputs
-    picks = _deal_with_picks(spk, picks)
+    picks = _deal_with_picks(spk, pick)
+    cell_idx = picks[0]
+    ch_names = None
+    unit = None
+    metadata = spk.metadata
 
     if isinstance(arr, xr.DataArray):
         if time is None:
@@ -210,20 +219,32 @@ def spike_centered_windows(spk, arr, picks=None, time=None, sfreq=None,
                 raise ValueError('When ``arr`` is an xarray ``time`` input '
                                  'argument has to be either ``None`` or a '
                                  f'string, got {type(time)}.')
+
     elif isinstance(arr, np.ndarray):
         if time is None:
             raise ValueError('When ``arr`` is an ndarray ``time`` input '
                                 'argument has to be an array of time points '
                                 'for each sample of the time dimension.')
     else:
-        raise ValueError('``arr`` has to be either an xarray or an '
-                            f'ndarray, got {type(arr)}.')
+        import mne
+        if isinstance(arr, mne.Epochs):
+            time = arr.times
+            ch_names = arr.ch_names
+            sfreq = arr.info['sfreq']
+            unit = 'V'
+            if metadata is None:
+                metadata = arr.metadata
+
+            arr = arr.get_data()
+        else:
+            raise ValueError('``arr`` has to be either an xarray, numpy array '
+                             f'or mne.Epochs, got {type(arr)}.')
 
     if sfreq is None:
         sfreq = 1 / np.diff(time).mean()
-
-    # TEMP:
-    cell_idx = picks[0]
+    if ch_names is None:
+        n_channels = arr.shape[1]
+        ch_names = np.arange(n_channels)
 
     spike_centered = list()
     window_samples, half_win = _symmetric_window_samples(winlen, sfreq)
@@ -234,6 +255,7 @@ def spike_centered_windows(spk, arr, picks=None, time=None, sfreq=None,
 
     n_tri = max(spk.trial[cell_idx]) + 1
     for tri_idx in range(n_tri):
+        # ENH: change to trial boundaries
         sel = spk.trial[cell_idx] == tri_idx
         if sel.any():
             tms = spk.time[cell_idx][sel]
@@ -254,15 +276,17 @@ def spike_centered_windows(spk, arr, picks=None, time=None, sfreq=None,
     # prepare coordinates
     spike_idx = np.where(tri_is_ok)[0]
     tri = spk.trial[cell_idx][tri_is_ok]
-    n_channels = arr.shape[1]
-    channel_idx = np.arange(n_channels)
+
+    coords = {'spike': spike_idx, 'channel': ch_names,
+              'time': window_time, 'trial': ('spike', tri)}
+    coords = _inherit_metadata(coords, metadata, 'spike', tri=tri)
 
     # construct xarray and assign coords
     spike_centered = xr.DataArray(
         spike_centered, dims=['spike', 'channel', 'time'],
-        coords={'spike': spike_idx, 'channel': channel_idx,
-                'time': window_time})
-    spike_centered = spike_centered.assign_coords(trial=('spike', tri))
+        coords=coords, name='amplitude')
+    if unit is not None:
+        spike_centered.attrs['unit'] = unit
 
     return spike_centered
 
