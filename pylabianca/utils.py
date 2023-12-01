@@ -115,12 +115,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     if tri is not None:
         coords['trial'] = (dimname, tri)
 
-    if spike_epochs.metadata is not None:
-        for col in spike_epochs.metadata.columns:
-            if tri is None:
-                coords[col] = (dimname, spike_epochs.metadata[col])
-            else:
-                coords[col] = (dimname, spike_epochs.metadata[col].iloc[tri])
+    coords = _inherit_metadata(coords, spike_epochs.metadata, dimname, tri=tri)
 
     if copy_cellinfo:
         if cell_names is not None and spike_epochs.cellinfo is not None:
@@ -132,6 +127,16 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     firing = xr.DataArray(frate, dims=dims, coords=coords,
                           attrs=attrs)
     return firing
+
+
+def _inherit_metadata(coords, metadata, dimname, tri=None):
+    if metadata is not None:
+        for col in metadata.columns:
+            if tri is None:
+                coords[col] = (dimname, metadata[col])
+            else:
+                coords[col] = (dimname, metadata[col].iloc[tri])
+    return coords
 
 
 def _symmetric_window_samples(winlen, sfreq):
