@@ -651,13 +651,13 @@ def read_events_neo(reader, format='mne'):
     return events
 
 
-def read_events_plexon_nex(path):
+def read_events_plexon_nex(path, format='mne'):
     import neo
     reader = neo.io.NeuroExplorerIO(filename=path)
-    return read_events_neo(reader, format='mne')
+    return read_events_neo(reader, format=format)
 
 
-def read_spikes_neo(reader, waveform=True):
+def read_spikes_neo(reader, waveform=True, min_spikes=10):
     spike_info = reader.header['spike_channels']
     n_units = spike_info.shape[0]
     cell_info = pd.DataFrame(spike_info)
@@ -667,15 +667,9 @@ def read_spikes_neo(reader, waveform=True):
     assert len(tstmp_uni) == 1
     timestamp_frate = tstmp_uni[0]
 
-    from warnings import warn
-
-    waveform = True
-
-    min_spikes = 10
     use_cells = np.zeros(n_units, dtype=bool)
     waveforms = list() if waveform else None
     timestamps = list()
-
 
     for ch_idx in range(n_units):
         tmstmp = reader.get_spike_timestamps(spike_channel_index=ch_idx)
@@ -722,7 +716,7 @@ def read_spikes_neo(reader, waveform=True):
     else:
         waveform_time = None
 
-    spk = pln.spikes.Spikes(
+    spk = Spikes(
         timestamps, sfreq=timestamp_frate, cell_names=cell_names,
         cellinfo=cell_info, waveform=waveforms, waveform_time=waveform_time
     )
