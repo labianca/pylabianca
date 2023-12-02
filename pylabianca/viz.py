@@ -52,9 +52,10 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     # auto-infer reduce_dim
     # ---------------------
     if reduce_dim is None:
-        auto_reduce_dims = ['trial', 'fold', 'perm', 'permutation', 'cell']
+        auto_reduce_dims = ['trial', 'fold', 'perm', 'permutation', 'cell',
+                            'spike']
         for dimname in auto_reduce_dims:
-            if dimname in arr.coords:
+            if dimname in arr.dims:
                 reduce_dim = dimname
                 break
 
@@ -70,7 +71,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
             raise RuntimeError(msg)
 
     # if reduce_dim is still None - use the first dim for 2d array
-    # TODO
+    if reduce_dim is None:
+        reduce_dim = arr.dims[0]
 
     # auto-infer x_dim
     # ----------------
@@ -82,8 +84,9 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim = dimname
                 break
 
-    # if reduce_dim is still None - use the last dim for 2d array
-    # TODO
+    # if x_dim is still None - use the last dim for 2d array
+    if x_dim is None:
+        x_dim = arr.dims[-1]
 
     ax = plot_xarray_shaded(
         arr, reduce_dim=reduce_dim, x_dim=x_dim, groupby=groupby, ax=ax,
