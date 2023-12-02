@@ -868,8 +868,8 @@ class Spikes(object):
         min_spikes : int
             Minimum number of spikes required to plot the ISI histogram.
         max_isi : float | None
-            Maximum ISI time to plot. If ``None`` the maximum ISI is set to 0.1 for
-            ``unit == 's'`` and 100 for ``unit == 'ms'``.
+            Maximum ISI time to plot. If ``None`` the maximum ISI is set to 0.1
+            for ``unit == 's'`` and 100 for ``unit == 'ms'``.
         ax : matplotlib.Axes | None
             Axis to plot to. If ``None`` a new figure is created.
 
