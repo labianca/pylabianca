@@ -11,7 +11,8 @@ from .utils import _deal_with_picks, _get_trial_boundaries
 
 
 # TODO - trialinfo columns ...
-def read_filedtrip(fname, data_name='spike', kind='raw', waveform=True):
+# CONSIDER - autodetect the correct var name
+def read_fieldtrip(fname, data_name='spike', kind='raw', waveform=True):
     '''Read fieldtrip SpikeTrials format.
 
     Parameters
