@@ -92,6 +92,11 @@ def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
     trial = data['trial'].item() - 1
     trialtime = data['trialtime'].item()
 
+    if 'timestamp' in data.dtype.names:
+        timestamps = data['timestamp'].item()
+    else:
+        timestamps = None
+
     msg = 'All trials have to be of the same length'
     assert (trialtime == trialtime[[0]]).all(), msg
 
@@ -102,7 +107,7 @@ def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
     spk = SpikeEpochs(time, trial, time_limits, n_trials=n_trials,
                       metadata=trialinfo, cell_names=cell_names,
                       cellinfo=cellinfo, waveform=waveform,
-                      waveform_time=waveform_time)
+                      waveform_time=waveform_time, timestamps=timestamps)
 
     return spk
 
