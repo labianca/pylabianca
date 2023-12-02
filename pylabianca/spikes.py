@@ -130,27 +130,7 @@ class SpikeEpochs():
             Query for ``.cellinfo`` - to pick cells by their properties, not
             names or indices. Used only when ``picks`` is ``None``.
         '''
-        if picks is None and query is None:
-            return self
-
-        if picks is None and query is not None:
-            assert self.cellinfo is not None
-            cellinfo_sel = self.cellinfo.query(query)
-            picks = cellinfo_sel.index.values
-        else:
-            picks = _deal_with_picks(self, picks)
-
-        self.time = [self.time[ix] for ix in picks]
-        self.trial = [self.trial[ix] for ix in picks]
-        self.cell_names = self.cell_names[picks].copy()
-        if self.cellinfo is not None:
-            self.cellinfo = self.cellinfo.loc[picks, :].reset_index(drop=True)
-        if self.waveform is not None:
-            self.waveform = [self.waveform[ix] for ix in picks]
-        if self.timestamps is not None:
-            self.timestamps = [self.timestamps[ix] for ix in picks]
-
-        return self
+        return _pick_cells(self, picks=picks, query=query)
 
     def drop_cells(self, picks):
         '''Drop cells by index. Operates in-place.
@@ -160,10 +140,7 @@ class SpikeEpochs():
         picks : int | str | listlike of int
             Cell  indices to drop.
         '''
-        all_idx = np.arange(self.n_units())
-        is_dropped = np.in1d(all_idx, picks)
-        retain_idx = np.where(~is_dropped)[0]
-        return self.pick_cells(retain_idx)
+        return _drop_cells(self, picks)
 
     def crop(self, tmin=None, tmax=None):
         '''Confine time range to specified limit. Operates in-place.
@@ -789,7 +766,6 @@ class Spikes(object):
         '''Return the number of neurons in SpikeEpochs.'''
         return len(self.timestamps)
 
-    # TODO: refactor out common parts with SpikeEpochs.pick_cells
     def pick_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates in-place.
 
@@ -806,26 +782,8 @@ class Spikes(object):
         spk : Spikes
             Selected units in a Spikes object.
         '''
-        if picks is None and query is None:
-            return self
+        return _pick_cells(self, picks=picks, query=query)
 
-        if picks is None and query is not None:
-            assert self.cellinfo is not None
-            cellinfo_sel = self.cellinfo.query(query)
-            picks = cellinfo_sel.index.values
-        else:
-            picks = _deal_with_picks(self, picks)
-
-        self.timestamps = [self.timestamps[ix] for ix in picks]
-        self.cell_names = self.cell_names[picks].copy()
-        if self.cellinfo is not None:
-            self.cellinfo = self.cellinfo.loc[picks, :].reset_index(drop=True)
-        if self.waveform is not None:
-            self.waveform = [self.waveform[ix] for ix in picks]
-
-        return self
-
-    # TODO: DRY with SpikeEpochs
     def drop_cells(self, picks):
         '''Drop cells by index. Operates in-place.
 
@@ -834,10 +792,7 @@ class Spikes(object):
         picks : int | str | listlike of int
             Cell  indices to drop.
         '''
-        all_idx = np.arange(len(self))
-        is_dropped = np.in1d(all_idx, picks)
-        retain_idx = np.where(~is_dropped)[0]
-        return self.pick_cells(retain_idx)
+        return _drop_cells(self, picks)
 
     def n_spikes(self):
         """Calculate number of spikes per cell.
@@ -1049,6 +1004,61 @@ def _check_waveforms(times, waveform, waveform_time):
                    '`waveform` must be equal.')
             raise RuntimeError(msg)
 
+
+def _pick_cells(spk, picks=None, query=None):
+    '''Select cells by name or index.  Operates in-place.
+
+    Parameters
+    ----------
+    spk : Spikes | SpikeEpochs
+        Spikes object to select cells from.
+    picks : int | str | listlike of int | list of str | None
+        Cell names or indices to select.
+    query : str | None
+        Query for ``.cellinfo`` - to pick cells by their properties, not
+        names or indices. Used only when ``picks`` is ``None``.
+    '''
+    if picks is None and query is None:
+        return spk
+
+    if picks is None and query is not None:
+        assert spk.cellinfo is not None
+        cellinfo_sel = spk.cellinfo.query(query)
+        picks = cellinfo_sel.index.values
+    else:
+        picks = _deal_with_picks(spk, picks)
+
+    spk.cell_names = spk.cell_names[picks].copy()
+
+    if isinstance(spk, Spikes):
+        spk.timestamps = [spk.timestamps[ix] for ix in picks]
+    elif isinstance(spk, SpikeEpochs):
+        spk.time = [spk.time[ix] for ix in picks]
+        spk.trial = [spk.trial[ix] for ix in picks]
+
+        if spk.timestamps is not None:
+            spk.timestamps = [spk.timestamps[ix] for ix in picks]
+
+    if spk.cellinfo is not None:
+        spk.cellinfo = spk.cellinfo.loc[picks, :].reset_index(drop=True)
+    if spk.waveform is not None:
+        spk.waveform = [spk.waveform[ix] for ix in picks]
+
+    return spk
+
+
+def _drop_cells(spk, picks):
+    '''Drop cells by index. Operates in-place.
+
+    Parameters
+    ----------
+    picks : int | str | listlike of int
+        Cell  indices to drop.
+    '''
+    all_idx = np.arange(spk.n_units())
+    is_dropped = np.in1d(all_idx, picks)
+    retain_idx = np.where(~is_dropped)[0]
+    return spk.pick_cells(retain_idx)
 
 
 def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
