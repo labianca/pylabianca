@@ -144,6 +144,8 @@ class SpikeEpochs():
             self.cellinfo = self.cellinfo.loc[picks, :].reset_index(drop=True)
         if self.waveform is not None:
             self.waveform = [self.waveform[ix] for ix in picks]
+        if self.timestamps is not None:
+            self.timestamps = [self.timestamps[ix] for ix in picks]
 
         return self
 
@@ -696,7 +698,7 @@ class Spikes(object):
     # TODO: return idx from _epoch_spikes only when self.waveform is not None
     # TODO: time and consider speeding up
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.,
-              store_timestamps=False):
+              keep_timestamps=False):
         '''Epoch spikes with respect to selected events.
 
         Parameters
@@ -714,9 +716,9 @@ class Spikes(object):
         tmax : float
             Epoch start in seconds with respect to event onset. Default to
             ``-0.2``.
-        store_timestamps : bool
-            Whether to store original spike timestamps in the epochs. Defaults
-            to ``False``.
+        keep_timestamps : bool
+            Whether to keep the original spike timestamps and store them in the
+            epochs. Defaults to ``False``.
 
         Returns
         -------
@@ -734,7 +736,7 @@ class Spikes(object):
 
         has_waveform = self.waveform is not None
         waveforms = list() if has_waveform else None
-        timestamps = list() if store_timestamps else None
+        timestamps = list() if keep_timestamps else None
 
         for neuron_idx in range(n_neurons):
             tri, tim, idx = _epoch_spikes(
@@ -746,7 +748,7 @@ class Spikes(object):
             if has_waveform:
                 waveforms.append(self.waveform[neuron_idx][idx, :])
 
-            if store_timestamps:
+            if keep_timestamps:
                 timestamps.append(self.timestamps[neuron_idx][idx])
 
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
