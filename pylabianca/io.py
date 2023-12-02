@@ -724,11 +724,67 @@ def read_spikes_neo(reader, waveform=True, min_spikes=10):
 
 
 # TODO: waveforms seem to be read incorrectly for fieldtrip
-# sample plexon nex
-def read_plexon_nex(path):
+#       sample plexon nex - likely a bug in neo
+def read_plexon_nex(path, waveform=True, min_spikes=10):
     import neo
     reader = neo.io.NeuroExplorerIO(filename=path)
-    return read_spikes_neo(reader, format='mne')
+    return read_spikes_neo(reader, waveform=waveform, min_spikes=min_spikes)
+
+
+# CONSIDER: allow xarray output? format='xarray' and format='mne'?
+def read_analog_neo(reader, channels='all'):
+    import mne
+
+    analog_header = reader.header['signal_channels']
+    n_analog_channels = len(analog_header)
+    dtypes = analog_header.dtype
+
+    analog_array = [reader.get_analogsignal_chunk(stream_index=idx)[:, 0]
+                    for idx in range(n_analog_channels)]
+    analog_array = np.stack(analog_array, axis=0)
+
+    if 'gain' in dtypes.fields:
+        analog_array = analog_array * analog_header['gain'][:, None]
+
+    if 'sampling_rate' in dtypes.fields:
+        sampling_rate = analog_header['sampling_rate']
+    else:
+        sampling_rate = np.array(
+            [reader.get_signal_sampling_rate(stream_index=idx)
+            for idx in range(n_analog_channels)]
+        )
+
+    assert (sampling_rate[0] == sampling_rate).all()
+    sfreq = sampling_rate[0]
+
+    # make sure the signal is in Volts
+    # translate 'units': 'mV' -> divide by 1_000; 'V' -> no change;
+    #                    'uV' -> divide by 1e6
+    if 'units' in dtypes.fields:
+        translate_units = {'mV': 1 / 1_000, 'V': 1, 'uV': 1 / 1e6}
+        units = analog_header['units']
+        multips = np.array([translate_units[unit] for unit in units])
+        if not (multips == np.ones(n_analog_channels)).all():
+            analog_array *= multips[:, None]
+
+    ch_names = analog_header['name'].tolist()
+
+    # check offsets
+    offsets = np.array([reader.get_signal_t_start(0, 0, stream_index=idx)
+                        for idx in range(n_analog_channels)])
+    assert (offsets[0] == offsets).all()
+    first_sample = int(np.round(sfreq * offsets[0]))
+
+    info = mne.create_info(ch_names, sfreq, ch_types='seeg')
+    raw = mne.io.RawArray(analog_array, info, first_samp=first_sample)
+
+    return raw
+
+
+def read_analog_plexon_nex(path):
+    import neo
+    reader = neo.io.NeuroExplorerIO(filename=path)
+    return read_analog_neo(reader)
 
 
 # TODO - make sure we can save and write more cellinfo columns
