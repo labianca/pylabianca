@@ -111,10 +111,13 @@ class SpikeEpochs():
         from copy import deepcopy
         return deepcopy(self)
 
-    # TODO: consider if it is better to return number of epochs?
     def __len__(self):
-        '''Return the number of neurons in SpikeEpochs.'''
-        return len(self.time)
+        '''Return the number of epochs in SpikeEpochs.'''
+        return self.n_trials
+
+    def n_units(self):
+        '''Return the number of units in SpikeEpochs.'''
+        return len(self.cell_names)
 
     def pick_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates in-place.
@@ -157,7 +160,7 @@ class SpikeEpochs():
         picks : int | str | listlike of int
             Cell  indices to drop.
         '''
-        all_idx = np.arange(len(self))
+        all_idx = np.arange(self.n_units())
         is_dropped = np.in1d(all_idx, picks)
         retain_idx = np.where(~is_dropped)[0]
         return self.pick_cells(retain_idx)
@@ -690,12 +693,16 @@ class Spikes(object):
 
     def __repr__(self):
         '''Text representation of SpikeEpochs.'''
-        n_cells = len(self.cell_names)
+        n_cells = self.n_units()
         avg_spikes = np.mean([len(x) for x in self.timestamps])
         msg = '<Spikes, {} cells, {:.1f} spikes/cell on average>'
         return msg.format(n_cells, avg_spikes)
 
-    # TODO: return idx from _epoch_spikes only when self.waveform is not None
+    def n_units(self):
+        '''Return the number of units in Spikes.'''
+        return len(self.cell_names)
+
+    # TODO: return idx from _epoch_spikes only when self.waveform is not None?
     # TODO: time and consider speeding up
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.,
               keep_timestamps=False):
