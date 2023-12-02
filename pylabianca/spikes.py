@@ -9,12 +9,11 @@ from .spike_distance import compare_spike_times, xcorr_hist_trials
 
 
 # TODO:
-# - [ ] index by trial?
-# - [ ] len(spk_epochs) currently gives number of units, not epochs ...
+# - [ ] add variable validity checks !
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  waveform=None, waveform_time=None, cell_names=None,
-                 metadata=None, cellinfo=None):
+                 metadata=None, cellinfo=None, timestamps=None):
         '''Create ``SpikeEpochs`` object for convenient storage, analysis and
         visualization of spikes data.
 
@@ -52,6 +51,9 @@ class SpikeEpochs():
             DataFrame with trial-level metadata.
         cellinfo : pandas.DataFrame
             DataFrame with additional information about the cells.
+        timestamps : listlike of np.ndarray | None
+            Original spike timestamps. Should be in the same format as ``time``
+            and ``trial`` arguments.
         '''
         if not isinstance(time[0], np.ndarray):
             time = [np.asarray(x) for x in time]
@@ -92,8 +94,9 @@ class SpikeEpochs():
         self.waveform = waveform
         self.waveform_time = waveform_time
         self.cell_names = cell_names
-        self.metadata = metadata
         self.cellinfo = cellinfo
+        self.timestamps = timestamps
+        self.metadata = metadata
 
     def __repr__(self):
         '''Text representation of SpikeEpochs.'''
@@ -181,6 +184,10 @@ class SpikeEpochs():
             sel = (self.time[cell_idx] >= tmin) & (self.time[cell_idx] <= tmax)
             self.time[cell_idx] = self.time[cell_idx][sel]
             self.trial[cell_idx] = self.trial[cell_idx][sel]
+            if self.waveform is not None:
+                self.waveform[cell_idx] = self.waveform[cell_idx][sel, :]
+            if self.timestamps is not None:
+                self.timestamps[cell_idx] = self.timestamps[cell_idx][sel]
         self.time_limits = [tmin, tmax]
         return self
 
@@ -414,33 +421,37 @@ class SpikeEpochs():
             raise TypeError('Currently only string queries are allowed to '
                             'select elements of SpikeEpochs')
 
-        newtime, newtrial = list(), list()
+        new_time, new_trial = list(), list()
         if self.metadata is not None:
             new_metadata = new_metadata.reset_index(drop=True)
         else:
             new_metadata = None
 
         has_waveform = self.waveform is not None
+        has_timestamps = self.timestamps is not None
         waveform = list() if has_waveform else None
+        timestamps = list() if has_timestamps else None
 
         # for each cell select relevant trials:
         for cell_idx in range(len(self.trial)):
             cell_tri = self.trial[cell_idx]
             sel = np.in1d(cell_tri, tri_idx)
-            newtime.append(self.time[cell_idx][sel])
+            new_time.append(self.time[cell_idx][sel])
 
             this_tri = (cell_tri[sel, None] == tri_idx[None, :]).argmax(axis=1)
-            newtrial.append(this_tri)
+            new_trial.append(this_tri)
 
             if has_waveform:
                 waveform.append(self.waveform[cell_idx][sel])
+            if has_timestamps:
+                timestamps.append(self.timestamps[cell_idx][sel])
 
         new_cellinfo = None if self.cellinfo is None else self.cellinfo.copy()
-        return SpikeEpochs(newtime, newtrial, time_limits=self.time_limits,
+        return SpikeEpochs(new_time, new_trial, time_limits=self.time_limits,
                            n_trials=len(tri_idx),
                            cell_names=self.cell_names.copy(),
                            metadata=new_metadata, cellinfo=new_cellinfo,
-                           waveform=waveform)
+                           waveform=waveform, timestamps=timestamps)
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
         '''Plot waveform heatmap for one cell.
@@ -684,7 +695,8 @@ class Spikes(object):
 
     # TODO: return idx from _epoch_spikes only when self.waveform is not None
     # TODO: time and consider speeding up
-    def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.):
+    def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.,
+              store_timestamps=False):
         '''Epoch spikes with respect to selected events.
 
         Parameters
@@ -702,6 +714,9 @@ class Spikes(object):
         tmax : float
             Epoch start in seconds with respect to event onset. Default to
             ``-0.2``.
+        store_timestamps : bool
+            Whether to store original spike timestamps in the epochs. Defaults
+            to ``False``.
 
         Returns
         -------
@@ -719,6 +734,7 @@ class Spikes(object):
 
         has_waveform = self.waveform is not None
         waveforms = list() if has_waveform else None
+        timestamps = list() if store_timestamps else None
 
         for neuron_idx in range(n_neurons):
             tri, tim, idx = _epoch_spikes(
@@ -730,10 +746,14 @@ class Spikes(object):
             if has_waveform:
                 waveforms.append(self.waveform[neuron_idx][idx, :])
 
+            if store_timestamps:
+                timestamps.append(self.timestamps[neuron_idx][idx])
+
         spk = SpikeEpochs(time, trial, time_limits=[tmin, tmax],
                           cell_names=self.cell_names, cellinfo=self.cellinfo,
                           n_trials=len(events), waveform=waveforms,
-                          waveform_time=self.waveform_time)
+                          waveform_time=self.waveform_time,
+                          timestamps=timestamps)
 
         return spk
 
