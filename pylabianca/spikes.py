@@ -325,6 +325,18 @@ class SpikeEpochs():
         """
         return _n_spikes(self, per_epoch=per_epoch)
 
+    @property
+    def metadata(self):
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, df):
+        if df is not None:
+            assert isinstance(df, pd.DataFrame)
+            assert df.shape[0] == len(self)
+            df = df.reset_index(drop=True)
+        self._metadata = df
+
     # TODO:
     # - [ ] use `group` from sarna in looping through trials
     #       for faster execution...
@@ -382,7 +394,7 @@ class SpikeEpochs():
                 t_start=self.time_limits[0])
         return spikes
 
-    # TODO: return xarray?
+    # TODO: return xarray? / return mne.Epochs?
     def to_raw(self, picks=None, sfreq=500.):
         '''Turn epoched spike timestamps into binned continuous representation.
 
