@@ -162,13 +162,16 @@ class SpikeEpochs():
         if tmax is None:
             tmax = self.time_limits[1]
 
+        has_waveform = self.waveform is not None
+        has_timestamps = self.timestamps is not None
+
         for cell_idx in range(len(self.time)):
             sel = (self.time[cell_idx] >= tmin) & (self.time[cell_idx] <= tmax)
             self.time[cell_idx] = self.time[cell_idx][sel]
             self.trial[cell_idx] = self.trial[cell_idx][sel]
-            if self.waveform is not None:
+            if has_waveform:
                 self.waveform[cell_idx] = self.waveform[cell_idx][sel, :]
-            if self.timestamps is not None:
+            if has_timestamps:
                 self.timestamps[cell_idx] = self.timestamps[cell_idx][sel]
         self.time_limits = [tmin, tmax]
         return self
