@@ -291,6 +291,72 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
     return spike_centered
 
 
+def shuffle_trials(spk, drop_timestamps=True, drop_waveforms=True):
+    '''Create a copy of the SpikeEpochs object with shuffled trials.
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        SpikeEpochs object.
+    drop_timestamps : bool
+        If True, timestamps are not copied to the new object.
+    drop_waveforms : bool
+        If True, waveforms are not copied to the new object.
+
+    Returns
+    -------
+    new_spk : SpikeEpochs
+        SpikeEpochs object with shuffled trials.
+    '''
+    new_spk = spk.copy()
+
+    n_tri = spk.n_trials
+    n_cells = spk.n_units()
+    tri_idx = np.arange(n_tri)
+    np.random.shuffle(tri_idx)
+
+    has_timestamps = spk.timestamps is not None
+    has_waveforms = spk.waveform is not None
+
+    if drop_timestamps:
+        new_spk.timestamps = None
+        has_timestamps = False
+    if drop_waveforms:
+        new_spk.waveform = None
+        has_waveforms = False
+
+    for cell_idx in range(n_cells):
+        tri_limits, tri_id = _get_trial_boundaries(spk, cell_idx)
+        n_spikes = np.diff(tri_limits)
+
+        start_idx = 0
+        for ix, tri in enumerate(tri_idx):
+            pos = np.where(tri_id == tri)[0]
+            if len(pos) > 0:
+                pos = pos[0]
+                limits = tri_limits[pos:pos + 2]
+                n_spk = n_spikes[pos]
+
+                slc = slice(start_idx, start_idx + n_spk)
+                new_spk.trial[cell_idx][slc] = ix
+                new_spk.time[cell_idx][slc] = (
+                    spk.time[cell_idx][limits[0]:limits[1]]
+                )
+
+                if has_timestamps:
+                    new_spk.timestamps[cell_idx][slc] = (
+                        spk.timestamps[cell_idx][limits[0]:limits[1]]
+                    )
+
+                if has_waveforms:
+                    new_spk.waveform[cell_idx][slc] = (
+                        spk.waveform[cell_idx][limits[0]:limits[1]]
+                    )
+
+                start_idx += n_spk
+    return new_spk
+
+
 # TODO - if other sorters are used, alignment point (sample_idx) for the
 #        spike waveforms should be saved somewhere in spk and used here.
 def infer_waveform_polarity(spk, cell_idx, threshold=1.75, baseline_range=50,
