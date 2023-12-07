@@ -141,6 +141,8 @@ def _construct_bins(sfreq, max_lag, bins=None):
 
 # TODO: add option to shuffle trials?
 # TODO: add option to shift trials?
+# TODO: split into a higher and lower level function
+#       the higher level would be common to this and _xcorr_hist
 def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
                        bins=None):
     '''
@@ -331,6 +333,118 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     )
 
     return xcorrs
+
+
+# more memory efficient version of xcorr_hist_trials
+# intended to work on Spikes turned to SpikeEpochs
+# (_xcorr_hist_trials is VERY memory inefficient for many thousands of spikes
+#  but that does not happen frequently with single trials)
+# CONSIDER: use batch-array looping instead of full iterative loop
+def _xcorr_hist_auto_py(times, bins, batch_size=1_000):
+    '''Compute auto-correlation histogram for a single cell.
+
+    [a little more about memory efficiency and using monotonic relationship to
+     our advantage etc.]'''
+    n_times = times.shape[0]
+    distances = list()
+    n_bins = len(bins) - 1
+    max_lag = max(np.abs(bins[[0, -1]]))
+    counts = np.zeros(n_bins, dtype=int)
+
+    in_batch = 0
+    for idx1 in range(n_times):
+        time1 = times[idx1]
+
+        # move forward till we fall out of max_lag
+        max_lag_ok = True
+        idx2 = idx1
+        while max_lag_ok and idx2 < (n_times - 1):
+            idx2 += 1
+            distance = times[idx2] - time1
+            max_lag_ok = distance <= max_lag
+
+            if max_lag_ok:
+                distances.append(distance)
+                distances.append(-distance)
+                in_batch += 2
+
+        if in_batch >= batch_size or idx1 == (n_times - 1):
+            these_counts, _ = np.histogram(distances, bins)
+            counts += these_counts
+            in_batch = 0
+            distances = list()
+
+    return counts
+
+
+def _xcorr_hist_auto_numpy1(times, bins):
+    '''Compute auto-correlation histogram for a single cell.
+
+    [a little more about memory efficiency and using monotonic relationship to
+     our advantage etc.]'''
+    n_times = times.shape[0]
+    n_bins = len(bins) - 1
+    counts = np.zeros(n_bins, dtype=int)
+
+    for idx1 in range(n_times):
+        time1 = times[idx1]
+        distances = times[idx1 + 1:] - time1
+        distances = np.concatenate([distances, -distances])
+        these_counts, _ = np.histogram(distances, bins)
+        counts += these_counts
+
+    return counts
+
+
+def _xcorr_hist_cross(times, max_lag, bins, batch_size=1_000):
+    '''Compute cross-correlation histogram for a single cell.
+
+    [a little more about memory efficiency and using monotonic relationship to
+     our advantage etc.]'''
+    n_times = times.shape[0]
+    distances = list()
+    n_bins = len(bins) - 1
+    counts = np.zeros(n_bins, dtype=int)
+
+    tm_idx_low = 0
+    tm_idx_high = 1
+    in_batch = 0
+
+    for idx1 in range(n_times):
+        time1 = times[idx1]
+
+        # move forward till tm_idx_high
+        new_tm_idx_low = tm_idx_low
+        for idx2 in range(tm_idx_low, tm_idx_high):
+            if not idx1 == idx2:
+                distance = time1 - times[idx2]
+
+                if distance > max_lag:
+                    new_tm_idx_low = idx2
+                else:
+                    distances.append(distance)
+                    in_batch += 1
+
+        tm_idx_low = new_tm_idx_low
+        max_lag_ok = True
+        while max_lag_ok and idx2 < (n_times - 1):
+            idx2 += 1
+            if not idx1 == idx2:
+                distance = time1 - times[idx2]
+                max_lag_ok = distance > -max_lag
+
+                if max_lag_ok:
+                    tm_idx_high = idx2
+                    distances.append(distance)
+                    in_batch += 1
+
+        if in_batch >= batch_size or idx1 == (n_times - 1):
+            these_counts, _ = np.histogram(distances, bins)
+            counts += these_counts
+            in_batch = 0
+            distances = list()
+
+    return counts
 
 
 def _spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
