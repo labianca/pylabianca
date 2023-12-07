@@ -12,8 +12,8 @@ the SpikeEpochs object does not contain metadata).
 * ENH: to increase compatibility with MNE-Python `len(SpikeEpochs)` returns the number of trials now. To get the number of units use `SpikeEpochs.n_units()`
 * ENH: added `pylabianca.utils.shuffle_trials()` function to shuffle trials in `SpikeEpochs` object
 
-* DOC: added example of working with pylabianca together with spiketools: [notebook](doc\working_with_spiketools.ipynb)
-* DOC: added example of spike-field analysis combining pylabianca and MNE-Python: [notebook](doc\spike-triggered_analysis.ipynb)
+* DOC: added example of working with pylabianca together with spiketools: [notebook](doc/working_with_spiketools.ipynb)
+* DOC: added example of spike-field analysis combining pylabianca and MNE-Python: [notebook](doc/spike-triggered_analysis.ipynb)
 
 
 * FIX: removed incorrect condition label [FIXME: add more info] `pylabianca.viz.plot_shaded()`
