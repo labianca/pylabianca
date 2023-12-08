@@ -306,17 +306,8 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     # smooth with gaussian if needed
     # TODO: DRY with _spike_density
     if gauss_fwhm is not None:
-        from scipy.signal import correlate
-        from .spike_rate import _gauss_sd_from_FWHM
-
-        gauss_sd = _gauss_sd_from_FWHM(gauss_fwhm)
-        winlen = gauss_sd * 6
-        gauss_sd = gauss_sd * sfreq
-        win_smp, trim = _symmetric_window_samples(winlen, sfreq)
-        kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
-
-        bin_centers = bin_centers[trim:-trim]
-        xcorrs = correlate(xcorrs, kernel[None, None, :], mode='valid')
+        xcorrs, bin_centers = _convolve_xcorr(
+            xcorrs, bin_centers, gauss_fwhm, sfreq)
 
     # construct xarr
     xcorrs = _turn_spike_rate_to_xarray(
@@ -333,6 +324,36 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     )
 
     return xcorrs
+
+
+# CONSIDER: move out to utils?
+def _convolve_xcorr(xcorrs, bin_centers, gauss_fwhm, sfreq):
+    from scipy.signal import correlate
+    from .spike_rate import _gauss_sd_from_FWHM
+
+    gauss_sd = _gauss_sd_from_FWHM(gauss_fwhm)
+    winlen = gauss_sd * 6
+    gauss_sd = gauss_sd * sfreq
+    win_smp, trim = _symmetric_window_samples(winlen, sfreq)
+    kernel = _gauss_kernel_samples(win_smp, gauss_sd)
+
+    bin_centers = bin_centers[trim:-trim]
+    full_kernel = (kernel[None, None, :] if xcorrs.ndim == 3
+                   else kernel[None, :] if xcorrs.ndim == 2
+                   else kernel)
+    xcorrs = correlate(xcorrs, full_kernel, mode='valid')
+    return xcorrs, bin_centers
+
+
+def _deal_with_pick_pairs(spk, picks, picks2=None):
+    picks = _deal_with_picks(spk, picks)
+    if picks2 is None:
+        # picks and picks2 has to be all combinations of picks
+        pick_pairs = itertools.product(picks, picks)
+    else:
+        picks2 = _deal_with_picks(spk, picks2)
+        pick_pairs = itertools.product(picks, picks2)
+    return pick_pairs, picks, picks2
 
 
 # more memory efficient version of xcorr_hist_trials
