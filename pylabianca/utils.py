@@ -71,6 +71,8 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
           as string)
         * 2d ``n_trials x n_times`` (``cell_names`` is None and ``times``
           is an array)
+        * 2d ``n_cells x n_times`` (``cell_names`` is not None and ``times``
+          is an array)
 
     spike_epochs : SpikeEpochs object
         SpikeEpochs object.
@@ -96,10 +98,26 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     import xarray as xr
 
     # later: consider having firing rate from many neurons...
-    n_trials = frate.shape[0] if cell_names is None else frate.shape[1]
-    dimname = 'trial' if tri is None else 'spike'
-    coords = {dimname: np.arange(n_trials)}
-    dims = [dimname]
+    times_array = isinstance(times, np.ndarray)
+    if frate.ndim == 3:
+        n_trials = frate.shape[0] if cell_names is None else frate.shape[1]
+    elif frate.ndim == 2:
+        if cell_names is None:
+            n_trials = frate.shape[0]
+        else:
+            if times_array:
+                n_trials = 0
+            else:
+                n_trials = frate.shape[1]
+
+    if n_trials > 0:
+        dimname = 'trial' if tri is None else 'spike'
+        coords = {dimname: np.arange(n_trials)}
+        dims = [dimname]
+    else:
+        coords = dict()
+        dims = list()
+
     attrs = None
     if isinstance(times, np.ndarray):
         dims.append(x_dim_name)
@@ -115,7 +133,9 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     if tri is not None:
         coords['trial'] = (dimname, tri)
 
-    coords = _inherit_metadata(coords, spike_epochs.metadata, dimname, tri=tri)
+    if n_trials > 0:
+        coords = _inherit_metadata(
+            coords, spike_epochs.metadata, dimname, tri=tri)
 
     if copy_cellinfo:
         if cell_names is not None and spike_epochs.cellinfo is not None:
