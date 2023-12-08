@@ -494,44 +494,6 @@ def _xcorr_hist_cross_py(times, times2, bins, batch_size=1_000):
     return counts
 
 
-def _spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
-                         kernel_winlen=0.025):
-    from .spike_rate import _spike_density
-
-    # create kernel
-    gauss_sd = kernel_winlen / 6 * sfreq
-    win_smp, trim = _symmetric_window_samples(kernel_winlen, sfreq)
-    kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
-
-    # calculate spike density
-    picks = _deal_with_picks(spk, picks)
-    tms, cnt = _spike_density(spk, picks=picks, sfreq=sfreq, kernel=kernel)
-
-    # cut out spike-centered windows
-    windows = spike_centered_windows(
-        spk, cell_idx, cnt, tms, sfreq, winlen=winlen)
-
-    # correct autocorrelation if present:
-    if cell_idx in picks:
-        idx = np.where(np.asarray(picks) == cell_idx)[0][0]
-        trim = int((windows.shape[-1] - len(kernel)) / 2)
-        windows[idx, :, trim:-trim] -= kernel
-
-    # turn to xarray
-    t_per_smp = 1 / sfreq
-    win_diff = [-winlen / 2, winlen / 2]
-    time = np.arange(win_diff[0], win_diff[1] + 0.01 * t_per_smp,
-                     step=t_per_smp)
-    cell_names = [spk.cell_names[idx] for idx in picks]
-    windows = windows.transpose('channel', 'spike', 'time')
-    xcorr = _turn_spike_rate_to_xarray(
-        time, windows, spk, tri=windows.trial.values,
-        cell_names=cell_names
-    )
-
-    return xcorr
-
-
 # - [ ] silence warnings
 # - [ ] add more arguments that could be passed to elephant
 # - [ ]
