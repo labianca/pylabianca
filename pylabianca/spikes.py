@@ -318,8 +318,6 @@ class SpikeEpochs():
         self._metadata = df
 
     # TODO:
-    # - [ ] use `group` from sarna in looping through trials
-    #       for faster execution...
     def to_neo(self, cell_idx, join=False, sep_time=0.):
         '''Turn spikes of given cell into neo.SpikeTrain format.
 
