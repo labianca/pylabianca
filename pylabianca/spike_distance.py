@@ -398,31 +398,16 @@ def _xcorr_hist_auto_py(times, bins, batch_size=1_000):
     return counts
 
 
-def _xcorr_hist_auto_numpy1(times, bins):
-    '''Compute auto-correlation histogram for a single cell.
+# test numba presence: mne.fixes.has_numba
 
-    [a little more about memory efficiency and using monotonic relationship to
-     our advantage etc.]'''
-    n_times = times.shape[0]
-    n_bins = len(bins) - 1
-    counts = np.zeros(n_bins, dtype=int)
-
-    for idx1 in range(n_times):
-        time1 = times[idx1]
-        distances = times[idx1 + 1:] - time1
-        distances = np.concatenate([distances, -distances])
-        these_counts, _ = np.histogram(distances, bins)
-        counts += these_counts
-
-    return counts
-
-
-def _xcorr_hist_cross(times, max_lag, bins, batch_size=1_000):
+def _xcorr_hist_cross_py(times, times2, bins, batch_size=1_000):
     '''Compute cross-correlation histogram for a single cell.
 
     [a little more about memory efficiency and using monotonic relationship to
      our advantage etc.]'''
     n_times = times.shape[0]
+    n_times2 = times2.shape[0]
+    max_lag = max(np.abs(bins[[0, -1]]))
     distances = list()
     n_bins = len(bins) - 1
     counts = np.zeros(n_bins, dtype=int)
@@ -438,9 +423,9 @@ def _xcorr_hist_cross(times, max_lag, bins, batch_size=1_000):
         new_tm_idx_low = tm_idx_low
         for idx2 in range(tm_idx_low, tm_idx_high):
             if not idx1 == idx2:
-                distance = time1 - times[idx2]
+                distance = times2[idx2] - time1
 
-                if distance > max_lag:
+                if distance < -max_lag:
                     new_tm_idx_low = idx2
                 else:
                     distances.append(distance)
@@ -448,11 +433,11 @@ def _xcorr_hist_cross(times, max_lag, bins, batch_size=1_000):
 
         tm_idx_low = new_tm_idx_low
         max_lag_ok = True
-        while max_lag_ok and idx2 < (n_times - 1):
+        while max_lag_ok and idx2 < (n_times2 - 1):
             idx2 += 1
             if not idx1 == idx2:
-                distance = time1 - times[idx2]
-                max_lag_ok = distance > -max_lag
+                distance = times2[idx2] - time1
+                max_lag_ok = distance <= max_lag
 
                 if max_lag_ok:
                     tm_idx_high = idx2
