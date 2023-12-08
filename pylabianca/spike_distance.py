@@ -220,17 +220,17 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
     return xcorr, bins
 
 
-# TODO: max_lag cannot be longer than epoch time window and preferrably
+# TODO: max_lag cannot be longer than epoch time window and preferably
 #       it is < 1 / 2 epoch length ...
 # TODO: when gauss_fwhm is set, calculate trim before and adjust max_lag
 #       so that it is left in after convolution
-def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
-                      bins=None, gauss_fwhm=None):
+def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
+               bins=None, gauss_fwhm=None, backend='auto'):
     '''Compute cross-correlation histogram for each trial.
 
     Parameters
     ----------
-    spk : SpikeEpochs
+    spk : Spikes | SpikeEpochs
         SpikeEpochs to compute cross-correlation for.
     picks1 : ...
         List of cell indices or names to perform cross- and auto- correlations
@@ -250,25 +250,57 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
         Full-width at half maximum of the gaussian kernel to convolve the
         cross-correlation histograms with. Defaults to ``None`` which ommits
         convolution.
+    backend : str
+        Backend to use for the computation. Can be ``'numpy'``, ``'numba'`` or
+        ``'auto'``. Defaults to ``'auto'`` which will use ``'numba'`` if
+        numba is available (and number of spikes is > 1000 in any of the cells
+        picked) and ``'numpy'`` otherwise.
 
     Returns
     -------
     xcorr : xarray.DataArray
         ...
     '''
-    from .spikes import SpikeEpochs
+    from .spikes import Spikes, SpikeEpochs
     from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
-    assert isinstance(spk, SpikeEpochs)
+    assert isinstance(spk, (Spikes, SpikeEpochs))
 
+    has_epochs = isinstance(spk, SpikeEpochs)
+    if not has_epochs:
+        spk = spk.to_epochs()
+    else:
+        has_epochs = spk.n_trials > 1
+
+    pick_pairs, picks, picks2 = _deal_with_pick_pairs(
+        spk, picks, picks2=picks2)
     bins = _construct_bins(sfreq, max_lag, bins=bins)
 
-    picks = _deal_with_picks(spk, picks)
-    if picks2 is None:
-        # picks and picks2 has to be all combinations of picks
-        pick_pairs = itertools.product(picks, picks)
+    if backend == 'auto':
+        from borsar.utils import has_numba
+        min_spikes_numba = 1_000
+
+        if picks2 is not None:
+            all_picks = np.concatenate([picks, picks2])
+        else:
+            all_picks = picks
+
+        n_spikes = spk.n_spikes()
+        n_spikes = n_spikes[all_picks]
+        valid_spikes =  (n_spikes > min_spikes_numba).any()
+        if valid_spikes and has_numba():
+            backend = 'numba'
+        else:
+            backend = 'numpy'
+
+    if backend == 'numba' and not has_epochs:
+        from ._numba import _xcorr_hist_auto_numba, _xcorr_hist_cross_numba
+        auto_fun = _xcorr_hist_auto_numba
+        cross_fun = _xcorr_hist_cross_numba
+    elif backend == 'numpy':
+        auto_fun = _xcorr_hist_auto_py
+        cross_fun = _xcorr_hist_cross_py
     else:
-        picks2 = _deal_with_picks(spk, picks2)
-        pick_pairs = itertools.product(picks, picks2)
+        raise ValueError(f'Unknown backend: {backend}')
 
     cell = list()  # pair name, but set as cell attr in xarray
     cell1_idx, cell2_idx = list(), list()
@@ -279,13 +311,22 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     # LOOP
     xcorrs = list()
     for idx1, idx2  in pick_pairs:
-        # compute xcorr histogram for cell pair
-        xcorr, _ = _xcorr_hist_trials(spk, idx1, idx2, sfreq=sfreq,
-                                      max_lag=max_lag, bins=bins)
+        is_auto = idx1 == idx2
 
+        # compute xcorr histogram for cell pair
+        # -------------------------------------
+        if has_epochs:
+            xcorr, _ = _xcorr_hist_trials(
+                spk, idx1, idx2, sfreq=sfreq, max_lag=max_lag, bins=bins)
+        else:
+            if is_auto:
+                xcorr = auto_fun(spk.time[idx1], bins)
+            else:
+                xcorr = cross_fun(spk.time[idx1], spk.time[idx2], bins)
+
+        # add coords to lists
         name1 = spk.cell_names[idx1]
         name2 = spk.cell_names[idx2]
-        is_auto = idx1 == idx2
         name = f'{name1} x {name2}'
 
         cell.append(name)
