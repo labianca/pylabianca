@@ -5,7 +5,7 @@ import pandas as pd
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _get_trial_boundaries)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
-from .spike_distance import compare_spike_times, xcorr_hist_trials
+from .spike_distance import compare_spike_times, xcorr_hist
 
 
 # TODO:
@@ -279,9 +279,9 @@ class SpikeEpochs():
         xcorr : xarray.DataArray
             ...
         """
-        return xcorr_hist_trials(
+        return xcorr_hist(
             self, picks=picks, picks2=picks2, sfreq=sfreq, max_lag=max_lag,
-              bins=bins, gauss_fwhm=gauss_fwhm
+              bins=bins, gauss_fwhm=gauss_fwhm, backend='numpy'
         )
 
     def n_spikes(self, per_epoch=False):
@@ -975,6 +975,47 @@ class Spikes(object):
         elif format == 'osort_mm':
             from .io import _save_spk_to_mm_matlab_format as write_spikes
         write_spikes(self, path)
+
+    def xcorr(self, picks=None, picks2=None, sfreq=500., max_lag=0.2,
+              bins=None, gauss_fwhm=None, backend='auto'):
+        """
+        Calculate cross-correlation histogram.
+
+        Parameters
+        ----------
+        picks : ...
+            List of cell indices or names to perform cross- and auto- correlations
+            for. All combinations of cells will be used.
+        picks2 : ...
+            ...
+        sfreq : float
+            Sampling frequency of the bins. The bin width will be ``1 / sfreq``
+            seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
+        max_lag : float
+            Maximum lag in seconds. Used only when ``bins is None``. Defaults
+            to ``0.2``.
+        bins : numpy array | None
+            Array representing edges of the histogram bins. If ``None`` (default)
+            the bins are constructed based on ``sfreq`` and ``max_lag``.
+        gauss_fwhm : float | None
+            Full-width at half maximum of the gaussian kernel to convolve the
+            cross-correlation histograms with. Defaults to ``None`` which ommits
+            convolution.
+        backend : str
+            Backend to use for the computation. Can be ``'numpy'``, ``'numba'`` or
+            ``'auto'``. Defaults to ``'auto'`` which will use ``'numba'`` if
+            numba is available (and number of spikes is > 1000 in any of the cells
+            picked) and ``'numpy'`` otherwise.
+
+        Returns
+        -------
+        xcorr : xarray.DataArray
+            ...
+        """
+        return xcorr_hist(
+            self, picks=picks, picks2=picks2, sfreq=sfreq, max_lag=max_lag,
+            bins=bins, gauss_fwhm=gauss_fwhm, backend=backend
+        )
 
 
 def _check_waveforms(times, waveform, waveform_time):
