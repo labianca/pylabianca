@@ -903,17 +903,28 @@ class Spikes(object):
             recording start as the earliest spike timestamp MINUS
             ``pad_timestamps``. Defaults to 0.
         '''
-        min_stamp = (int(min([min(x) for x in self.timestamps]))
-                     - pad_timestamps)
-        max_stamp = (int(max([max(x) for x in self.timestamps]))
-                     + pad_timestamps)
+        min_stamp = (np.min([x[0] for x in self.timestamps])
+                    - pad_timestamps)
+        max_stamp = (np.max([x[-1] for x in self.timestamps])
+                    + pad_timestamps)
         stamp_diff = max_stamp - min_stamp
         s_len = stamp_diff / self.sfreq
 
-        events_fake = np.array([[min_stamp, 0, 123]])
         tmin, tmax = 0, s_len
-        spk_epochs = self.epoch(events_fake, event_id=123,
-                                tmin=tmin, tmax=tmax)
+
+        time = [(x - min_stamp) / self.sfreq for x in self.timestamps]
+        trial = [np.zeros(len(x), dtype=int) for x in self.timestamps]
+        waveform = self.waveform.copy() if self.waveform is not None else None
+        waveform_time = (self.waveform_time.copy()
+                         if self.waveform_time is not None else None)
+        cell_names = (None if self.cell_names is None
+                      else self.cell_names.copy())
+        cellinfo = None if self.cellinfo is None else self.cellinfo.copy()
+
+        spk_epochs = SpikeEpochs(
+            time, trial, time_limits=[tmin, tmax], n_trials=1,
+            waveform=waveform, waveform_time=waveform_time,
+            cell_names=cell_names, cellinfo=cellinfo)
         return spk_epochs
 
     def merge(self, picks):
