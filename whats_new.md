@@ -11,6 +11,10 @@ the SpikeEpochs object does not contain metadata).
 * ENH: added option to store original timestamps when epoching (`keep_timestamps` argument). These timestamps are kept in sync with event-centered spike times through all further operations like condition selection, cropping, etc.
 * ENH: to increase compatibility with MNE-Python `len(SpikeEpochs)` returns the number of trials now. To get the number of units use `SpikeEpochs.n_units()`
 * ENH: added `pylabianca.utils.shuffle_trials()` function to shuffle trials in `SpikeEpochs` object
+* ENH: speed up auto- and cross-correlation for `Spikes` with more loopy approach, previous `spk.to_epochs().xcorr()` appraoch was insanely slow for large datasets. In general, for data with lots of spikes it is more efficient to use a combinantion of smart looping + `np.histogram()` than to use numpy for all calculations.
+* ENH: added `.xcorr()` method to `Spikes` objects
+* ENH: added very fast nuba implementation of auto- and cross-correlation for `Spikes` objects. A new argument `backend` was added to `.xcorr()` method of `Spikes`. The default is value if `backend='auto'`, which automatically selects the backend (if numba is available and there are many spikes in the data, numba is used). Other options are `backend='numpy'` and `backend='numba'`.
+
 
 * DOC: added example of working with pylabianca together with spiketools: [notebook](doc/working_with_spiketools.ipynb)
 * DOC: added example of spike-field analysis combining pylabianca and MNE-Python: [notebook](doc/spike-triggered_analysis.ipynb)
