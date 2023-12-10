@@ -393,7 +393,10 @@ def _deal_with_pick_pairs(spk, picks, picks2=None):
         pick_pairs = itertools.product(picks, picks)
     else:
         picks2 = _deal_with_picks(spk, picks2)
-        pick_pairs = itertools.product(picks, picks2)
+        if len(picks) == len(picks2):
+            pick_pairs = zip(picks, picks2)
+        else:
+            pick_pairs = itertools.product(picks, picks2)
     return pick_pairs, picks, picks2
 
 
