@@ -152,10 +152,11 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
     ----------
     spk : pylabianca.spikes.SpikeEpochs
         SpikeEpochs object to use.
-    cell_idx1 : ...
-        List of cell indices or names to perform cross- and auto- correlations
-        for. All combinations of cells will be used.
-    cell_idx2 : ...
+    cell_idx1 : int
+        Index of the first cell to compute cross-correlation for.
+    cell_idx2 : int
+        Index of the second cell to compute cross-correlation for. If
+        ``cell_idx1 == cell_idx2`` then auto-correlation will be computed.
     sfreq : float
         Sampling frequency of the bins. The bin width will be ``1 / sfreq``
         seconds. Used only when ``bins is None``. Defaults to ``500.``.
@@ -232,11 +233,23 @@ def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     ----------
     spk : Spikes | SpikeEpochs
         SpikeEpochs to compute cross-correlation for.
-    picks1 : ...
+    picks : int | str | list-like of int | list-like of str | None
         List of cell indices or names to perform cross- and auto- correlations
-        for. All combinations of cells will be used.
-    picks2 : ...
-        ...
+        for. If ``picks2`` is ``None`` then all combinations of cells from
+        ``picks`` will be used.
+    picks2 : int | str | list-like of int | list-like of str | None
+        List of cell indices or names to perform cross-correlations with.
+        ``picks2`` is used as pairs for ``picks``. The interaction between
+        ``picks`` and ``picks2`` is the following:
+        * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
+            combinations of pairs.
+        * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
+            pairs are constructed from successive elements of ``picks`` and
+            ``picks2``. For example, if ``picks = [0, 1, 2]`` and
+            ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+            ``[(0, 3), (1, 4), (2, 5)]``.
+        * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
+            all combinations of ``picks`` and ``picks2`` are used.
     sfreq : float
         Sampling frequency of the bins. The bin width will be ``1 / sfreq``
         seconds. Used only when ``bins is None``. Defaults to ``500.``.
@@ -259,7 +272,9 @@ def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     Returns
     -------
     xcorr : xarray.DataArray
-        ...
+        Xarray DataArray of cross-correlation histograms. The first dimension
+        is the cell pair, and the last dimension is correlation the lag. If the
+        input is SpikeEpochs then the second dimension is the trial.
     '''
     from .spikes import Spikes, SpikeEpochs
     from .utils import _deal_with_picks, _turn_spike_rate_to_xarray

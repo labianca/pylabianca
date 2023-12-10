@@ -255,11 +255,23 @@ class SpikeEpochs():
 
         Parameters
         ----------
-        picks : ...
+        picks : int | str | list-like of int | list-like of str | None
             List of cell indices or names to perform cross- and auto- correlations
-            for. All combinations of cells will be used.
-        picks2 : ...
-            ...
+            for. If ``picks2`` is ``None`` then all combinations of cells from
+            ``picks`` will be used.
+        picks2 : int | str | list-like of int | list-like of str | None
+            List of cell indices or names to perform cross-correlations with.
+            ``picks2`` is used as pairs for ``picks``. The interaction between
+            ``picks`` and ``picks2`` is the following:
+            * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
+                combinations of pairs.
+            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
+                pairs are constructed from successive elements of ``picks`` and
+                ``picks2``. For example, if ``picks = [0, 1, 2]`` and
+                ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+                ``[(0, 3), (1, 4), (2, 5)]``.
+            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
+                all combinations of ``picks`` and ``picks2`` are used.
         sfreq : float
             Sampling frequency of the bins. The bin width will be ``1 / sfreq``
             seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
@@ -277,7 +289,10 @@ class SpikeEpochs():
         Returns
         -------
         xcorr : xarray.DataArray
-            ...
+            Xarray DataArray of cross-correlation histograms. The first
+            dimension is the cell pair, and the last dimension is correlation
+            the lag. If the input is SpikeEpochs then the second dimension is
+            the trial.
         """
         return xcorr_hist(
             self, picks=picks, picks2=picks2, sfreq=sfreq, max_lag=max_lag,
@@ -992,11 +1007,23 @@ class Spikes(object):
 
         Parameters
         ----------
-        picks : ...
+        picks : int | str | list-like of int | list-like of str | None
             List of cell indices or names to perform cross- and auto- correlations
-            for. All combinations of cells will be used.
-        picks2 : ...
-            ...
+            for. If ``picks2`` is ``None`` then all combinations of cells from
+            ``picks`` will be used.
+        picks2 : int | str | list-like of int | list-like of str | None
+            List of cell indices or names to perform cross-correlations with.
+            ``picks2`` is used as pairs for ``picks``. The interaction between
+            ``picks`` and ``picks2`` is the following:
+            * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
+                combinations of pairs.
+            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
+                pairs are constructed from successive elements of ``picks`` and
+                ``picks2``. For example, if ``picks = [0, 1, 2]`` and
+                ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+                ``[(0, 3), (1, 4), (2, 5)]``.
+            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
+                all combinations of ``picks`` and ``picks2`` are used.
         sfreq : float
             Sampling frequency of the bins. The bin width will be ``1 / sfreq``
             seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
@@ -1019,7 +1046,10 @@ class Spikes(object):
         Returns
         -------
         xcorr : xarray.DataArray
-            ...
+            Xarray DataArray of cross-correlation histograms. The first
+            dimension is the cell pair, and the last dimension is correlation
+            the lag. If the input is SpikeEpochs then the second dimension is
+            the trial.
         """
         return xcorr_hist(
             self, picks=picks, picks2=picks2, sfreq=sfreq, max_lag=max_lag,
