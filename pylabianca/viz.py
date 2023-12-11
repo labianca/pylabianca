@@ -846,7 +846,7 @@ def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
     assert unit in ['s', 'ms']
     picks = _deal_with_picks(spk, picks)
     n_picks = len(picks)
-    ax = auto_multipanel(n_picks)
+    ax = auto_multipanel(n_picks, ax=ax)
 
     div = 1000 if unit == 'ms' else 1
     if max_isi is None:

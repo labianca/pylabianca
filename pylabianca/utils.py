@@ -1,3 +1,6 @@
+import os
+import os.path as op
+
 import numpy as np
 import pandas as pd
 
@@ -71,6 +74,8 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
           as string)
         * 2d ``n_trials x n_times`` (``cell_names`` is None and ``times``
           is an array)
+        * 2d ``n_cells x n_times`` (``cell_names`` is not None and ``times``
+          is an array)
 
     spike_epochs : SpikeEpochs object
         SpikeEpochs object.
@@ -96,10 +101,26 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     import xarray as xr
 
     # later: consider having firing rate from many neurons...
-    n_trials = frate.shape[0] if cell_names is None else frate.shape[1]
-    dimname = 'trial' if tri is None else 'spike'
-    coords = {dimname: np.arange(n_trials)}
-    dims = [dimname]
+    times_array = isinstance(times, np.ndarray)
+    if frate.ndim == 3:
+        n_trials = frate.shape[0] if cell_names is None else frate.shape[1]
+    elif frate.ndim == 2:
+        if cell_names is None:
+            n_trials = frate.shape[0]
+        else:
+            if times_array:
+                n_trials = 0
+            else:
+                n_trials = frate.shape[1]
+
+    if n_trials > 0:
+        dimname = 'trial' if tri is None else 'spike'
+        coords = {dimname: np.arange(n_trials)}
+        dims = [dimname]
+    else:
+        coords = dict()
+        dims = list()
+
     attrs = None
     if isinstance(times, np.ndarray):
         dims.append(x_dim_name)
@@ -115,7 +136,9 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     if tri is not None:
         coords['trial'] = (dimname, tri)
 
-    coords = _inherit_metadata(coords, spike_epochs.metadata, dimname, tri=tri)
+    if n_trials > 0:
+        coords = _inherit_metadata(
+            coords, spike_epochs.metadata, dimname, tri=tri)
 
     if copy_cellinfo:
         if cell_names is not None and spike_epochs.cellinfo is not None:
@@ -621,3 +644,67 @@ def drop_cells_by_channel_and_cluster_id(spk, to_drop):
         this_idx = find_cells_by_cluster_id(spk, cluster, channel=channel)[0]
         cell_idx.append(this_idx)
     spk.drop_cells(cell_idx)
+
+
+def get_data_path():
+    home_dir = os.path.expanduser('~')
+    data_dir = 'pylabianca_data'
+    full_data_dir = op.join(home_dir, data_dir)
+    has_data_dir = op.exists(full_data_dir)
+
+    if not has_data_dir:
+        os.mkdir(full_data_dir)
+
+    return full_data_dir
+
+
+def get_fieldtrip_data():
+    import pooch
+
+    data_path = get_data_path()
+    ft_url = ('https://download.fieldtriptoolbox.org/tutorial/spike/p029_'
+              'sort_final_01.nex')
+    known_hash = ('4ae4ed2a9613cde884b62d8c5713c418cff5f4a57c8968a3886'
+                  'db1e9991a81c9')
+    fname = pooch.retrieve(
+        url=ft_url, known_hash=known_hash,
+        fname='p029_sort_final_01.nex', path=data_path
+    )
+    return fname
+
+
+def get_test_data_link():
+    dropbox_lnk = ('https://www.dropbox.com/scl/fo/757tf3ujqga3sa2qocm4l/h?'
+                   'rlkey=mlz44bcqtg4ds3gsc29b2k62x&dl=1')
+    return dropbox_lnk
+
+
+def download_test_data():
+    # check if test data exist
+    data_dir = get_data_path()
+    check_files = ['ft_spk_epoched.mat', 'monkey_stim.csv',
+                   'p029_sort_final_01_events']
+    if all([op.isfile(op.join(data_dir, f)) for f in check_files]):
+        return
+
+    import pooch
+    import zipfile
+
+    # set up paths
+    fname = 'temp_file.zip'
+    download_link = get_test_data_link()
+
+    # download the file
+    hash = None
+    pooch.retrieve(url=download_link, known_hash=hash,
+                   path=data_dir, fname=fname)
+
+    # unzip and extract
+    # TODO - optionally extract only the missing files
+    destination = op.join(data_dir, fname)
+    zip_ref = zipfile.ZipFile(destination, 'r')
+    zip_ref.extractall(data_dir)
+    zip_ref.close()
+
+    # remove the zipfile
+    os.remove(destination)
