@@ -85,3 +85,130 @@ def _numba_compare_times(times1, times2, distances):
         distances[idx1] = min_distance
         tm2_idx = max(idx2 - 1, 0)
     return distances
+
+
+@numba.jit(nopython=True)
+def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
+    '''Compute auto-correlation histogram for a single cell.
+
+    [a little more about memory efficiency and using monotonic relationship to
+     our advantage etc.]'''
+    n_times = times.shape[0]
+    distances = [0.01]
+    n_bins = len(bins) - 1
+    max_lag = max(abs(bins[0]), abs(bins[-1]))
+    counts = np.zeros(n_bins, dtype='int')
+
+    in_batch = 0
+    for idx1 in range(n_times):
+        time1 = times[idx1]
+
+        # move forward till we fall out of max_lag
+        max_lag_ok = True
+        idx2 = idx1
+        while max_lag_ok and idx2 < (n_times - 1):
+            idx2 += 1
+            distance = times[idx2] - time1
+            max_lag_ok = distance <= max_lag
+
+            if max_lag_ok:
+                distances.append(distance)
+                distances.append(-distance)
+                in_batch += 2
+
+        if in_batch >= batch_size + 1 or idx1 == (n_times - 1):
+            these_counts, _ = numba_histogram(distances[1:], bins)
+            counts += these_counts
+            in_batch = 0
+            distances = [0.01]
+
+    return counts
+
+
+@numba.jit(nopython=True)
+def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
+    '''Compute cross-correlation histogram for a single cell.
+
+    [a little more about memory efficiency and using monotonic relationship to
+     our advantage etc.]'''
+    n_times = times.shape[0]
+    n_times2 = times2.shape[0]
+    max_lag = max(abs(bins[0]), abs(bins[-1]))
+    distances = [0.01]
+    n_bins = len(bins) - 1
+    counts = np.zeros(n_bins, dtype='int')
+
+    tm_idx_low = 0
+    tm_idx_high = 1
+    in_batch = 0
+
+    for idx1 in range(n_times):
+        time1 = times[idx1]
+
+        # move forward till tm_idx_high
+        new_tm_idx_low = tm_idx_low
+        for idx2 in range(tm_idx_low, tm_idx_high):
+            if not idx1 == idx2:
+                distance = times2[idx2] - time1
+
+                if distance < -max_lag:
+                    new_tm_idx_low = idx2
+                else:
+                    distances.append(distance)
+                    in_batch += 1
+
+        tm_idx_low = new_tm_idx_low
+        max_lag_ok = True
+        while max_lag_ok and idx2 < (n_times2 - 1):
+            idx2 += 1
+            if not idx1 == idx2:
+                distance = times2[idx2] - time1
+                max_lag_ok = distance <= max_lag
+
+                if max_lag_ok:
+                    tm_idx_high = idx2
+                    distances.append(distance)
+                    in_batch += 1
+
+        if in_batch >= batch_size + 1 or idx1 == (n_times - 1):
+            these_counts, _ = numba_histogram(distances[1:], bins)
+            counts += these_counts
+            in_batch = 0
+            distances = [0.01]
+
+    return counts
+
+
+@numba.jit(nopython=True)
+def compute_bin(x, bin_edges):
+    '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
+    # assuming uniform bins for now
+    n = bin_edges.shape[0] - 1
+    a_min = bin_edges[0]
+    a_max = bin_edges[-1]
+
+    # special case to mirror NumPy behavior for last bin
+    if x == a_max:
+        return n - 1 # a_max always in last bin
+
+    bin = int(n * (x - a_min) / (a_max - a_min))
+
+    if bin < 0 or bin >= n:
+        return None
+    else:
+        return bin
+
+
+@numba.jit(nopython=True)
+def numba_histogram(a, bin_edges):
+    '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
+    n_bins = len(bin_edges) - 1
+    hist = np.zeros(n_bins, dtype=np.intp)
+
+    # for x in a.flat:
+    for x in a:
+        bin = compute_bin(x, bin_edges)
+        if bin is not None:
+            hist[int(bin)] += 1
+
+    return hist, bin_edges

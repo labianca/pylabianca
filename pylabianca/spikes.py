@@ -5,7 +5,7 @@ import pandas as pd
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _get_trial_boundaries)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
-from .spike_distance import compare_spike_times, xcorr_hist_trials
+from .spike_distance import compare_spike_times, xcorr_hist
 
 
 # TODO:
@@ -255,11 +255,23 @@ class SpikeEpochs():
 
         Parameters
         ----------
-        picks : ...
+        picks : int | str | list-like of int | list-like of str | None
             List of cell indices or names to perform cross- and auto- correlations
-            for. All combinations of cells will be used.
-        picks2 : ...
-            ...
+            for. If ``picks2`` is ``None`` then all combinations of cells from
+            ``picks`` will be used.
+        picks2 : int | str | list-like of int | list-like of str | None
+            List of cell indices or names to perform cross-correlations with.
+            ``picks2`` is used as pairs for ``picks``. The interaction between
+            ``picks`` and ``picks2`` is the following:
+            * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
+                combinations of pairs.
+            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
+                pairs are constructed from successive elements of ``picks`` and
+                ``picks2``. For example, if ``picks = [0, 1, 2]`` and
+                ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+                ``[(0, 3), (1, 4), (2, 5)]``.
+            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
+                all combinations of ``picks`` and ``picks2`` are used.
         sfreq : float
             Sampling frequency of the bins. The bin width will be ``1 / sfreq``
             seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
@@ -277,11 +289,14 @@ class SpikeEpochs():
         Returns
         -------
         xcorr : xarray.DataArray
-            ...
+            Xarray DataArray of cross-correlation histograms. The first
+            dimension is the cell pair, and the last dimension is correlation
+            the lag. If the input is SpikeEpochs then the second dimension is
+            the trial.
         """
-        return xcorr_hist_trials(
+        return xcorr_hist(
             self, picks=picks, picks2=picks2, sfreq=sfreq, max_lag=max_lag,
-              bins=bins, gauss_fwhm=gauss_fwhm
+              bins=bins, gauss_fwhm=gauss_fwhm, backend='numpy'
         )
 
     def n_spikes(self, per_epoch=False):
@@ -318,8 +333,6 @@ class SpikeEpochs():
         self._metadata = df
 
     # TODO:
-    # - [ ] use `group` from sarna in looping through trials
-    #       for faster execution...
     def to_neo(self, cell_idx, join=False, sep_time=0.):
         '''Turn spikes of given cell into neo.SpikeTrain format.
 
@@ -903,17 +916,28 @@ class Spikes(object):
             recording start as the earliest spike timestamp MINUS
             ``pad_timestamps``. Defaults to 0.
         '''
-        min_stamp = (int(min([min(x) for x in self.timestamps]))
-                     - pad_timestamps)
-        max_stamp = (int(max([max(x) for x in self.timestamps]))
-                     + pad_timestamps)
+        min_stamp = (np.min([x[0] for x in self.timestamps])
+                    - pad_timestamps)
+        max_stamp = (np.max([x[-1] for x in self.timestamps])
+                    + pad_timestamps)
         stamp_diff = max_stamp - min_stamp
         s_len = stamp_diff / self.sfreq
 
-        events_fake = np.array([[min_stamp, 0, 123]])
         tmin, tmax = 0, s_len
-        spk_epochs = self.epoch(events_fake, event_id=123,
-                                tmin=tmin, tmax=tmax)
+
+        time = [(x - min_stamp) / self.sfreq for x in self.timestamps]
+        trial = [np.zeros(len(x), dtype=int) for x in self.timestamps]
+        waveform = self.waveform.copy() if self.waveform is not None else None
+        waveform_time = (self.waveform_time.copy()
+                         if self.waveform_time is not None else None)
+        cell_names = (None if self.cell_names is None
+                      else self.cell_names.copy())
+        cellinfo = None if self.cellinfo is None else self.cellinfo.copy()
+
+        spk_epochs = SpikeEpochs(
+            time, trial, time_limits=[tmin, tmax], n_trials=1,
+            waveform=waveform, waveform_time=waveform_time,
+            cell_names=cell_names, cellinfo=cellinfo)
         return spk_epochs
 
     def merge(self, picks):
@@ -975,6 +999,62 @@ class Spikes(object):
         elif format == 'osort_mm':
             from .io import _save_spk_to_mm_matlab_format as write_spikes
         write_spikes(self, path)
+
+    def xcorr(self, picks=None, picks2=None, sfreq=500., max_lag=0.2,
+              bins=None, gauss_fwhm=None, backend='auto'):
+        """
+        Calculate cross-correlation histogram.
+
+        Parameters
+        ----------
+        picks : int | str | list-like of int | list-like of str | None
+            List of cell indices or names to perform cross- and auto- correlations
+            for. If ``picks2`` is ``None`` then all combinations of cells from
+            ``picks`` will be used.
+        picks2 : int | str | list-like of int | list-like of str | None
+            List of cell indices or names to perform cross-correlations with.
+            ``picks2`` is used as pairs for ``picks``. The interaction between
+            ``picks`` and ``picks2`` is the following:
+            * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
+                combinations of pairs.
+            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
+                pairs are constructed from successive elements of ``picks`` and
+                ``picks2``. For example, if ``picks = [0, 1, 2]`` and
+                ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+                ``[(0, 3), (1, 4), (2, 5)]``.
+            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
+                all combinations of ``picks`` and ``picks2`` are used.
+        sfreq : float
+            Sampling frequency of the bins. The bin width will be ``1 / sfreq``
+            seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
+        max_lag : float
+            Maximum lag in seconds. Used only when ``bins is None``. Defaults
+            to ``0.2``.
+        bins : numpy array | None
+            Array representing edges of the histogram bins. If ``None`` (default)
+            the bins are constructed based on ``sfreq`` and ``max_lag``.
+        gauss_fwhm : float | None
+            Full-width at half maximum of the gaussian kernel to convolve the
+            cross-correlation histograms with. Defaults to ``None`` which ommits
+            convolution.
+        backend : str
+            Backend to use for the computation. Can be ``'numpy'``, ``'numba'`` or
+            ``'auto'``. Defaults to ``'auto'`` which will use ``'numba'`` if
+            numba is available (and number of spikes is > 1000 in any of the cells
+            picked) and ``'numpy'`` otherwise.
+
+        Returns
+        -------
+        xcorr : xarray.DataArray
+            Xarray DataArray of cross-correlation histograms. The first
+            dimension is the cell pair, and the last dimension is correlation
+            the lag. If the input is SpikeEpochs then the second dimension is
+            the trial.
+        """
+        return xcorr_hist(
+            self, picks=picks, picks2=picks2, sfreq=sfreq, max_lag=max_lag,
+            bins=bins, gauss_fwhm=gauss_fwhm, backend=backend
+        )
 
 
 def _check_waveforms(times, waveform, waveform_time):

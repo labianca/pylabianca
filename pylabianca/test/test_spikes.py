@@ -1,6 +1,12 @@
+import os.path as op
 import numpy as np
 import pandas as pd
 import pylabianca as pln
+from pylabianca.utils import download_test_data, get_data_path
+
+
+download_test_data()
+data_dir = get_data_path()
 
 
 def create_fake_spikes():
@@ -96,3 +102,34 @@ def test_to_raw():
     )
     assert (spk_tm == good_tms).all()
     assert (spk_raw == good_raw).all()
+
+
+def test_epoching_vs_fieldtrip():
+    ft_data = pln.utils.get_fieldtrip_data()
+
+    # read and epoch data
+    events_test = np.array([[22928800, 0, 1],
+                            [171087520, 0, 1],
+                            [300742480, 0, 1]])
+
+    spk = pln.io.read_plexon_nex(ft_data)
+    spk_epo_test = (spk.copy().pick_cells(['sig002a_wf', 'sig003a_wf'])
+                    .epoch(events_test, tmin=-2.75, tmax=3.,
+                           keep_timestamps=True)
+    )
+
+    # read fieldtrip results
+    fname = 'ft_spk_epoched.mat'
+    spk_epo_test_ft = pln.io.read_fieldtrip(
+        op.join(data_dir, fname), kind='epochs', data_name='spikeTrials_test')
+
+    # check that the results are the same
+    for ch_idx in range(2):
+        assert (spk_epo_test_ft.timestamps[ch_idx]
+                == spk_epo_test.timestamps[ch_idx]).all()
+
+        assert (spk_epo_test_ft.trial[ch_idx]
+                == spk_epo_test.trial[ch_idx]).all()
+
+        np.testing.assert_almost_equal(
+            spk_epo_test.time[ch_idx], spk_epo_test_ft.time[ch_idx])

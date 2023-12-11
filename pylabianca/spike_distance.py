@@ -141,6 +141,8 @@ def _construct_bins(sfreq, max_lag, bins=None):
 
 # TODO: add option to shuffle trials?
 # TODO: add option to shift trials?
+# TODO: split into a higher and lower level function
+#       the higher level would be common to this and _xcorr_hist
 def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
                        bins=None):
     '''
@@ -150,10 +152,11 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
     ----------
     spk : pylabianca.spikes.SpikeEpochs
         SpikeEpochs object to use.
-    cell_idx1 : ...
-        List of cell indices or names to perform cross- and auto- correlations
-        for. All combinations of cells will be used.
-    cell_idx2 : ...
+    cell_idx1 : int
+        Index of the first cell to compute cross-correlation for.
+    cell_idx2 : int
+        Index of the second cell to compute cross-correlation for. If
+        ``cell_idx1 == cell_idx2`` then auto-correlation will be computed.
     sfreq : float
         Sampling frequency of the bins. The bin width will be ``1 / sfreq``
         seconds. Used only when ``bins is None``. Defaults to ``500.``.
@@ -218,23 +221,35 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
     return xcorr, bins
 
 
-# TODO: max_lag cannot be longer than epoch time window and preferrably
+# TODO: max_lag cannot be longer than epoch time window and preferably
 #       it is < 1 / 2 epoch length ...
 # TODO: when gauss_fwhm is set, calculate trim before and adjust max_lag
 #       so that it is left in after convolution
-def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
-                      bins=None, gauss_fwhm=None):
+def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
+               bins=None, gauss_fwhm=None, backend='auto'):
     '''Compute cross-correlation histogram for each trial.
 
     Parameters
     ----------
-    spk : SpikeEpochs
+    spk : Spikes | SpikeEpochs
         SpikeEpochs to compute cross-correlation for.
-    picks1 : ...
+    picks : int | str | list-like of int | list-like of str | None
         List of cell indices or names to perform cross- and auto- correlations
-        for. All combinations of cells will be used.
-    picks2 : ...
-        ...
+        for. If ``picks2`` is ``None`` then all combinations of cells from
+        ``picks`` will be used.
+    picks2 : int | str | list-like of int | list-like of str | None
+        List of cell indices or names to perform cross-correlations with.
+        ``picks2`` is used as pairs for ``picks``. The interaction between
+        ``picks`` and ``picks2`` is the following:
+        * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
+            combinations of pairs.
+        * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
+            pairs are constructed from successive elements of ``picks`` and
+            ``picks2``. For example, if ``picks = [0, 1, 2]`` and
+            ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+            ``[(0, 3), (1, 4), (2, 5)]``.
+        * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
+            all combinations of ``picks`` and ``picks2`` are used.
     sfreq : float
         Sampling frequency of the bins. The bin width will be ``1 / sfreq``
         seconds. Used only when ``bins is None``. Defaults to ``500.``.
@@ -248,25 +263,59 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
         Full-width at half maximum of the gaussian kernel to convolve the
         cross-correlation histograms with. Defaults to ``None`` which ommits
         convolution.
+    backend : str
+        Backend to use for the computation. Can be ``'numpy'``, ``'numba'`` or
+        ``'auto'``. Defaults to ``'auto'`` which will use ``'numba'`` if
+        numba is available (and number of spikes is > 1000 in any of the cells
+        picked) and ``'numpy'`` otherwise.
 
     Returns
     -------
     xcorr : xarray.DataArray
-        ...
+        Xarray DataArray of cross-correlation histograms. The first dimension
+        is the cell pair, and the last dimension is correlation the lag. If the
+        input is SpikeEpochs then the second dimension is the trial.
     '''
-    from .spikes import SpikeEpochs
+    from .spikes import Spikes, SpikeEpochs
     from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
-    assert isinstance(spk, SpikeEpochs)
+    assert isinstance(spk, (Spikes, SpikeEpochs))
 
+    has_epochs = isinstance(spk, SpikeEpochs)
+    if not has_epochs:
+        spk = spk.to_epochs()
+    else:
+        has_epochs = spk.n_trials > 1
+
+    pick_pairs, picks, picks2 = _deal_with_pick_pairs(
+        spk, picks, picks2=picks2)
     bins = _construct_bins(sfreq, max_lag, bins=bins)
 
-    picks = _deal_with_picks(spk, picks)
-    if picks2 is None:
-        # picks and picks2 has to be all combinations of picks
-        pick_pairs = itertools.product(picks, picks)
+    if backend == 'auto':
+        from borsar.utils import has_numba
+        min_spikes_numba = 1_000
+
+        if picks2 is not None:
+            all_picks = np.concatenate([picks, picks2])
+        else:
+            all_picks = picks
+
+        n_spikes = spk.n_spikes()
+        n_spikes = n_spikes[all_picks]
+        valid_spikes =  (n_spikes > min_spikes_numba).any()
+        if valid_spikes and has_numba():
+            backend = 'numba'
+        else:
+            backend = 'numpy'
+
+    if backend == 'numba' and not has_epochs:
+        from ._numba import _xcorr_hist_auto_numba, _xcorr_hist_cross_numba
+        auto_fun = _xcorr_hist_auto_numba
+        cross_fun = _xcorr_hist_cross_numba
+    elif backend == 'numpy':
+        auto_fun = _xcorr_hist_auto_py
+        cross_fun = _xcorr_hist_cross_py
     else:
-        picks2 = _deal_with_picks(spk, picks2)
-        pick_pairs = itertools.product(picks, picks2)
+        raise ValueError(f'Unknown backend: {backend}')
 
     cell = list()  # pair name, but set as cell attr in xarray
     cell1_idx, cell2_idx = list(), list()
@@ -277,13 +326,22 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     # LOOP
     xcorrs = list()
     for idx1, idx2  in pick_pairs:
-        # compute xcorr histogram for cell pair
-        xcorr, _ = _xcorr_hist_trials(spk, idx1, idx2, sfreq=sfreq,
-                                      max_lag=max_lag, bins=bins)
+        is_auto = idx1 == idx2
 
+        # compute xcorr histogram for cell pair
+        # -------------------------------------
+        if has_epochs:
+            xcorr, _ = _xcorr_hist_trials(
+                spk, idx1, idx2, sfreq=sfreq, max_lag=max_lag, bins=bins)
+        else:
+            if is_auto:
+                xcorr = auto_fun(spk.time[idx1], bins)
+            else:
+                xcorr = cross_fun(spk.time[idx1], spk.time[idx2], bins)
+
+        # add coords to lists
         name1 = spk.cell_names[idx1]
         name2 = spk.cell_names[idx2]
-        is_auto = idx1 == idx2
         name = f'{name1} x {name2}'
 
         cell.append(name)
@@ -304,17 +362,8 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     # smooth with gaussian if needed
     # TODO: DRY with _spike_density
     if gauss_fwhm is not None:
-        from scipy.signal import correlate
-        from .spike_rate import _gauss_sd_from_FWHM
-
-        gauss_sd = _gauss_sd_from_FWHM(gauss_fwhm)
-        winlen = gauss_sd * 6
-        gauss_sd = gauss_sd * sfreq
-        win_smp, trim = _symmetric_window_samples(winlen, sfreq)
-        kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
-
-        bin_centers = bin_centers[trim:-trim]
-        xcorrs = correlate(xcorrs, kernel[None, None, :], mode='valid')
+        xcorrs, bin_centers = _convolve_xcorr(
+            xcorrs, bin_centers, gauss_fwhm, sfreq)
 
     # construct xarr
     xcorrs = _turn_spike_rate_to_xarray(
@@ -333,42 +382,134 @@ def xcorr_hist_trials(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     return xcorrs
 
 
-def _spike_xcorr_density(spk, cell_idx, picks=None, sfreq=500, winlen=0.1,
-                         kernel_winlen=0.025):
-    from .spike_rate import _spike_density
+# CONSIDER: move out to utils?
+def _convolve_xcorr(xcorrs, bin_centers, gauss_fwhm, sfreq):
+    from scipy.signal import correlate
+    from .spike_rate import _gauss_sd_from_FWHM
 
-    # create kernel
-    gauss_sd = kernel_winlen / 6 * sfreq
-    win_smp, trim = _symmetric_window_samples(kernel_winlen, sfreq)
-    kernel = _gauss_kernel_samples(win_smp, gauss_sd) * sfreq
+    gauss_sd = _gauss_sd_from_FWHM(gauss_fwhm)
+    winlen = gauss_sd * 6
+    gauss_sd = gauss_sd * sfreq
+    win_smp, trim = _symmetric_window_samples(winlen, sfreq)
+    kernel = _gauss_kernel_samples(win_smp, gauss_sd)
 
-    # calculate spike density
+    bin_centers = bin_centers[trim:-trim]
+    full_kernel = (kernel[None, None, :] if xcorrs.ndim == 3
+                   else kernel[None, :] if xcorrs.ndim == 2
+                   else kernel)
+    xcorrs = correlate(xcorrs, full_kernel, mode='valid')
+    return xcorrs, bin_centers
+
+
+def _deal_with_pick_pairs(spk, picks, picks2=None):
     picks = _deal_with_picks(spk, picks)
-    tms, cnt = _spike_density(spk, picks=picks, sfreq=sfreq, kernel=kernel)
+    if picks2 is None:
+        # picks and picks2 has to be all combinations of picks
+        pick_pairs = itertools.product(picks, picks)
+    else:
+        picks2 = _deal_with_picks(spk, picks2)
+        if len(picks) == len(picks2):
+            pick_pairs = zip(picks, picks2)
+        else:
+            pick_pairs = itertools.product(picks, picks2)
+    return pick_pairs, picks, picks2
 
-    # cut out spike-centered windows
-    windows = spike_centered_windows(
-        spk, cell_idx, cnt, tms, sfreq, winlen=winlen)
 
-    # correct autocorrelation if present:
-    if cell_idx in picks:
-        idx = np.where(np.asarray(picks) == cell_idx)[0][0]
-        trim = int((windows.shape[-1] - len(kernel)) / 2)
-        windows[idx, :, trim:-trim] -= kernel
+# more memory efficient version of xcorr_hist_trials
+# intended to work on Spikes turned to SpikeEpochs
+# (_xcorr_hist_trials is VERY memory inefficient for many thousands of spikes
+#  but that does not happen frequently with single trials)
+# CONSIDER: use batch-array looping instead of full iterative loop
+def _xcorr_hist_auto_py(times, bins, batch_size=1_000):
+    '''Compute auto-correlation histogram for a single cell.
 
-    # turn to xarray
-    t_per_smp = 1 / sfreq
-    win_diff = [-winlen / 2, winlen / 2]
-    time = np.arange(win_diff[0], win_diff[1] + 0.01 * t_per_smp,
-                     step=t_per_smp)
-    cell_names = [spk.cell_names[idx] for idx in picks]
-    windows = windows.transpose('channel', 'spike', 'time')
-    xcorr = _turn_spike_rate_to_xarray(
-        time, windows, spk, tri=windows.trial.values,
-        cell_names=cell_names
-    )
+    [a little more about memory efficiency and using monotonic relationship to
+     our advantage etc.]'''
+    n_times = times.shape[0]
+    distances = list()
+    n_bins = len(bins) - 1
+    max_lag = max(np.abs(bins[[0, -1]]))
+    counts = np.zeros(n_bins, dtype=int)
 
-    return xcorr
+    in_batch = 0
+    for idx1 in range(n_times):
+        time1 = times[idx1]
+
+        # move forward till we fall out of max_lag
+        max_lag_ok = True
+        idx2 = idx1
+        while max_lag_ok and idx2 < (n_times - 1):
+            idx2 += 1
+            distance = times[idx2] - time1
+            max_lag_ok = distance <= max_lag
+
+            if max_lag_ok:
+                distances.append(distance)
+                distances.append(-distance)
+                in_batch += 2
+
+        if in_batch >= batch_size or idx1 == (n_times - 1):
+            these_counts, _ = np.histogram(distances, bins)
+            counts += these_counts
+            in_batch = 0
+            distances = list()
+
+    return counts
+
+
+# test numba presence: mne.fixes.has_numba
+
+def _xcorr_hist_cross_py(times, times2, bins, batch_size=1_000):
+    '''Compute cross-correlation histogram for a single cell.
+
+    [a little more about memory efficiency and using monotonic relationship to
+     our advantage etc.]'''
+    n_times = times.shape[0]
+    n_times2 = times2.shape[0]
+    max_lag = max(np.abs(bins[[0, -1]]))
+    distances = list()
+    n_bins = len(bins) - 1
+    counts = np.zeros(n_bins, dtype=int)
+
+    tm_idx_low = 0
+    tm_idx_high = 1
+    in_batch = 0
+
+    for idx1 in range(n_times):
+        time1 = times[idx1]
+
+        # move forward till tm_idx_high
+        new_tm_idx_low = tm_idx_low
+        for idx2 in range(tm_idx_low, tm_idx_high):
+            if not idx1 == idx2:
+                distance = times2[idx2] - time1
+
+                if distance < -max_lag:
+                    new_tm_idx_low = idx2
+                else:
+                    distances.append(distance)
+                    in_batch += 1
+
+        tm_idx_low = new_tm_idx_low
+        max_lag_ok = True
+        while max_lag_ok and idx2 < (n_times2 - 1):
+            idx2 += 1
+            if not idx1 == idx2:
+                distance = times2[idx2] - time1
+                max_lag_ok = distance <= max_lag
+
+                if max_lag_ok:
+                    tm_idx_high = idx2
+                    distances.append(distance)
+                    in_batch += 1
+
+        if in_batch >= batch_size or idx1 == (n_times - 1):
+            these_counts, _ = np.histogram(distances, bins)
+            counts += these_counts
+            in_batch = 0
+            distances = list()
+
+    return counts
 
 
 # - [ ] silence warnings
