@@ -54,9 +54,9 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     if reduce_dim is None:
         auto_reduce_dims = ['trial', 'fold', 'perm', 'permutation', 'cell',
                             'spike']
-        for dimname in auto_reduce_dims:
-            if dimname in arr.dims:
-                reduce_dim = dimname
+        for dim_name in auto_reduce_dims:
+            if dim_name in arr.dims:
+                reduce_dim = dim_name
                 break
 
     if ('cell' in arr.coords and not reduce_dim == 'cell'
@@ -79,9 +79,9 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     # try time, freq, frequency, lag by default
     if x_dim is None:
         auto_x_dims = ['time', 'frequency', 'freq', 'lag']
-        for dimname in auto_x_dims:
-            if dimname in arr.coords:
-                x_dim = dimname
+        for dim_name in auto_x_dims:
+            if dim_name in arr.coords:
+                x_dim = dim_name
                 break
 
     # if x_dim is still None - use the last dim for 2d array
