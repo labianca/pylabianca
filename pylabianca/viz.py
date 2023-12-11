@@ -408,13 +408,16 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
 
     if groupby is not None:
         values = np.unique(spk_cell.metadata.loc[:, groupby])
+        string_levels = values.dtype == 'object'
     else:
         values = [None]
 
     for idx, value in enumerate(values):
         img_color = f'C{idx}'
         if groupby is not None:
-            trials = (spk_cell.metadata.query(f'{groupby} == {value}')
+            query_str = (f'{groupby} == "{value}"' if string_levels
+                         else f'{groupby} == {value}')
+            trials = (spk_cell.metadata.query(query_str)
                       .index.values)
         else:
             if spk_cell.metadata is not None:
