@@ -2,7 +2,8 @@ import os.path as op
 import numpy as np
 import pandas as pd
 import pylabianca as pln
-from pylabianca.utils import download_test_data, get_data_path
+from pylabianca.utils import (download_test_data, get_data_path,
+                              get_fieldtrip_data)
 
 
 download_test_data()
@@ -105,7 +106,7 @@ def test_to_raw():
 
 
 def test_epoching_vs_fieldtrip():
-    ft_data = pln.utils.get_fieldtrip_data()
+    ft_data = get_fieldtrip_data()
 
     # read and epoch data
     events_test = np.array([[22928800, 0, 1],
