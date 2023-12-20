@@ -115,6 +115,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
             if 'unit' in arr.attrs:
                 this_unit = arr.attrs['unit']
                 ylabel += f' ({this_unit})'
+        else:
+            ylabel=''
         ax.set_ylabel(ylabel, fontsize=14)
 
     return ax
