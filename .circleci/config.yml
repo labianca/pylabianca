@@ -1,0 +1,48 @@
+version: 2.1
+orbs:
+  codecov: codecov/codecov@3.3.0
+jobs:
+  build:
+    docker:
+      - image: continuumio/conda-ci-linux-64-python3.9
+    parameters:
+      mne_version:
+        type: string
+        default: "current"
+      use_numba:
+        type: string
+        default: "no"
+    steps:
+      - checkout
+      - run:
+          name: Create conda env
+          command: |
+            conda install mamba -c confa-forge
+            mamba env create -f environment.yml
+            source activate pylabianca
+            if [ << parameters.use_numba >> == "yes" ]; then
+              mamba install numba -y;
+            fi
+            if [ << parameters.mne_version >> == "current" ]; then
+              pip install mne
+            else
+              pip install mne==<< parameters.mne_version >>;
+            fi
+            hash -r pytest
+      - run:
+          name: Run tests
+          command: |
+            sudo apt update
+            sudo apt-get -y install curl gnupg
+            source activate pylabianca
+            python -m pytest --cov=pylabianca pylabianca/
+      - codecov/upload
+
+workflows:
+  workflow:
+    jobs:
+      - build:
+          matrix:
+            parameters:
+              use_numba: ["yes", "no"]
+              mne_version: ["current", "1.5.1", "1.0.3"]
