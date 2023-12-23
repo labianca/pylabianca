@@ -888,8 +888,19 @@ def to_spiketools(spk_epochs, picks=None):
            'convert Spikes to SpikeEpochs beforehand by using '
            '``.to_epochs()`` method of Spikes.')
     assert isinstance(spk_epochs, SpikeEpochs), msg
+
     picks = _deal_with_picks(spk_epochs, picks)
     one_unit = len(picks) == 1
+
+    unit_list = _to_arrays(spk_epochs, picks)
+
+    if one_unit:
+        return unit_list[0]
+    else:
+        return unit_list
+
+
+def _to_arrays(spk_epochs, picks):
 
     max_trials = spk_epochs.n_trials
     unit_list = list()
@@ -905,11 +916,7 @@ def to_spiketools(spk_epochs, picks=None):
             else:
                 trial_list.append(np.array([]))
         unit_list.append(trial_list)
-
-    if one_unit:
-        return unit_list[0]
-    else:
-        return unit_list
+    return unit_list
 
 
 def _get_chan_num(chan):
