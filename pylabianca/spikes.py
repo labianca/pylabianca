@@ -69,8 +69,8 @@ class SpikeEpochs():
         self.time_limits = time_limits
 
         if n_trials is None:
-            n_trials = max(max(tri) + 1 if len(tri) > 0 else 0
-                           for tri in self.trial)
+            n_trials = int(max(max(tri) + 1 if len(tri) > 0 else 0
+                           for tri in self.trial))
         if cell_names is None:
             n_cells = len(time)
             cell_names = np.array(['cell{:03d}'.format(idx)
