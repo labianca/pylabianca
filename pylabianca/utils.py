@@ -708,3 +708,11 @@ def download_test_data():
 
     # remove the zipfile
     os.remove(destination)
+
+
+def has_elephant():
+    try:
+        import elephant
+        return True
+    except ImportError:
+        return False
