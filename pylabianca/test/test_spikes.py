@@ -5,7 +5,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import (download_test_data, get_data_path,
-                              get_fieldtrip_data)
+                              get_fieldtrip_data, has_elephant)
 
 
 download_test_data()
@@ -144,4 +144,55 @@ def test_epoching_vs_fieldtrip(spk_epochs):
                 == spk_epochs.trial[ch_idx]).all()
 
         np.testing.assert_almost_equal(
-            spk_epo_test.time[ch_idx], spk_epo_test_ft.time[ch_idx])
+            spk_epochs.time[ch_idx], spk_epo_test_ft.time[ch_idx])
+
+
+@pytest.mark.skipif(not has_elephant(), reason="requires elephant")
+def test_firing_rate_against_elephant(spk_epochs):
+    from scipy.stats import pearsonr
+    import quantities as q
+    import elephant.statistics as elestat
+
+    # test .to_neo() and .to_spiketools()
+    spike_train = spk_epochs.to_neo(0)
+    spikes = pln.io.to_spiketools(spk_epochs, picks=0)
+
+    for tri_idx in range(3):
+        assert(len(spike_train[tri_idx] == len(spikes[tri_idx])))
+
+    # compare mean firing rate
+    avg_fr = spk_epochs.spike_rate(tmin=-2.75, tmax=3., step=False)
+    avg_rate = elestat.mean_firing_rate(spike_train[0])
+
+    assert avg_rate.item() == avg_fr[0, 0].item()
+
+    # compare spike rates
+    fr = spk_epochs.spike_rate(winlen=0.25)
+    kernel = elestat.kernels.RectangularKernel(sigma=0.0715 * q.second)
+    rate = elestat.instantaneous_rate(
+        spike_train[0], 1 / 500. * q.second, kernel=kernel)
+
+    dist = np.array(rate.times)[:, None] - fr.time.values[None, :]
+    idx = np.abs(dist).argmin(axis=0)
+    sel_rate = rate.magnitude[idx].ravel()
+
+    avg_diff = np.mean(sel_rate - fr[0, 0].values)
+    assert avg_diff < 0.5
+
+    rval, _ = pearsonr(sel_rate, fr[0, 0].values)
+    assert rval > 0.999
+
+
+def test_metadata():
+    spk = create_random_spikes()
+
+    # good metadata and selection by condition
+    df = pd.DataFrame({'cond': ['A'] * 15 + ['B'] * 10})
+    spk.metadata = df
+
+    spk2 = spk['cond == "B"']
+    for cell_idx in range(4):
+        first_idx = np.where(spk.trial[cell_idx] == 15)[0][0]
+        assert (spk2.time[cell_idx] == spk.time[cell_idx][first_idx:]).all()
+        assert (spk2.trial[cell_idx] + 15
+                == spk.trial[cell_idx][first_idx:]).all()
