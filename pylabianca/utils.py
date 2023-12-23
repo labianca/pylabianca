@@ -683,7 +683,7 @@ def download_test_data():
     # check if test data exist
     data_dir = get_data_path()
     check_files = ['ft_spk_epoched.mat', 'monkey_stim.csv',
-                   'p029_sort_final_01_events']
+                   'p029_sort_final_01_events.mat']
     if all([op.isfile(op.join(data_dir, f)) for f in check_files]):
         return
 
