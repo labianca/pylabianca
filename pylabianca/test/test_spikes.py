@@ -89,14 +89,50 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
 
 
 def test_crop():
-    spk = create_fake_spikes()
-    spk.crop(tmin=0.1)
+    spk_orig = create_fake_spikes()
+    spk = spk_orig.copy().crop(tmin=0.1)
 
     assert (spk.time[0] == np.array(
         [0.11, 0.22, 0.25, 0.4, 0.12, 0.14, 0.19, 0.23, 0.32])).all()
     assert (spk.time[1] == np.array([0.16, 0.33, 0.148, 0.32])).all()
     assert (spk.trial[0] == np.array([0, 0, 0, 0, 1, 1, 1, 1, 1])).all()
     assert (spk.trial[1] == np.array([0, 0, 1, 1])).all()
+
+    spk = spk_orig.copy().crop(tmax=0.1)
+
+    assert (spk.time[0] == np.array(
+        [-0.3, -0.1, 0.025, -0.08])).all()
+    assert (spk.time[1] == np.array(
+        [-0.22, -0.13, -0.03, 0.08, -0.2, -0.08, 0.035])).all()
+    assert (spk.trial[0] == np.array([0, 0, 0, 1])).all()
+    assert (spk.trial[1] == np.array([0, 0, 0, 0, 1, 1, 1])).all()
+
+
+def test_num():
+    for n_cells in [3, 5, 10]:
+        spk = create_random_spikes(n_cells=n_cells)
+        assert spk.n_units() == n_cells
+
+    for n_tri in [5, 8, 12]:
+        spk = create_random_spikes(n_trials=n_tri)
+        assert len(spk) == n_tri
+
+    for n_spk_per_tri in [10, 15, 23]:
+        spk = create_random_spikes(
+            n_cells=1, n_trials=10, n_spikes=n_spk_per_tri)
+        assert spk.n_spikes()[0] == n_spk_per_tri * 10
+        assert (spk.n_spikes(per_epoch=True) == n_spk_per_tri).all()
+
+
+def test_concatenate():
+    args = dict(n_trials=False, sfreq=10_000)
+    spk1 = create_random_spikes(n_cells=2, n_spikes=(5, 11), **args)
+    spk2 = create_random_spikes(n_cells=2, n_spikes=(5, 11), **args)
+    spk3 = pln.spikes.concatenate_spikes([spk1, spk2], sort=False)
+
+    assert len(spk3) == len(spk1) + len(spk2)
+    assert (spk3.timestamps[2] == spk2.timestamps[0]).all()
+    assert (spk3.timestamps[3] == spk2.timestamps[1]).all()
 
 
 def test_repr():
