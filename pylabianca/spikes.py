@@ -64,7 +64,7 @@ class SpikeEpochs():
 
         if time_limits is None:
             tmin = min([min(x) for x in time])
-            tmax = max([max(x) for x in time])
+            tmax = max([max(x) for x in time]) + 1e-6
             time_limits = np.array([tmin, tmax])
         self.time_limits = time_limits
 
@@ -1253,7 +1253,7 @@ def _n_spikes(spk, per_epoch=False):
         tmin, tmax = spk.time_limits
         winlen = tmax - tmin
 
-        # FIX: this normalizes per second, we don't want that in n_spikes
+        # FIX: this could be changed into using np.unique() on spk.trial
         frate = compute_spike_rate(spk, step=False, tmin=tmin, tmax=tmax)
         n_spk = (frate.values * winlen).astype('int')
         return n_spk
