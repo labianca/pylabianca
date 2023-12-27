@@ -4,7 +4,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: docker pull condaforge/mambaforge:latest
+      - image: condaforge/mambaforge:latest
     parameters:
       mne_version:
         type: string
