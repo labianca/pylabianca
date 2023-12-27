@@ -17,7 +17,7 @@ jobs:
       - run:
           name: Create conda env
           command: |
-            conda install mamba -c conda-forge -y
+            sudo conda install mamba -c conda-forge -y
             mamba env create -f environment.yml
             source activate pylabianca
             if [ << parameters.use_numba >> == "yes" ]; then
