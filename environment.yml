@@ -7,7 +7,6 @@ dependencies:
   - hdf5
   - matplotlib>=3.8.0
   - mkl
-  - numba
   - numpy>=1.26.1
   - numpydoc
   - pandas>=2.1.2
@@ -20,7 +19,6 @@ dependencies:
   - xlrd>=2.0.1
   - pip:
     - borsar
-    - mne
     - elephant
     - h5io>=0.1.9
     - h5netcdf
