@@ -4,7 +4,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: continuumio/conda-ci-linux-64-python3.9
+      - image: docker pull condaforge/mambaforge:latest
     parameters:
       mne_version:
         type: string
@@ -17,18 +17,6 @@ jobs:
       - run:
           name: Create conda env
           command: |
-            echo "Install Mambaforge"
-            MAMBA_URL="https://github.com/conda-forge/miniforge/releases/download/23.1.0-0/Mambaforge-23.1.0-0-Linux-aarch64.sh"
-            echo "Downloading $MAMBA_URL"
-            wget -q $MAMBA_URL -O minimamba.sh
-            chmod +x minimamba.sh
-
-            MAMBA_DIR="$HOME/miniconda3"
-            rm -rf $MAMBA_DIR
-            ./minimamba.sh -b -p $MAMBA_DIR
-
-            export PATH=$MAMBA_DIR/bin:$PATH
-
             mamba env create -f environment.yml
             source activate pylabianca
             if [ << parameters.use_numba >> == "yes" ]; then
