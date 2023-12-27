@@ -27,6 +27,7 @@ jobs:
             else
               pip install mne==<< parameters.mne_version >>;
             fi
+            mamba install pytest -y;
             hash -r pytest
       - run:
           name: Run tests
