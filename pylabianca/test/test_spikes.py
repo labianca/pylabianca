@@ -148,6 +148,23 @@ def test_pick_cells():
     assert len(spk.time) == 1
     assert spk.time[0][0] == -0.22
 
+    spk = create_random_spikes(n_cells=5)
+    spk.cell_names = np.array(list("ABCDE"))
+
+    spk2 = spk.copy().pick_cells(['A', 'C', 'E'])
+    spk3 = spk.copy().pick_cells(np.array([0, 2, 4]))
+    spk4 = spk.copy().pick_cells(np.array([True, False, True, False, True]))
+
+    for cell_idx in range(spk2.n_units()):
+        assert spk2.cell_names[cell_idx] == spk3.cell_names[cell_idx]
+        assert spk2.cell_names[cell_idx] == spk4.cell_names[cell_idx]
+
+        assert (spk2.time[cell_idx] == spk3.time[cell_idx]).all()
+        assert (spk2.time[cell_idx] == spk4.time[cell_idx]).all()
+
+        assert (spk2.trial[cell_idx] == spk3.trial[cell_idx]).all()
+        assert (spk2.trial[cell_idx] == spk4.trial[cell_idx]).all()
+
 
 def test_pick_cells_cellinfo_query():
     from copy import deepcopy
