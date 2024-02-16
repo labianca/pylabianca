@@ -108,6 +108,7 @@ def test_crop():
     assert (spk.trial[1] == np.array([0, 0, 0, 0, 1, 1, 1])).all()
 
 
+# add .n_trials (if present in SpikeEpochs)
 def test_num():
     for n_cells in [3, 5, 10]:
         spk = create_random_spikes(n_cells=n_cells)
@@ -164,6 +165,35 @@ def test_pick_cells():
 
         assert (spk2.trial[cell_idx] == spk3.trial[cell_idx]).all()
         assert (spk2.trial[cell_idx] == spk4.trial[cell_idx]).all()
+
+
+def test_pick_trials():
+    spk = create_random_spikes(n_cells=3, n_trials=10)
+
+    tri = [1, 3, 8]
+    for repr in ['list', 'array', 'bool']:
+        if repr == 'list':
+            spk_sel = spk[tri]
+        elif repr == 'array':
+            spk_sel = spk[np.array(tri)]
+        else:
+            msk = np.zeros(10, dtype=bool)
+            msk[tri] = True
+            spk_sel = spk[msk]
+
+        # make sure we have 3 trials now
+        assert spk_sel.n_trials == 3
+
+        # make sure trial numbers have been renumbered
+        assert all([(tri < 3).all() for tri in spk_sel.trial])
+
+        # make sure spike times are the same
+        for trial_idx, trial in enumerate(tri):
+            for unit_idx in range(spk.n_units()):
+                msk1 = spk.trial[unit_idx] == trial
+                msk2 = spk_sel.trial[unit_idx] == trial_idx
+                assert (spk.time[unit_idx][msk1]
+                        == spk_sel.time[unit_idx][msk2]).all()
 
 
 def test_pick_cells_cellinfo_query():
