@@ -232,6 +232,16 @@ def test_to_raw():
     assert (spk_raw == good_raw).all()
 
 
+def test_apply():
+    spk = create_random_spikes(n_cells=4, n_trials=23)
+    avg = spk.apply(np.mean)
+    test_idx = [(0, 5), (1, 18), (3, 22)]
+
+    for cell_idx, tri_idx in test_idx:
+        msk = spk.trial[cell_idx] == tri_idx
+        assert avg[cell_idx, tri_idx].item() == np.mean(spk.time[cell_idx][msk])
+
+
 def test_epoching_vs_fieldtrip(spk_epochs):
 
     # read fieldtrip results
