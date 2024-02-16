@@ -906,7 +906,7 @@ def _to_arrays(spk_epochs, picks):
     unit_list = list()
     for idx in picks:
         trial_list = list()
-        tri_limits, tri_ids = _get_trial_boundaries(spk_epochs, 0)
+        tri_limits, tri_ids = _get_trial_boundaries(spk_epochs, idx)
         tri_enum = 0
         for tri in range(max_trials):
             if tri in tri_ids:
