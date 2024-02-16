@@ -422,12 +422,18 @@ class SpikeEpochs():
             tri_idx = new_metadata.index.values
         elif isinstance(selection, (np.ndarray, list, tuple)):
             selection = np.asarray(selection)
-            assert (np.issubdtype(selection.dtype, np.integer)
-                    or np.issubdtype(selection.dtype, np.bool_)))
+            int_sel = np.issubdtype(selection.dtype, np.integer)
+            bool_sel = np.issubdtype(selection.dtype, np.bool_)
+            assert int_sel or bool_sel
 
-            if self.metadata is not None:
-                new_metadata = self.metadata.iloc[selection, :]
-            tri_idx = selection
+            if int_sel:
+                if self.metadata is not None:
+                    new_metadata = self.metadata.iloc[selection, :]
+                tri_idx = selection
+            else:
+                if self.metadata is not None:
+                    new_metadata = self.metadata.loc[selection, :]
+                tri_idx = np.where(selection)[0]
         else:
             raise TypeError('Currently only string queries are allowed to '
                             'select elements of SpikeEpochs')
