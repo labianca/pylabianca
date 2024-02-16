@@ -412,7 +412,7 @@ class SpikeEpochs():
         return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
 
     def __getitem__(self, selection):
-        '''Select trials using an array of integers or metadata query.'''
+        '''Select trials using an array of int / bool or metadata query.'''
         if isinstance(selection, str):
             if self.metadata is None:
                 raise TypeError('metadata cannot be ``None`` when selecting '
@@ -422,7 +422,8 @@ class SpikeEpochs():
             tri_idx = new_metadata.index.values
         elif isinstance(selection, (np.ndarray, list, tuple)):
             selection = np.asarray(selection)
-            assert np.issubdtype(selection.dtype, np.integer)
+            assert (np.issubdtype(selection.dtype, np.integer)
+                    or np.issubdtype(selection.dtype, np.bool_)))
 
             if self.metadata is not None:
                 new_metadata = self.metadata.iloc[selection, :]
