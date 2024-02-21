@@ -488,7 +488,7 @@ class SpikeEpochs():
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
                              labels=labels, times=self.waveform_time)
 
-    def apply(self, func, picks=None, per_trial=True, args=None, kwargs=None):
+    def apply(self, func, picks=None, args=None, kwargs=None):
         '''Apply a function to each cell and trial.
 
         Parameters
@@ -498,9 +498,6 @@ class SpikeEpochs():
         picks : int | str | list-like of int | list-like of str | None
             Cell indices or names to apply the function to. Optional, the
             default (``None``) applies the function to all cells.
-        per_trial : bool
-            Whether to apply the function to each trial separately. Defaults
-            to ``True``.
         args : list | None
             Positional arguments to pass to the function. Defaults to ``None``.
         kwargs : dict | None
@@ -527,17 +524,13 @@ class SpikeEpochs():
             # trials = self.to_spiketools(pick)
             trials = to_spiketools(self, pick)
 
-            if per_trial:
-                trial_list = list()
-                for tri in trials:
-                    value = func(tri, *args, **kwargs)
-                    trial_list.append(value)
-                # else:
-                #     trial_list.append(np.nan)
-                out.append(np.array(trial_list))
-            else:
-                trial_list = func(trials, *args, **kwargs)
-                out.append(trial_list)
+            trial_list = list()
+            for tri in trials:
+                value = func(tri, *args, **kwargs)
+                trial_list.append(value)
+            # else:
+            #     trial_list.append(np.nan)
+            out.append(np.array(trial_list))
 
         out = np.stack(out, axis=0)
 
