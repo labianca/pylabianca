@@ -65,6 +65,9 @@ def test_crop():
     assert (spk.trial[0] == np.array([0, 0, 0, 1])).all()
     assert (spk.trial[1] == np.array([0, 0, 0, 0, 1, 1, 1])).all()
 
+    with pytest.raises(TypeError, match="tmin and/or tmax"):
+        spk_orig.copy().crop(tmin=None, tmax=None)
+
 
 # add .n_trials (if present in SpikeEpochs)
 def test_num():
@@ -123,6 +126,19 @@ def test_pick_cells():
 
         assert (spk2.trial[cell_idx] == spk3.trial[cell_idx]).all()
         assert (spk2.trial[cell_idx] == spk4.trial[cell_idx]).all()
+
+    # picks=None returns the same object
+    spk5 = spk.pick_cells(picks=None)
+    assert id(spk) == id(spk5)
+
+    # .drop_cells() works as expected
+    spk6 = spk.copy().drop_cells(['A', 'C', 'E'])
+    assert spk6.n_units() == 2
+    assert (spk6.cell_names == np.array(['B', 'D'])).all()
+
+    spk7 = spk.copy().pick_cells(['B', 'D'])
+    assert (spk6.time[0] == spk7.time[0]).all()
+    assert (spk6.time[1] == spk7.time[1]).all()
 
 
 def test_pick_trials():
