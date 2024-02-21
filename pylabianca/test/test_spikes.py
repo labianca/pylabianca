@@ -5,7 +5,8 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import (download_test_data, get_data_path,
-                              get_fieldtrip_data, has_elephant)
+                              get_fieldtrip_data, has_elephant,
+                              create_random_spikes)
 
 
 download_test_data()
@@ -43,49 +44,6 @@ def create_fake_spikes():
     spk = pln.SpikeEpochs(times, trials)
     return spk
 
-
-def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
-                         **args):
-    tmin, tmax = -0.5, 1.5
-    tlen = tmax - tmin
-    constant_n_spikes = isinstance(n_spikes, int)
-    if constant_n_spikes:
-        n_spk = n_spikes
-
-    return_epochs = isinstance(n_trials, int) and n_trials > 0
-    if not return_epochs:
-        n_trials = 1
-        tmin = 0
-        tmax = 1e6
-
-    times = list()
-    trials = list()
-    for _ in range(n_cells):
-        this_tri = list()
-        this_tim = list()
-        for tri_idx in range(n_trials):
-            if not constant_n_spikes:
-                n_spk = np.random.randint(*n_spikes)
-
-            if return_epochs:
-                tms = np.random.rand(n_spk) * tlen + tmin
-                this_tri.append(np.ones(n_spk, dtype=int) * tri_idx)
-            else:
-                tms = np.random.randint(tmin, tmax, size=n_spk)
-            tms = np.sort(tms)
-            this_tim.append(tms)
-
-        this_tim = np.concatenate(this_tim)
-        times.append(this_tim)
-
-        if return_epochs:
-            this_tri = np.concatenate(this_tri)
-            trials.append(this_tri)
-
-    if return_epochs:
-        return pln.SpikeEpochs(times, trials, **args)
-    else:
-        return pln.Spikes(times, **args)
 
 
 def test_crop():

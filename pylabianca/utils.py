@@ -716,3 +716,69 @@ def has_elephant():
         return True
     except ImportError:
         return False
+
+
+def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
+                         **args):
+    '''Create random spike data. Mostly useful for testing.
+
+    Parameters
+    ----------
+    n_cells : int
+        Number of cells.
+    n_trials : int
+        Number of trials. If ``None`` or 0 then Spikes object is returned.
+    n_spikes : int | tuple
+        Number of spikes. If tuple then the first element is the minimum
+        number of spikes and the second element is the maximum number of
+        spikes.
+    args : dict
+        Additional arguments are passed to the Spikes / SpikeEpochs object.
+
+    Returns
+    -------
+    spikes : Spikes | SpikeEpochs
+        Spike data object.
+    '''
+    from .spikes import SpikeEpochs, Spikes
+
+    tmin, tmax = -0.5, 1.5
+    tlen = tmax - tmin
+    constant_n_spikes = isinstance(n_spikes, int)
+    if constant_n_spikes:
+        n_spk = n_spikes
+
+    return_epochs = isinstance(n_trials, int) and n_trials > 0
+    if not return_epochs:
+        n_trials = 1
+        tmin = 0
+        tmax = 1e6
+
+    times = list()
+    trials = list()
+    for _ in range(n_cells):
+        this_tri = list()
+        this_tim = list()
+        for tri_idx in range(n_trials):
+            if not constant_n_spikes:
+                n_spk = np.random.randint(*n_spikes)
+
+            if return_epochs:
+                tms = np.random.rand(n_spk) * tlen + tmin
+                this_tri.append(np.ones(n_spk, dtype=int) * tri_idx)
+            else:
+                tms = np.random.randint(tmin, tmax, size=n_spk)
+            tms = np.sort(tms)
+            this_tim.append(tms)
+
+        this_tim = np.concatenate(this_tim)
+        times.append(this_tim)
+
+        if return_epochs:
+            this_tri = np.concatenate(this_tri)
+            trials.append(this_tri)
+
+    if return_epochs:
+        return SpikeEpochs(times, trials, **args)
+    else:
+        return Spikes(times, **args)
