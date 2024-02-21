@@ -221,6 +221,7 @@ def test_epoching_vs_fieldtrip(spk_epochs):
 
 @pytest.mark.skipif(not has_elephant(), reason="requires elephant")
 def test_firing_rate_against_elephant(spk_epochs):
+    import borsar
     from scipy.stats import pearsonr
     import quantities as q
     import elephant.statistics as elestat
@@ -253,6 +254,24 @@ def test_firing_rate_against_elephant(spk_epochs):
 
     rval, _ = pearsonr(sel_rate, fr[0, 0].values)
     assert rval > 0.999
+
+    # compare spike density
+    sigma = 0.075
+    fwhm = pln.spike_rate._FWHM_from_window(gauss_sd=sigma)
+    fr = spk_epochs.spike_density(fwhm=fwhm)
+
+    kernel = elestat.kernels.GaussianKernel(sigma=sigma * q.second)
+
+    for cell_idx in range(spk_epochs.n_units()):
+        spike_train = spk_epochs.to_neo(cell_idx)
+        for tri_idx in range(spk_epochs.n_trials):
+            rate = elestat.instantaneous_rate(
+                spike_train[tri_idx], 1 / 500. * q.second, kernel=kernel)
+
+            idx = borsar.find_index(np.array(rate.times), fr.time[[0, -1]].values)
+            elph_fr = rate.magnitude.ravel()[idx[0]:idx[1] + 1]
+            rval, _ = pearsonr(fr[cell_idx, tri_idx].values, elph_fr)
+            assert rval > 0.999
 
 
 def test_metadata():
