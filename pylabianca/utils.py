@@ -54,6 +54,8 @@ def _deal_with_picks(spk, picks):
 #           (mne-python-like)
 # CHANGE name to something more general - it is now used for xarray and decoding
 #        results (and more in the future)
+# spike_epochs is used only when n_trials > 0 to inherit metadata
+#              and to copy cellinfo
 def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
                                tri=None, copy_cellinfo=True,
                                x_dim_name='time'):
