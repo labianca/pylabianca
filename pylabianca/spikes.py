@@ -1139,6 +1139,7 @@ def _drop_cells(spk, picks):
         Cell  indices to drop.
     '''
     all_idx = np.arange(spk.n_units())
+    picks = _deal_with_picks(spk, picks)
     is_dropped = np.in1d(all_idx, picks)
     retain_idx = np.where(~is_dropped)[0]
     return spk.pick_cells(retain_idx)
