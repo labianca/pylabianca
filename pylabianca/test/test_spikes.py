@@ -97,9 +97,26 @@ def test_concatenate():
 
 
 def test_repr():
+    # SpikeEpochs repr
     spk = create_fake_spikes()
     should_be = '<SpikeEpochs, 2 epochs, 2 cells, 12.0 spikes/cell on average>'
     assert str(spk) == should_be
+
+    # another test for SpikeEpochs
+    n_cells, n_trials, n_spikes = 5, 4, 23
+    spk = create_random_spikes(
+        n_cells=n_cells, n_trials=n_trials, n_spikes=n_spikes)
+    expected_str = (f'<SpikeEpochs, {n_trials} epochs, {n_cells} cells, '
+                    f'{n_spikes * n_trials}.0 spikes/cell on average>')
+    assert str(spk) == expected_str
+
+    # Spikes repr
+    n_cells, n_trials, n_spikes = 23, 0, 100
+    spk = create_random_spikes(
+        n_cells=n_cells, n_trials=n_trials, n_spikes=n_spikes)
+    expected_str = (f'<Spikes, {n_cells} cells, '
+                    f'{n_spikes}.0 spikes/cell on average>')
+    assert str(spk) == expected_str
 
 
 def test_pick_cells():
