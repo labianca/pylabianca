@@ -1218,6 +1218,11 @@ def _sort_spikes(spk, by=None, inplace=True):
     '''Sort units by channel and cluster id or other columns in cellinfo.'''
     by = ['channel', 'cluster'] if by is None else by
 
+    # make sure that cellinfo is present
+    if spk.cellinfo is None or not isinstance(spk.cellinfo, pd.DataFrame):
+        raise ValueError('To sort units .cellinfo attribute has to contain '
+                         'a dataframe with information about the units.')
+
     # the tests below were written by GitHub copilot entirely!
     if isinstance(by, str):
         by = [by]
