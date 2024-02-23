@@ -45,7 +45,6 @@ def create_fake_spikes():
     return spk
 
 
-
 def test_crop():
     spk_orig = create_fake_spikes()
     spk = spk_orig.copy().crop(tmin=0.1)
@@ -303,3 +302,71 @@ def test_metadata():
         assert (spk2.time[cell_idx] == spk.time[cell_idx][first_idx:]).all()
         assert (spk2.trial[cell_idx] + 15
                 == spk.trial[cell_idx][first_idx:]).all()
+
+def test_sort():
+    spk = create_random_spikes(n_cells=6, n_trials=0, n_spikes=(50, 120))
+
+    # no .cellinfo attribute
+    with pytest.raises(ValueError, match=".cellinfo attribute has to contain"):
+        spk.sort()
+
+    # .cellinfo is not a dataframe
+    spk.cellinfo = np.array([[1, 2, 3, 4, 5, 6], [2, 2, 5, 1, 1, 8]]).T
+    with pytest.raises(ValueError, match=".cellinfo attribute has to contain"):
+        spk.sort()
+
+    # now with a dataframe
+    cellinfo = pd.DataFrame({'name': list('abcdef'),
+                            'channel': np.random.randint(20, 120, size=6),
+                            'cluster': np.random.randint(100, 1_000, size=6)})
+    spk.cellinfo = cellinfo.copy()
+
+    spk_srt = spk.sort(inplace=False)
+
+    # assert that .cell_names have different order
+    assert not (spk.cell_names == spk_srt.cell_names).all()
+
+    # see how 'name' changed and infer reordering
+    sorting = np.argsort(spk_srt.cellinfo.name.values)
+    for orig_idx in range(6):
+        # see if .cell_names, timestamps agree with reordering
+        srt_idx = sorting[orig_idx]
+        assert spk_srt.cell_names[srt_idx] == spk.cell_names[orig_idx]
+        assert (spk_srt.timestamps[srt_idx] == spk.timestamps[orig_idx]).all()
+
+    # original object is changed with inplace=True
+    spk_srt = spk.sort(inplace=True)
+    assert id(spk) == id(spk_srt)
+    assert (spk.cell_names == spk_srt.cell_names).all()
+
+
+def test_merge():
+    spk = create_random_spikes(n_cells=5, n_trials=0, n_spikes=(50, 120))
+    spk_m1 = spk.copy().merge([0, 2])
+
+    assert len(spk) > len(spk_m1)
+    assert spk.cell_names[0] == spk_m1.cell_names[0]
+    assert not (spk.cell_names[2] == spk_m1.cell_names[2])
+
+    n_spk = spk.n_spikes()
+    mrg = np.sort(np.concatenate([spk.timestamps[0], spk.timestamps[2]]))
+    assert (n_spk[0] + n_spk[2]) == spk_m1.n_spikes()[0]
+    assert (spk_m1.timestamps[0] == mrg).all()
+
+    # make sure it works also with cellinfo dataframe and waveforms
+    cellinfo = pd.DataFrame(
+        {'name': list('abcd'), 'channel': np.random.randint(20, 120, size=4),
+         'cluster': np.random.randint(100, 1_000, size=4)}
+    )
+    spk_m1.cellinfo = cellinfo.copy()
+
+    n_smp = 32
+    n_spk_m1 = spk_m1.n_spikes()
+    spk_m1.waveform = [np.random.rand(n_sp, n_smp) for n_sp in n_spk_m1]
+
+    spk_m2 = spk_m1.copy().merge([1, 3])
+    assert (spk_m2.cellinfo == spk_m1.cellinfo[:3]).all().all()
+
+    n_spk_m2 = spk_m2.n_spikes()
+    assert (n_spk_m2[1] == (n_spk_m1[1] + n_spk_m1[3])
+            == spk_m2.waveform[1].shape[0])
