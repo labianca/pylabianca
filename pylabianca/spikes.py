@@ -820,7 +820,7 @@ class Spikes(object):
         """
         return _n_spikes(self)
 
-    def sort(self, by=None):
+    def sort(self, by=None, inplace=True):
         '''Sort cells. Operates in-place.
 
         The units are by default sorted by channel and cluster id information
@@ -834,13 +834,15 @@ class Spikes(object):
             If string or list of strings - name/names of ``.cellinfo`` columns
             to sort by.
             Defaults to ``None``.
+        inplace : bool
+            Whether to sort the units in place. Defaults to ``True``.
 
         Returns
         -------
         spk : Spikes
             Sorted Spikes.
         '''
-        self = _sort_spikes(self, by)
+        self = _sort_spikes(self, by, inplace=inplace)
         return self
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
