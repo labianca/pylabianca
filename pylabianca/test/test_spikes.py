@@ -403,3 +403,24 @@ def test_plot_waveform():
     # currently just a smoke test for plotting waveforms
     spk.plot_waveform(0)
     spk.plot_waveform(0, upsample=20)
+
+
+# TODO: MOVE to io tests
+def test_to_neo_and_to_spiketools():
+    spk = create_random_spikes(n_cells=2, n_trials=3, n_spikes=(50, 120))
+
+    spk_neo = spk.to_neo(0, join='concat', sep_time=0.1)
+    spk_lst = spk.to_spiketools(picks=0)
+
+    n_spk = spk.n_spikes(per_epoch=True)
+    spk_idx = np.concatenate([
+        np.zeros((2, 1)), np.cumsum(n_spk, axis=1)],
+        axis=1
+    ).astype(int)
+    epoch_time = np.diff(spk.time_limits)
+
+    for idx in range(spk_idx.shape[1] - 1):
+        np.testing.assert_almost_equal(
+            spk_neo[spk_idx[0, idx]:spk_idx[0, idx + 1]].magnitude,
+            spk_lst[idx] + 0.1 * idx + epoch_time * idx
+        )
