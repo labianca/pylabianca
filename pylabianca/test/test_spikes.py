@@ -387,3 +387,19 @@ def test_merge():
     n_spk_m2 = spk_m2.n_spikes()
     assert (n_spk_m2[1] == (n_spk_m1[1] + n_spk_m1[3])
             == spk_m2.waveform[1].shape[0])
+
+
+# TODO: MOVE to viz tests
+def test_plot_waveform():
+    spk = create_random_spikes(n_cells=2, n_trials=0, n_spikes=(50, 120))
+
+    n_smp = 6
+    n_spk = spk.n_spikes()
+    wfrm = [np.random.randn(n, n_smp) * 0.2 for n in n_spk]
+    shape = np.array([0, 1, 5, -3, -1, 0.5])
+    wfrm[0] += shape[None, :]
+    spk.waveform = wfrm
+
+    # currently just a smoke test for plotting waveforms
+    spk.plot_waveform(0)
+    spk.plot_waveform(0, upsample=20)
