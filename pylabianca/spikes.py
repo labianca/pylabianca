@@ -411,6 +411,25 @@ class SpikeEpochs():
         '''
         return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
 
+    def to_spiketools(self, picks=None):
+        '''Convert pylabianca SpikeEpochs to list of arrays.
+
+        Parameters
+        ----------
+        picks : None | list of ints
+            Which units to convert. If ``None``, all units are converted.
+
+        Returns
+        -------
+        inst : list of arrays
+            List of arrays containing spike times. Each array corresponds to
+            one trial. When multiple picks are provided, the output is a list
+            of lists of arrays (where outermost list elements correspond to
+            units).
+        '''
+        from .io import to_spiketools
+        return to_spiketools(self, picks)
+
     def __getitem__(self, selection):
         '''Select trials using an array of int / bool or metadata query.'''
         if isinstance(selection, str):
