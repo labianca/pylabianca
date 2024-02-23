@@ -783,4 +783,7 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
     if return_epochs:
         return SpikeEpochs(times, trials, **args)
     else:
+        if 'sfreq' not in args:
+            args['sfreq'] = 10_000
+
         return Spikes(times, **args)
