@@ -205,6 +205,7 @@ def test_pick_cells_cellinfo_query():
     assert (spk3.cellinfo.cell_idx.values == [10, 20]).all()
 
 
+# TODO: move to io tests?
 def test_to_raw():
     times = [[-0.3, -0.28, -0.26, 0.15, 0.18, 0.2],
              [-0.045, 0.023, -0.1, 0.13]]
@@ -251,6 +252,7 @@ def test_epoching_vs_fieldtrip(spk_epochs):
             spk_epochs.time[ch_idx], spk_epo_test_ft.time[ch_idx])
 
 
+# TODO: move to spike_rate tests
 @pytest.mark.skipif(not has_elephant(), reason="requires elephant")
 def test_firing_rate_against_elephant(spk_epochs):
     import borsar
