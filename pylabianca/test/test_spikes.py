@@ -411,6 +411,7 @@ def test_plot_waveform():
 def test_to_neo_and_to_spiketools():
     spk = create_random_spikes(n_cells=2, n_trials=3, n_spikes=(50, 120))
 
+    # .to_neo, join='concat'
     spk_neo = spk.to_neo(0, join='concat', sep_time=0.1)
     spk_lst = spk.to_spiketools(picks=0)
 
@@ -426,3 +427,9 @@ def test_to_neo_and_to_spiketools():
             spk_neo[spk_idx[0, idx]:spk_idx[0, idx + 1]].magnitude,
             spk_lst[idx] + 0.1 * idx + epoch_time * idx
         )
+
+    # .to_neo, join='pool'
+    spk_neo = spk.to_neo(0, join='pool')
+
+    assert n_spk.sum(axis=1)[0] == len(spk_neo)
+    assert (spk_neo.magnitude == np.sort(np.concatenate(spk_lst))).all()
