@@ -34,13 +34,47 @@ def spk_epochs(ft_data):
     return spk_epo_test
 
 
+def check_input_validation():
+    tri = 'abc'
+    times = [np.random.random(len(tri[0]) + 3),
+             np.random.random(len(tri[1]) + 2)]
+    times = [t.tolist() for r in times]
+
+    msg = 'Both time and trial have to be lists or object '
+    with pytest.raises(ValueError, match=msg):
+        pln.SpikeEpochs(times, tri)
+
+    tri = [[0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
+           [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]]
+
+    msg = 'All elements of time list must be numpy arrays.'
+    with pytest.raises(ValueError, match=msg):
+        pln.SpikeEpochs(times, tri)
+
+    tri = [np.array(t) for t in tri]
+    with pytest.raises(ValueError, match=msg):
+        pln.SpikeEpochs(times, tri)
+
+    times = [np.array(t) for t in times]
+    times2 = times.copy()
+    times2.append(np.array([0.1, 0.2, 0.3]))
+
+    msg = 'Length of time and trial lists must be the same.'
+    with pytest.raises(ValueError, match=msg):
+        pln.SpikeEpochs(times2, tri)
+
+
 def create_fake_spikes():
     times = [[-0.3, -0.1, 0.025, 0.11, 0.22, 0.25, 0.4,
               -0.08, 0.12, 0.14, 0.19, 0.23, 0.32],
              [-0.22, -0.13, -0.03, 0.08, 0.16, 0.33, -0.2,
               -0.08, 0.035, 0.148, 0.32]]
+    times = [np.array(t) for t in times]
+
     trials = [[0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1],
               [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]]
+    trials = [np.array(t) for t in trials]
+
     spk = pln.SpikeEpochs(times, trials)
     return spk
 
@@ -207,9 +241,9 @@ def test_pick_cells_cellinfo_query():
 
 # TODO: move to io tests?
 def test_to_raw():
-    times = [[-0.3, -0.28, -0.26, 0.15, 0.18, 0.2],
-             [-0.045, 0.023, -0.1, 0.13]]
-    trials = [[0, 0, 0, 0, 0, 0], [0, 0, 1, 1]]
+    times = [np.array([-0.3, -0.28, -0.26, 0.15, 0.18, 0.2]),
+             np.array([-0.045, 0.023, -0.1, 0.13])]
+    trials = [np.array([0, 0, 0, 0, 0, 0]), np.array([0, 0, 1, 1])]
     spk = pln.SpikeEpochs(times, trials)
 
     spk_tm, spk_raw = pln.spikes._spikes_to_raw(spk, sfreq=10)
