@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
-                    _get_trial_boundaries)
+                    _get_trial_boundaries, _validate_spike_epochs_input)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import compare_spike_times, xcorr_hist
 
@@ -55,10 +55,14 @@ class SpikeEpochs():
             Original spike timestamps. Should be in the same format as ``time``
             and ``trial`` arguments.
         '''
-        if not isinstance(time[0], np.ndarray):
-            time = [np.asarray(x) for x in time]
-        if not isinstance(trial[0], np.ndarray):
-            trial = [np.asarray(x) for x in trial]
+        _validate_spike_epochs_input(time, trial)
+
+        # TEMPORARY: remove after testing
+        # if not isinstance(time[0], np.ndarray):
+        #     time = [np.asarray(x) for x in time]
+        # if not isinstance(trial[0], np.ndarray):
+        #     trial = [np.asarray(x) for x in trial]
+
         self.time = time
         self.trial = trial
 
@@ -77,6 +81,7 @@ class SpikeEpochs():
                                    for idx in range(n_cells)])
         else:
             cell_names = np.asarray(cell_names)
+            assert len(cell_names) == len(time)
 
         if metadata is not None:
             assert isinstance(metadata, pd.DataFrame)
