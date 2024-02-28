@@ -787,3 +787,36 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
             args['sfreq'] = 10_000
 
         return Spikes(times, **args)
+
+
+def _validate_spike_epochs_input(time, trial):
+    '''Validate input for SpikeEpochs object.'''
+
+    # both time and trial have to be lists ...
+    def is_list_or_object_array(obj):
+        return isinstance(obj, list) or np.issubdtype(obj.dtype, np.object_)
+
+    if not (is_list_or_object_array(time) and is_list_or_object_array(trial)):
+        raise ValueError('Both time and trial have to be lists or object '
+                         'arrays.')
+
+    # ... of the same length ...
+    if len(time) != len(trial):
+        raise ValueError('Length of time and trial lists must be the same.')
+
+    # ... and all elements have to be numpy arrays
+    if not all([isinstance(cell_time, np.ndarray) for cell_time in time]):
+        raise ValueError('All elements of time list must be numpy arrays.')
+    if not all([isinstance(cell_trial, np.ndarray) for cell_trial in trial]):
+        raise ValueError('All elements of trial list must be numpy arrays.')
+
+    # all corresponding time and trial arrays have to have the same length
+    if not all([len(time[ix]) == len(trial[ix]) for ix in range(len(time))]):
+        raise ValueError('All time and trial arrays must have the same length.')
+
+    # trial arrays have to contain non-negative integers
+    for cell_trial in trial:
+        if not (np.issubdtype(cell_trial.dtype, np.integer)
+                and cell_trial.min() >= 0):
+            raise ValueError(
+                'Trial list of arrays must contain non-negative integers.')
