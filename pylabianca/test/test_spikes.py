@@ -341,6 +341,10 @@ def test_firing_rate_against_elephant(spk_epochs):
             rval, _ = pearsonr(fr[cell_idx, tri_idx].values, elph_fr)
             assert rval > 0.999
 
+    # test a case where times vector and n_steps did not align (lead to error)
+    this_spk = spk_epochs.copy().crop(tmin=-1., tmax=2.)
+    this_spk.spike_rate(winlen=0.35, step=0.05)
+
 
 def test_metadata():
     spk = create_random_spikes()
