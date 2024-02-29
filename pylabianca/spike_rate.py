@@ -88,16 +88,21 @@ def _add_frate_info(arr, dep='rate'):
 
 
 # ENH: speed up by using previous mask in the next step to pre-select spikes
+# ENH: time limits per window could be calculated only once - for all units
 def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
                               n_trials, winlen=0.25, step=0.05):
     half_win = winlen / 2
     window_limits = np.array([-half_win, half_win])
     used_range = time_limits[1] - time_limits[0]
-    n_steps = int(np.floor((used_range - winlen) / step + 1))
+    n_steps = (used_range - winlen) / step + 1
+    n_steps_int = int(n_steps)
 
-    fr_t_start = time_limits[0] + half_win
-    fr_t_end = time_limits[1] - half_win + step * 0.001
-    times = np.arange(fr_t_start, fr_t_end, step=step)
+    if n_steps - n_steps_int > 0.9:
+        n_steps = n_steps_int + 1
+    else:
+        n_steps = n_steps_int
+
+    times = np.arange(n_steps) * step + time_limits[0] + half_win
     frate = np.zeros((n_trials, n_steps))
 
     for step_idx in range(n_steps):
