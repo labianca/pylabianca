@@ -125,10 +125,12 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
 
     winlen = time_limits[1] - time_limits[0]
     frate = np.zeros(n_trials)
-    msk = (spike_times >= time_limits[0]) & (spike_times < time_limits[1])
-    tri = spike_trials[msk]
-    in_tri, count = np.unique(tri, return_counts=True)
-    frate[in_tri] = count / winlen
+
+    if len(spike_times) > 0:
+        msk = (spike_times >= time_limits[0]) & (spike_times < time_limits[1])
+        tri = spike_trials[msk]
+        in_tri, count = np.unique(tri, return_counts=True)
+        frate[in_tri] = count / winlen
 
     return frate
 
