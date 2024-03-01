@@ -207,12 +207,14 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         data=results['thresh'], dims=dims2, coords=coords, name='t value')
 
     # add cell coords
+    # TODO: this could be smarter and take all columns from cellinfo...
     for key in results.keys():
         copy_coords = ['region', 'region2', 'anat', 'channel', 'cluster']
         copy_coords = [coord for coord in copy_coords if coord in frate.coords]
-        coords = {coord: ('cell', frate.coords[coord].values)
-                  for coord in copy_coords}
-        results[key] = results[key].assign_coords(coords)
+        if len(copy_coords) > 0:
+            coords = {coord: ('cell', frate.coords[coord].values)
+                    for coord in copy_coords}
+            results[key] = results[key].assign_coords(coords)
 
     return results
 
