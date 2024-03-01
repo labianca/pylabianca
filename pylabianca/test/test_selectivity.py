@@ -48,8 +48,22 @@ def test_selectivity_continuous():
     selective_are = np.where((results['stat'] > results['thresh']).values)[0]
     assert np.in1d(selective_are, selective_should_be).mean() > 0.7
 
-    # LATER: add cellinfo and make sure it is retained in results
-    # ...
+    # add cellinfo and make sure it is retained in results
+    n_cells = spk_epochs.n_units()
+    cell_types = ['A', 'B', 'C']
+    regions = ['AMY', 'HIP']
+
+    cellinfo = pd.DataFrame(
+        {'cell_type': np.random.choice(cell_types, size=n_cells),
+        'region': np.random.choice(regions, size=n_cells)})
+    spk_epochs.cellinfo = cellinfo
+
+    fr = spk_epochs.spike_rate(tmin=0.1, tmax=1.1, step=False)
+    results = compute_selectivity_continuous(
+        fr, compare='emo', n_perm=10, n_jobs=1)
+
+    for key in results.keys():
+        assert all([coo in results[key].coords for coo in cellinfo.columns])
 
     # test also in time
     # ...
