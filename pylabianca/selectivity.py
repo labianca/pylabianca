@@ -200,9 +200,14 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         data=results['stat'], dims=dims[1:], coords=coords, name='t value')
 
     # thresh
-    results['thresh'] = np.stack(results['thresh'], axis=0)
-    dims2 = ['tail'] + dims[1:]
-    coords.update({'tail': ['pos', 'neg']})
+    if results['thresh'].shape[0] == 2:
+        # two-tail thresholds
+        results['thresh'] = np.stack(results['thresh'], axis=0)
+        dims2 = ['tail'] + dims[1:]
+        coords.update({'tail': ['pos', 'neg']})
+    else:
+        dims2 = dims[1:]
+
     results['thresh'] = xr.DataArray(
         data=results['thresh'], dims=dims2, coords=coords, name='t value')
 
