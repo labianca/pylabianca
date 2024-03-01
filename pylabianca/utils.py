@@ -822,3 +822,15 @@ def _validate_spike_epochs_input(time, trial):
                 and cell_trial.min() >= 0):
             raise ValueError(
                 'Trial list of arrays must contain non-negative integers.')
+
+
+def xr_find_nested_dims(arr, dim_name):
+    names = list()
+    coords = list(arr.coords)
+    coords.remove(dim_name)
+    subdim = (dim_name,)
+    for coord in coords:
+        if arr.coords[coord].dims == subdim:
+            names.append(coord)
+
+    return names
