@@ -76,8 +76,6 @@ def read_fieldtrip(fname, data_name='spike', kind='raw', waveform=True):
     return spk
 
 
-# TODO
-# - [ ] read waveform too...
 def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
                         waveform_time):
     '''Read fieldtrip SpikeTrials format.
@@ -353,7 +351,11 @@ def read_osort(path, waveform=True, channels='all', format='mm',
         from tqdm import tqdm
 
     assert op.exists(path), 'Path/file does not exist.'
-    assert format in ['standard', 'mm'], 'Unknown format.'
+    good_format = format in ['standard', 'mm']
+    if not good_format:
+        msg = f'Unrecognized format "{format}".'
+        raise ValueError(msg)
+
     one_file = not op.isdir(path)
 
     if not one_file:
@@ -420,7 +422,18 @@ def read_osort(path, waveform=True, channels='all', format='mm',
     for fname in iter_over:
         file_path = op.join(path, fname)
         data = loadmat(file_path, squeeze_me=False, variable_names=var_names)
-        this_cluster_id = data[translate['cluster_id']].astype('int64')
+
+        # make sure the correct format was specified - if not,
+        # there will be no variables in the data object - throw an
+        # informative error then
+        clst_id_field = translate['cluster_id']
+        if fname == files[0] and clst_id_field not in data:
+            msg = (f'Could not find the "{clst_id_field}" field in the file '
+                   f'{file_path} using the "{format}" format. Make sure the '
+                   'correct format was specified.')
+            raise ValueError(msg)
+
+        this_cluster_id = data[clst_id_field].astype('int64')
 
         if format == 'mm' and isinstance(correct_field, list):
             # TEMP FIX: older exporting function had a spelling error
