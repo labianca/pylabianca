@@ -47,7 +47,7 @@ the SpikeEpochs object does not contain metadata).
 * DOC: added example of spike-field analysis combining pylabianca and MNE-Python: [notebook](doc/spike-triggered_analysis.ipynb)
 
 
-* FIX: removed incorrect condition label [FIXME: add more info] `pylabianca.viz.plot_shaded()`
+* FIX: removed incorrect condition label when using `pylabianca.viz.plot_shaded()` with `groupby` argument. Previously the last condition label was used for the figure, although one line per condition was shown.
 * FIX: `.plot_isi()` `Spikes` method was not committed in 0.1 version, now added. It is just a wrapper around `pylabianca.viz.plot_isi()`
 * FIX: typo in `pylabianca.io.read_fieldtrip` (was `read_filedtrip` before)
 * FIX: when `.metadata` attribute of `SpikeEpochs` is set the metadata is tested to be a DataFrame with relevant number of rows. Also, row indices are reset to match trial indices.
