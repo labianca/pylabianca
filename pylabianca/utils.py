@@ -1,5 +1,6 @@
 import os
 import os.path as op
+from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -822,6 +823,22 @@ def _validate_spike_epochs_input(time, trial):
                 and cell_trial.min() >= 0):
             raise ValueError(
                 'Trial list of arrays must contain non-negative integers.')
+
+
+def _validate_cellinfo(spk, cellinfo):
+    '''Validate cellinfo input for SpikeEpochs object.'''
+    if cellinfo is not None:
+        if not isinstance(cellinfo, pd.DataFrame):
+            raise ValueError('cellinfo has to be a pandas DataFrame.')
+        if cellinfo.shape[0] != spk.n_units():
+            raise ValueError('Number of rows in cellinfo has to be equal to '
+                             'the number of cells in the SpikeEpochs object.')
+        if not (cellinfo.index == np.arange(spk.n_units())).all():
+            warn('cellinfo index does not match cell indices in the '
+                 'SpikeEpochs object. Resetting the index.')
+            cellinfo = cellinfo.reset_index(drop=True)
+
+    return cellinfo
 
 
 def xr_find_nested_dims(arr, dim_name):
