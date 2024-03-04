@@ -3,13 +3,12 @@ import numpy as np
 import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
-                    _get_trial_boundaries, _validate_spike_epochs_input)
+                    _get_trial_boundaries, _validate_spike_epochs_input,
+                    _validate_cellinfo)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import compare_spike_times, xcorr_hist
 
 
-# TODO:
-# - [ ] add variable validity checks !
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  waveform=None, waveform_time=None, cell_names=None,
@@ -57,12 +56,6 @@ class SpikeEpochs():
         '''
         _validate_spike_epochs_input(time, trial)
 
-        # TEMPORARY: remove after testing
-        # if not isinstance(time[0], np.ndarray):
-        #     time = [np.asarray(x) for x in time]
-        # if not isinstance(trial[0], np.ndarray):
-        #     trial = [np.asarray(x) for x in trial]
-
         self.time = time
         self.trial = trial
 
@@ -88,9 +81,7 @@ class SpikeEpochs():
             assert metadata.shape[0] == n_trials
 
         n_cells = len(self.time)
-        if cellinfo is not None:
-            assert isinstance(cellinfo, pd.DataFrame)
-            assert cellinfo.shape[0] == n_cells
+        self._cellinfo = _validate_cellinfo(self, cellinfo)
 
         if waveform is not None:
             _check_waveforms(self.time, waveform, waveform_time)
@@ -122,7 +113,7 @@ class SpikeEpochs():
 
     def n_units(self):
         '''Return the number of units in SpikeEpochs.'''
-        return len(self.cell_names)
+        return len(self.time)
 
     def pick_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates in-place.
@@ -336,6 +327,14 @@ class SpikeEpochs():
             assert df.shape[0] == len(self)
             df = df.reset_index(drop=True)
         self._metadata = df
+
+    @property
+    def cellinfo(self):
+        return self._cellinfo
+
+    @cellinfo.setter
+    def cellinfo(self, df):
+        self._cellinfo = _validate_cellinfo(self, df)
 
     # TODO:
     def to_neo(self, cell_idx, join=False, sep_time=0.):
@@ -710,7 +709,7 @@ class Spikes(object):
                                    for idx in range(n_cells)])
 
         self.cell_names = cell_names
-        self.cellinfo = cellinfo
+        self._cellinfo = _validate_cellinfo(self, cellinfo)
 
         if waveform is not None:
             _check_waveforms(timestamps, waveform, waveform_time)
@@ -729,7 +728,7 @@ class Spikes(object):
 
     def n_units(self):
         '''Return the number of units in Spikes.'''
-        return len(self.cell_names)
+        return len(self.timestamps)
 
     # TODO: return idx from _epoch_spikes only when self.waveform is not None?
     # TODO: time and consider speeding up
@@ -843,6 +842,14 @@ class Spikes(object):
             Number of spikes per cell.
         """
         return _n_spikes(self)
+
+    @property
+    def cellinfo(self):
+        return self._cellinfo
+
+    @cellinfo.setter
+    def cellinfo(self, df):
+        self._cellinfo = _validate_cellinfo(self, df)
 
     def sort(self, by=None, inplace=True):
         '''Sort cells. Operates in-place.
@@ -1245,7 +1252,7 @@ def _sort_spikes(spk, by=None, inplace=True):
     by = ['channel', 'cluster'] if by is None else by
 
     # make sure that cellinfo is present
-    if spk.cellinfo is None or not isinstance(spk.cellinfo, pd.DataFrame):
+    if spk.cellinfo is None:
         raise ValueError('To sort units .cellinfo attribute has to contain '
                          'a dataframe with information about the units.')
 
