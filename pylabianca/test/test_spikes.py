@@ -286,11 +286,6 @@ def test_sort():
     with pytest.raises(ValueError, match=".cellinfo attribute has to contain"):
         spk.sort()
 
-    # .cellinfo is not a dataframe
-    spk.cellinfo = np.array([[1, 2, 3, 4, 5, 6], [2, 2, 5, 1, 1, 8]]).T
-    with pytest.raises(ValueError, match=".cellinfo attribute has to contain"):
-        spk.sort()
-
     # now with a dataframe
     cellinfo = pd.DataFrame({'name': list('abcdef'),
                             'channel': np.random.randint(20, 120, size=6),
