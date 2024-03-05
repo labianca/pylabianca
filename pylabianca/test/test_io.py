@@ -63,3 +63,28 @@ def test_read_osort(tmp_path):
     # fname = 'test_standard.mat'
     # spk.to_matlab(op.join(tmp_path, fname), format='osort_standard')
 
+def test_read_events_neuralynx():
+    lynx_dir = op.join(
+        data_dir, r'test_neuralynx\sub-U06_ses-screening_set-U6d_run-01_ieeg')
+    events_df = pln.io.read_events_neuralynx(lynx_dir)
+
+    # one experiment start trigger
+    assert (events_df.trigger == 61).sum() == 1
+    assert (events_df.trigger == 1).sum() == (6 * 63)
+
+    # read mne events format
+    events = pln.io.read_events_neuralynx(lynx_dir, format='mne')
+    assert isinstance(events, np.ndarray)
+    assert events.ndim == 2
+    assert events.shape[1] == 3
+
+    events_df_actual = events_df.query('trigger >= 0')
+    assert (events_df_actual.timestamp.values == events[:, 0]).all()
+
+    events_df2 = pln.io.read_events_neuralynx(
+        lynx_dir, first_timestamp_from=None)
+    assert (events_df_actual.timestamp.values
+            == events_df2.timestamp.values).all()
+
+    with pytest.raises(ValueError, match='Unknown format'):
+        pln.io.read_events_neuralynx(lynx_dir, format='lieber_biber')
