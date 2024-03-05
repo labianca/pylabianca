@@ -575,11 +575,13 @@ def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
             events.loc[0, 'trigger'] = -1
             events.loc[0, 'timestamp'] = first_sample
             start, end = 1, n_events
+            starts = (event_timestamps - first_sample) / 1e6
         else:
             start, end = 0, n_events - 1
+            starts = np.empty(n_events)
+            starts.fill(np.nan)
 
         # the rest is just copying data to the dataframe
-        starts = (event_timestamps - first_sample) / 1e6
         events.loc[start:end, 'start'] = starts
         events.loc[start:end, 'duration'] = 'n/a'
         events.loc[start:end, 'trigger'] = triggers
@@ -595,7 +597,7 @@ def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
             events.loc[end + 1, 'trigger'] = -1
             events.loc[end + 1, 'timestamp'] = last_sample
 
-        events= events.infer_objects()
+        events = events.infer_objects()
 
     elif format == 'mne':
         events = np.zeros((n_events, 3), dtype='int64')
