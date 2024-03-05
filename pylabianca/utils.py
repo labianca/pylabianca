@@ -317,6 +317,7 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
     return spike_centered
 
 
+# TODO: differentiate between shuffling spike-trials vs just metadata
 def shuffle_trials(spk, drop_timestamps=True, drop_waveforms=True):
     '''Create a copy of the SpikeEpochs object with shuffled trials.
 
