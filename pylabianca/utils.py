@@ -801,7 +801,10 @@ def _validate_spike_epochs_input(time, trial):
 
     # both time and trial have to be lists ...
     def is_list_or_object_array(obj):
-        return isinstance(obj, list) or np.issubdtype(obj.dtype, np.object_)
+        return (isinstance(obj, list)
+                or (isinstance(obj, np.ndarray)
+                    and np.issubdtype(obj.dtype, np.object_))
+        )
 
     if not (is_list_or_object_array(time) and is_list_or_object_array(trial)):
         raise ValueError('Both time and trial have to be lists or object '
