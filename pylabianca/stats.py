@@ -2,9 +2,37 @@ import numpy as np
 
 
 # TODO: move to borsar
-# CHANGE THE api - the first argument could be a list of arrays or an xarray
 def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
                      return_pvalue=True, return_distribution=True, n_jobs=1):
+    '''Perform permutation test on the data.
+
+    Parameters
+    ----------
+    *arrays : array_like
+        The arrays for which the permutation test should be performed.
+    paired : bool
+        Whether a paired (repeated measures) or unpaired test should be used.
+    n_perm : int
+        Number of permutations to perform.
+    progress : bool
+        Whether to show progress bar.
+    return_pvalue : bool
+        Whether to return p values.
+    return_distribution : bool
+        Whether to return the permutation distribution.
+    n_jobs : int
+        Number of jobs to run in parallel.
+
+    Returns
+    -------
+    out : dict | tuple
+        Dictionary with keys ``'stat'``, ``'thresh'``, ``'dist'`` and ``'pval'``
+        if both ``return_pvalue`` and ``return_distribution`` are ``True``
+        (the default). Otherwise a tuple with the first element being the
+        statistic and the second being the p value (if ``return_pvalue`` is
+        True). If both ``return_pvalue`` and ``return_distribution`` are False,
+        then only the statistic is returned.
+    '''
     import borsar
 
     n_groups = len(arrays)
@@ -19,7 +47,9 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
 
     stat = stat_fun(*arrays)
 
-    # this does not make sense for > 1d,
+    # this does not make sense for > 1d, but we could make sure
+    # that if output is 1d, 1-element array, it is returned as a scalar
+    #
     # maybe it didn't make sense for 1d too?
     # if isinstance(stat, np.ndarray):
     #     try:
@@ -228,7 +258,7 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     cluster_pval = np.array(cluster_pval)
 
     if tail == 'both':
-        # we are essentially performing two test (one for pos
+        # we are essentially performing two tests (one for pos
         # and one for neg clusters) so we have to correct...
         cluster_pval = np.minimum(cluster_pval * 2, 1)
 

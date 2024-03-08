@@ -76,8 +76,6 @@ def read_fieldtrip(fname, data_name='spike', kind='raw', waveform=True):
     return spk
 
 
-# TODO
-# - [ ] read waveform too...
 def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
                         waveform_time):
     '''Read fieldtrip SpikeTrials format.
@@ -353,7 +351,11 @@ def read_osort(path, waveform=True, channels='all', format='mm',
         from tqdm import tqdm
 
     assert op.exists(path), 'Path/file does not exist.'
-    assert format in ['standard', 'mm'], 'Unknown format.'
+    good_format = format in ['standard', 'mm']
+    if not good_format:
+        msg = f'Unrecognized format "{format}".'
+        raise ValueError(msg)
+
     one_file = not op.isdir(path)
 
     if not one_file:
@@ -420,7 +422,18 @@ def read_osort(path, waveform=True, channels='all', format='mm',
     for fname in iter_over:
         file_path = op.join(path, fname)
         data = loadmat(file_path, squeeze_me=False, variable_names=var_names)
-        this_cluster_id = data[translate['cluster_id']].astype('int64')
+
+        # make sure the correct format was specified - if not,
+        # there will be no variables in the data object - throw an
+        # informative error then
+        clst_id_field = translate['cluster_id']
+        if fname == files[0] and clst_id_field not in data:
+            msg = (f'Could not find the "{clst_id_field}" field in the file '
+                   f'{file_path} using the "{format}" format. Make sure the '
+                   'correct format was specified.')
+            raise ValueError(msg)
+
+        this_cluster_id = data[clst_id_field].astype('int64')
 
         if format == 'mm' and isinstance(correct_field, list):
             # TEMP FIX: older exporting function had a spelling error
@@ -562,11 +575,13 @@ def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
             events.loc[0, 'trigger'] = -1
             events.loc[0, 'timestamp'] = first_sample
             start, end = 1, n_events
+            starts = (event_timestamps - first_sample) / 1e6
         else:
             start, end = 0, n_events - 1
+            starts = np.empty(n_events)
+            starts.fill(np.nan)
 
         # the rest is just copying data to the dataframe
-        starts = (event_timestamps - first_sample) / 1e6
         events.loc[start:end, 'start'] = starts
         events.loc[start:end, 'duration'] = 'n/a'
         events.loc[start:end, 'trigger'] = triggers
@@ -582,7 +597,7 @@ def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
             events.loc[end + 1, 'trigger'] = -1
             events.loc[end + 1, 'timestamp'] = last_sample
 
-        events= events.infer_objects()
+        events = events.infer_objects()
 
     elif format == 'mne':
         events = np.zeros((n_events, 3), dtype='int64')
@@ -906,7 +921,7 @@ def _to_arrays(spk_epochs, picks):
     unit_list = list()
     for idx in picks:
         trial_list = list()
-        tri_limits, tri_ids = _get_trial_boundaries(spk_epochs, 0)
+        tri_limits, tri_ids = _get_trial_boundaries(spk_epochs, idx)
         tri_enum = 0
         for tri in range(max_trials):
             if tri in tri_ids:

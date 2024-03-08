@@ -3,13 +3,12 @@ import numpy as np
 import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
-                    _get_trial_boundaries)
+                    _get_trial_boundaries, _validate_spike_epochs_input,
+                    _validate_cellinfo)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import compare_spike_times, xcorr_hist
 
 
-# TODO:
-# - [ ] add variable validity checks !
 class SpikeEpochs():
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  waveform=None, waveform_time=None, cell_names=None,
@@ -55,10 +54,8 @@ class SpikeEpochs():
             Original spike timestamps. Should be in the same format as ``time``
             and ``trial`` arguments.
         '''
-        if not isinstance(time[0], np.ndarray):
-            time = [np.asarray(x) for x in time]
-        if not isinstance(trial[0], np.ndarray):
-            trial = [np.asarray(x) for x in trial]
+        _validate_spike_epochs_input(time, trial)
+
         self.time = time
         self.trial = trial
 
@@ -77,15 +74,14 @@ class SpikeEpochs():
                                    for idx in range(n_cells)])
         else:
             cell_names = np.asarray(cell_names)
+            assert len(cell_names) == len(time)
 
         if metadata is not None:
             assert isinstance(metadata, pd.DataFrame)
             assert metadata.shape[0] == n_trials
 
         n_cells = len(self.time)
-        if cellinfo is not None:
-            assert isinstance(cellinfo, pd.DataFrame)
-            assert cellinfo.shape[0] == n_cells
+        self._cellinfo = _validate_cellinfo(self, cellinfo)
 
         if waveform is not None:
             _check_waveforms(self.time, waveform, waveform_time)
@@ -117,7 +113,7 @@ class SpikeEpochs():
 
     def n_units(self):
         '''Return the number of units in SpikeEpochs.'''
-        return len(self.cell_names)
+        return len(self.time)
 
     def pick_cells(self, picks=None, query=None):
         '''Select cells by name or index. Operates in-place.
@@ -332,6 +328,14 @@ class SpikeEpochs():
             df = df.reset_index(drop=True)
         self._metadata = df
 
+    @property
+    def cellinfo(self):
+        return self._cellinfo
+
+    @cellinfo.setter
+    def cellinfo(self, df):
+        self._cellinfo = _validate_cellinfo(self, df)
+
     # TODO:
     def to_neo(self, cell_idx, join=False, sep_time=0.):
         '''Turn spikes of given cell into neo.SpikeTrain format.
@@ -411,8 +415,27 @@ class SpikeEpochs():
         '''
         return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
 
+    def to_spiketools(self, picks=None):
+        '''Convert pylabianca SpikeEpochs to list of arrays.
+
+        Parameters
+        ----------
+        picks : None | list of ints
+            Which units to convert. If ``None``, all units are converted.
+
+        Returns
+        -------
+        inst : list of arrays
+            List of arrays containing spike times. Each array corresponds to
+            one trial. When multiple picks are provided, the output is a list
+            of lists of arrays (where outermost list elements correspond to
+            units).
+        '''
+        from .io import to_spiketools
+        return to_spiketools(self, picks)
+
     def __getitem__(self, selection):
-        '''Select trials using an array of integers or metadata query.'''
+        '''Select trials using an array of int / bool or metadata query.'''
         if isinstance(selection, str):
             if self.metadata is None:
                 raise TypeError('metadata cannot be ``None`` when selecting '
@@ -422,11 +445,18 @@ class SpikeEpochs():
             tri_idx = new_metadata.index.values
         elif isinstance(selection, (np.ndarray, list, tuple)):
             selection = np.asarray(selection)
-            assert np.issubdtype(selection.dtype, np.integer)
+            int_sel = np.issubdtype(selection.dtype, np.integer)
+            bool_sel = np.issubdtype(selection.dtype, np.bool_)
+            assert int_sel or bool_sel
 
-            if self.metadata is not None:
-                new_metadata = self.metadata.iloc[selection, :]
-            tri_idx = selection
+            if int_sel:
+                if self.metadata is not None:
+                    new_metadata = self.metadata.iloc[selection, :]
+                tri_idx = selection
+            else:
+                if self.metadata is not None:
+                    new_metadata = self.metadata.loc[selection, :]
+                tri_idx = np.where(selection)[0]
         else:
             raise TypeError('Currently only string queries are allowed to '
                             'select elements of SpikeEpochs')
@@ -481,7 +511,7 @@ class SpikeEpochs():
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
                              labels=labels, times=self.waveform_time)
 
-    def apply(self, func, picks=None, per_trial=True, args=None, kwargs=None):
+    def apply(self, func, picks=None, args=None, kwargs=None):
         '''Apply a function to each cell and trial.
 
         Parameters
@@ -491,9 +521,6 @@ class SpikeEpochs():
         picks : int | str | list-like of int | list-like of str | None
             Cell indices or names to apply the function to. Optional, the
             default (``None``) applies the function to all cells.
-        per_trial : bool
-            Whether to apply the function to each trial separately. Defaults
-            to ``True``.
         args : list | None
             Positional arguments to pass to the function. Defaults to ``None``.
         kwargs : dict | None
@@ -520,17 +547,13 @@ class SpikeEpochs():
             # trials = self.to_spiketools(pick)
             trials = to_spiketools(self, pick)
 
-            if per_trial:
-                trial_list = list()
-                for tri in trials:
-                    value = func(tri, *args, **kwargs)
-                    trial_list.append(value)
-                # else:
-                #     trial_list.append(np.nan)
-                out.append(np.array(trial_list))
-            else:
-                trial_list = func(trials, *args, **kwargs)
-                out.append(trial_list)
+            trial_list = list()
+            for tri in trials:
+                value = func(tri, *args, **kwargs)
+                trial_list.append(value)
+            # else:
+            #     trial_list.append(np.nan)
+            out.append(np.array(trial_list))
 
         out = np.stack(out, axis=0)
 
@@ -686,7 +709,7 @@ class Spikes(object):
                                    for idx in range(n_cells)])
 
         self.cell_names = cell_names
-        self.cellinfo = cellinfo
+        self._cellinfo = _validate_cellinfo(self, cellinfo)
 
         if waveform is not None:
             _check_waveforms(timestamps, waveform, waveform_time)
@@ -705,7 +728,7 @@ class Spikes(object):
 
     def n_units(self):
         '''Return the number of units in Spikes.'''
-        return len(self.cell_names)
+        return len(self.timestamps)
 
     # TODO: return idx from _epoch_spikes only when self.waveform is not None?
     # TODO: time and consider speeding up
@@ -820,7 +843,15 @@ class Spikes(object):
         """
         return _n_spikes(self)
 
-    def sort(self, by=None):
+    @property
+    def cellinfo(self):
+        return self._cellinfo
+
+    @cellinfo.setter
+    def cellinfo(self, df):
+        self._cellinfo = _validate_cellinfo(self, df)
+
+    def sort(self, by=None, inplace=True):
         '''Sort cells. Operates in-place.
 
         The units are by default sorted by channel and cluster id information
@@ -834,13 +865,15 @@ class Spikes(object):
             If string or list of strings - name/names of ``.cellinfo`` columns
             to sort by.
             Defaults to ``None``.
+        inplace : bool
+            Whether to sort the units in place. Defaults to ``True``.
 
         Returns
         -------
         spk : Spikes
             Sorted Spikes.
         '''
-        self = _sort_spikes(self, by)
+        self = _sort_spikes(self, by, inplace=inplace)
         return self
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
@@ -1139,6 +1172,7 @@ def _drop_cells(spk, picks):
         Cell  indices to drop.
     '''
     all_idx = np.arange(spk.n_units())
+    picks = _deal_with_picks(spk, picks)
     is_dropped = np.in1d(all_idx, picks)
     retain_idx = np.where(~is_dropped)[0]
     return spk.pick_cells(retain_idx)
@@ -1216,6 +1250,11 @@ def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
 def _sort_spikes(spk, by=None, inplace=True):
     '''Sort units by channel and cluster id or other columns in cellinfo.'''
     by = ['channel', 'cluster'] if by is None else by
+
+    # make sure that cellinfo is present
+    if spk.cellinfo is None:
+        raise ValueError('To sort units .cellinfo attribute has to contain '
+                         'a dataframe with information about the units.')
 
     # the tests below were written by GitHub copilot entirely!
     if isinstance(by, str):

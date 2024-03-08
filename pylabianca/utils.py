@@ -1,5 +1,6 @@
 import os
 import os.path as op
+from warnings import warn
 
 import numpy as np
 import pandas as pd
@@ -54,6 +55,8 @@ def _deal_with_picks(spk, picks):
 #           (mne-python-like)
 # CHANGE name to something more general - it is now used for xarray and decoding
 #        results (and more in the future)
+# spike_epochs is used only when n_trials > 0 to inherit metadata
+#              and to copy cellinfo
 def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
                                tri=None, copy_cellinfo=True,
                                x_dim_name='time'):
@@ -314,6 +317,7 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
     return spike_centered
 
 
+# TODO: differentiate between shuffling spike-trials vs just metadata
 def shuffle_trials(spk, drop_timestamps=True, drop_waveforms=True):
     '''Create a copy of the SpikeEpochs object with shuffled trials.
 
@@ -682,8 +686,12 @@ def get_test_data_link():
 def download_test_data():
     # check if test data exist
     data_dir = get_data_path()
-    check_files = ['ft_spk_epoched.mat', 'monkey_stim.csv',
-                   'p029_sort_final_01_events.mat']
+    check_files = [
+        'ft_spk_epoched.mat', 'monkey_stim.csv', ('p029_sort_final_01_events'
+        '.mat'), r'test_osort_data\sub-U04_switchorder\CSCA130_mm_format.mat',
+        r'test_neuralynx\sub-U06_ses-screening_set-U6d_run-01_ieeg\CSC129.ncs'
+    ]
+
     if all([op.isfile(op.join(data_dir, f)) for f in check_files]):
         return
 
@@ -711,8 +719,142 @@ def download_test_data():
 
 
 def has_elephant():
+    '''Test if elephant is available.'''
     try:
         import elephant
         return True
     except ImportError:
         return False
+
+
+def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
+                         **args):
+    '''Create random spike data. Mostly useful for testing.
+
+    Parameters
+    ----------
+    n_cells : int
+        Number of cells.
+    n_trials : int
+        Number of trials. If ``None`` or 0 then Spikes object is returned.
+    n_spikes : int | tuple
+        Number of spikes. If tuple then the first element is the minimum
+        number of spikes and the second element is the maximum number of
+        spikes.
+    args : dict
+        Additional arguments are passed to the Spikes / SpikeEpochs object.
+
+    Returns
+    -------
+    spikes : Spikes | SpikeEpochs
+        Spike data object.
+    '''
+    from .spikes import SpikeEpochs, Spikes
+
+    tmin, tmax = -0.5, 1.5
+    tlen = tmax - tmin
+    constant_n_spikes = isinstance(n_spikes, int)
+    if constant_n_spikes:
+        n_spk = n_spikes
+
+    return_epochs = isinstance(n_trials, int) and n_trials > 0
+    if not return_epochs:
+        n_trials = 1
+        tmin = 0
+        tmax = 1e6
+
+    times = list()
+    trials = list()
+    for _ in range(n_cells):
+        this_tri = list()
+        this_tim = list()
+        for tri_idx in range(n_trials):
+            if not constant_n_spikes:
+                n_spk = np.random.randint(*n_spikes)
+
+            if return_epochs:
+                tms = np.random.rand(n_spk) * tlen + tmin
+                this_tri.append(np.ones(n_spk, dtype=int) * tri_idx)
+            else:
+                tms = np.random.randint(tmin, tmax, size=n_spk)
+            tms = np.sort(tms)
+            this_tim.append(tms)
+
+        this_tim = np.concatenate(this_tim)
+        times.append(this_tim)
+
+        if return_epochs:
+            this_tri = np.concatenate(this_tri)
+            trials.append(this_tri)
+
+    if return_epochs:
+        return SpikeEpochs(times, trials, **args)
+    else:
+        if 'sfreq' not in args:
+            args['sfreq'] = 10_000
+
+        return Spikes(times, **args)
+
+
+def _validate_spike_epochs_input(time, trial):
+    '''Validate input for SpikeEpochs object.'''
+
+    # both time and trial have to be lists ...
+    def is_list_or_object_array(obj):
+        return (isinstance(obj, list)
+                or (isinstance(obj, np.ndarray)
+                    and np.issubdtype(obj.dtype, np.object_))
+        )
+
+    if not (is_list_or_object_array(time) and is_list_or_object_array(trial)):
+        raise ValueError('Both time and trial have to be lists or object '
+                         'arrays.')
+
+    # ... of the same length ...
+    if len(time) != len(trial):
+        raise ValueError('Length of time and trial lists must be the same.')
+
+    # ... and all elements have to be numpy arrays
+    if not all([isinstance(cell_time, np.ndarray) for cell_time in time]):
+        raise ValueError('All elements of time list must be numpy arrays.')
+    if not all([isinstance(cell_trial, np.ndarray) for cell_trial in trial]):
+        raise ValueError('All elements of trial list must be numpy arrays.')
+
+    # all corresponding time and trial arrays have to have the same length
+    if not all([len(time[ix]) == len(trial[ix]) for ix in range(len(time))]):
+        raise ValueError('All time and trial arrays must have the same length.')
+
+    # trial arrays have to contain non-negative integers
+    for cell_trial in trial:
+        if not (np.issubdtype(cell_trial.dtype, np.integer)
+                and cell_trial.min() >= 0):
+            raise ValueError(
+                'Trial list of arrays must contain non-negative integers.')
+
+
+def _validate_cellinfo(spk, cellinfo):
+    '''Validate cellinfo input for SpikeEpochs object.'''
+    if cellinfo is not None:
+        if not isinstance(cellinfo, pd.DataFrame):
+            raise ValueError('cellinfo has to be a pandas DataFrame.')
+        if cellinfo.shape[0] != spk.n_units():
+            raise ValueError('Number of rows in cellinfo has to be equal to '
+                             'the number of cells in the SpikeEpochs object.')
+        if not (cellinfo.index == np.arange(spk.n_units())).all():
+            warn('cellinfo index does not match cell indices in the '
+                 'SpikeEpochs object. Resetting the index.')
+            cellinfo = cellinfo.reset_index(drop=True)
+
+    return cellinfo
+
+
+def xr_find_nested_dims(arr, dim_name):
+    names = list()
+    coords = list(arr.coords)
+    coords.remove(dim_name)
+    subdim = (dim_name,)
+    for coord in coords:
+        if arr.coords[coord].dims == subdim:
+            names.append(coord)
+
+    return names

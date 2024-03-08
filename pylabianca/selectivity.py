@@ -1,5 +1,7 @@
 import numpy as np
 
+from .utils import xr_find_nested_dims
+
 
 # TODO: ensure same ``frate`` explanation for all functions
 #       - obtained with SpikeEpochs.spike_rate or SpikeEpochs.spike_density
@@ -200,24 +202,30 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         data=results['stat'], dims=dims[1:], coords=coords, name='t value')
 
     # thresh
-    results['thresh'] = np.stack(results['thresh'], axis=0)
-    dims2 = ['tail'] + dims[1:]
-    coords.update({'tail': ['pos', 'neg']})
+    if results['thresh'].shape[0] == 2:
+        # two-tail thresholds
+        results['thresh'] = np.stack(results['thresh'], axis=0)
+        dims2 = ['tail'] + dims[1:]
+        coords.update({'tail': ['pos', 'neg']})
+    else:
+        dims2 = dims[1:]
+
     results['thresh'] = xr.DataArray(
         data=results['thresh'], dims=dims2, coords=coords, name='t value')
 
     # add cell coords
+    # TODO: this could be smarter and take all columns from cellinfo...
     for key in results.keys():
-        copy_coords = ['region', 'region2', 'anat', 'channel', 'cluster']
-        copy_coords = [coord for coord in copy_coords if coord in frate.coords]
-        coords = {coord: ('cell', frate.coords[coord].values)
-                  for coord in copy_coords}
-        results[key] = results[key].assign_coords(coords)
+        copy_coords = xr_find_nested_dims(frate, 'cell')
+        if len(copy_coords) > 0:
+            coords = {coord: ('cell', frate.coords[coord].values)
+                      for coord in copy_coords}
+            results[key] = results[key].assign_coords(coords)
 
     return results
 
 
-# TODO: add njobs
+# TODO: add n_jobs
 # TODO: refactor to separate cluster-based and cell selection
 # TODO: create more progress bars and pass to cluster_based_test
 # TODO: use calculate_dos to ignore DoS calculation
