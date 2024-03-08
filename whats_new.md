@@ -10,11 +10,12 @@
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
 * ENH: `Spikes` `.sort()` method now exposes `inplace` argument to allow for sorting on a copy of the object (this can be also easily done by using
 `spk.copy().sort()`)
-ENH: better error message when the format passed to `pylabianca.io.read_osort()` does not match the data
-ENH: added better input validation to `SpikeEpochs` to avoid silly errors
+* ENH: better error message when the format passed to `pylabianca.io.read_osort()` does not match the data
+* ENH: added better input validation to `SpikeEpochs` to avoid silly errors
+* ENH: when adding or modifying `.cellinfo` it is now verified to have correct format and length
 
 
-* DOC: added dosctring to `pylabianca.stats.permutation_test()`
+* DOC: added docstring to `pylabianca.stats.permutation_test()`
 
 
 * FIX: allow to `.drop_cells()` using cell names, not only indices
