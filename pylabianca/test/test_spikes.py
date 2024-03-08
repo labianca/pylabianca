@@ -13,11 +13,11 @@ download_test_data()
 data_dir = get_data_path()
 
 
-def check_input_validation():
+def test_input_validation():
     tri = 'abc'
     times = [np.random.random(len(tri[0]) + 3),
              np.random.random(len(tri[1]) + 2)]
-    times = [t.tolist() for r in times]
+    times = [t.tolist() for t in times]
 
     msg = 'Both time and trial have to be lists or object '
     with pytest.raises(ValueError, match=msg):
