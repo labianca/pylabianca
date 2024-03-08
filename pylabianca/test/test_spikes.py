@@ -42,6 +42,27 @@ def test_input_validation():
     with pytest.raises(ValueError, match=msg):
         pln.SpikeEpochs(times2, tri)
 
+    # adding cellinfo to Spikes
+    spk = create_random_spikes(n_cells=4)
+
+    cellinfo = pd.DataFrame({'name': list('abcd'),
+                            'channel': np.random.randint(20, 120, size=4),
+                            'cluster': np.random.randint(100, 1_000, size=4)})
+
+    # make sure we get error if the cellinfo df is too short
+    msg = 'Number of rows in cellinfo has to be equal'
+    with pytest.raises(ValueError, match=msg):
+        spk.cellinfo = cellinfo.iloc[:2, :]
+
+    # if the indexing does not match cell_names indices - warning and
+    # re-indexing
+    cellinfo2 = cellinfo.iloc[[0, 2, 3, 1], :]
+    msg = 'cellinfo index does not match cell indices'
+    with pytest.warns(UserWarning, match=msg):
+        spk.cellinfo = cellinfo2
+
+    assert not (spk.cellinfo.index == cellinfo2.index).all()
+
 
 def create_fake_spikes():
     times = [[-0.3, -0.1, 0.025, 0.11, 0.22, 0.25, 0.4,
