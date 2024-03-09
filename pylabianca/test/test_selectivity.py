@@ -67,8 +67,21 @@ def test_selectivity_continuous():
     for key in results.keys():
         assert all([coo in results[key].coords for coo in cellinfo.columns])
 
-    # test also in time
-    # ...
+    # test also in time with two conditions
+    spk = pln.utils.create_random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
+
+    # add metadata
+    spk.metadata = pd.DataFrame(
+        {'cond': np.concatenate([np.ones(25), np.ones(25) * 2])}
+    )
+    fr = spk.spike_density(fwhm=0.2, sfreq=100.)
+
+    # %%
+    sel = pln.selectivity.compute_selectivity_continuous(
+        fr, compare='cond', n_jobs=2)
+    assert np.abs(np.abs(sel['thresh']).mean() - 2).item() < 0.05
+    assert sel['stat'].shape[-1] == fr.shape[-1]
+    assert sel['stat'].shape[0] == fr.shape[0]
 
 
 def test_cluster_based_selectivity():
