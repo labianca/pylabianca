@@ -202,7 +202,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         data=results['stat'], dims=dims[1:], coords=coords, name='t value')
 
     # thresh
-    if results['thresh'].shape[0] == 2:
+    if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
         # two-tail thresholds
         results['thresh'] = np.stack(results['thresh'], axis=0)
         dims2 = ['tail'] + dims[1:]
