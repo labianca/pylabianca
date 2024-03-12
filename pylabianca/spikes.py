@@ -601,19 +601,22 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
 
     for epo_idx in range(this_epo, n_epochs):
         # find spikes that fit within the epoch
-        first_idx = (timestamps[t_idx:] > (
-            event_times[epo_idx] + tmin)).argmax() + t_idx
-        msk = timestamps[first_idx:] < (event_times[epo_idx] + tmax)
+        above_lower = timestamps[t_idx:] > (event_times[epo_idx] + tmin)
+        # first_idx = above_lower.argmax() + t_idx
+        first_idx = np.where(above_lower)[0]
+        if len(first_idx) > 0:
+            first_idx = first_idx[0] + t_idx
+            msk = timestamps[first_idx:] < (event_times[epo_idx] + tmax)
 
-        # select these spikes and center wrt event time
-        tms = timestamps[first_idx:][msk] - event_times[epo_idx]
-        if len(tms) > 0:
-            tri = np.ones(len(tms), dtype='int') * epo_idx
-            trial.append(tri)
-            time.append(tms)
+            # select these spikes and center wrt event time
+            tms = timestamps[first_idx:][msk] - event_times[epo_idx]
+            if len(tms) > 0:
+                tri = np.ones(len(tms), dtype='int') * epo_idx
+                trial.append(tri)
+                time.append(tms)
 
-            idx.append(np.where(msk)[0] + first_idx)
-        t_idx = first_idx
+                idx.append(np.where(msk)[0] + first_idx)
+            t_idx = first_idx
 
     if len(trial) > 0:
         trial = np.concatenate(trial)
