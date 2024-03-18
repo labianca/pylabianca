@@ -19,12 +19,12 @@
 
 
 * FIX: allow to `.drop_cells()` using cell names, not only indices
-* FIX: `Spikes` `.sort()` method now raises error when using `Spikes` with empty `.cellinfo` attribute or when the attribute does not contain a pandas DataFrame.
+* FIX: `Spikes` `.sort()` method now raises error when using `Spikes` with empty `.cellinfo` attribute or when the attribute does not contain a pandas DataFrame.  
 * FIX: make sure `.n_trials` `SpikeEpochs` attribute is int
 * FIX: fix calculation of the time vector in spike rate calculation - in some cases the firing rate array had one less element than the time vector, because they were calculated independently (this was due to floating point arithmetic) and lead to an error when constructing xarray DataArray.
-FIX: avoid error when one-tail test (ANOVA) is used in `pylabianca.selectivity.compute_selectivity_continuous()` - previously the function assumed that always two-tail thresholds are returned
-FIX: make sure cellinfo columns inherited by firing rate xarray survive through `pylabianca.selectivity.compute_selectivity_continuous()`
-FIX: fix error when no spikes were present in fixed time window in `pylabianca.spike_rate._compute_spike_rate_fixed()` used when `step=False` in `.spike_rate()` method of `SpikeEpochs`
+* FIX: avoid error when one-tail test (ANOVA) is used in `pylabianca.selectivity.compute_selectivity_continuous()` - previously the function assumed that always two-tail thresholds are returned
+* FIX: make sure cellinfo columns inherited by firing rate xarray survive through `pylabianca.selectivity.compute_selectivity_continuous()`
+* FIX: fix error when no spikes were present in fixed time window in `pylabianca.spike_rate._compute_spike_rate_fixed()` used when `step=False` in `.spike_rate()` method of `SpikeEpochs`
 
 
 ## Version 0.2
