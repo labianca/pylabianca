@@ -49,7 +49,7 @@ The data variable is a structure with the follwing fields:
 
 This format uses one file per lead (microelectrode), so a path to folder (not file) is needed to read multiple channels.  
 This format can be read by `pylabianca.io.read_osort(path_to_folder, format='standard')`.  
-[FIX - add more info about reading only some channels, reading vs not reading waveforms etc.]
+This function can be used to read only some of the channels, reading vs not reading waveforms etc. - for more details see the docstring.  
 
 ### "mm" format
 Slightly modified and cleaned up variant of the Osort output format.  
@@ -63,7 +63,7 @@ The data variable is a structure with the follwing fields:
 
 This format uses only one file per sorting (not one per lead/microchannel as in Osort "standard" format).  
 This format can be read by `pylabianca.io.read_osort(path_to_file, format='mm')`.  
-[FIX - add more info about reading only some channels, reading vs not reading waveforms etc.]
+This function can be used to read only some of the channels, reading vs not reading waveforms etc. - for more details see the docstring.  
 
 ## Combinato output data
 [FIX - add more info here]  
