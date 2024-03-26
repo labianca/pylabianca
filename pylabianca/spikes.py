@@ -10,50 +10,51 @@ from .spike_distance import compare_spike_times, xcorr_hist
 
 
 class SpikeEpochs():
+    """Class for convenient storage, analysis and visualization of epoched
+    spikes data.
+
+    Parameters
+    ----------
+    time : list-like of np.ndarray
+        List of arrays, where each array contains spike times for one
+        cell (neuron). The times are centered with respect to epoch onset
+        (for example stimulus presentation).
+    trial : list-like of np.ndarray
+        List of arrays, where each array contains trial membership of
+        spikes from respective ``time`` array for one cell (neuron). The
+        trial indices are zero-based integers.
+    time_limits : list-like | None
+        Optional. Two-element array with epoch time limits with respect to
+        epoch-centering event. The limits have to be in seconds.
+        For example ``np.array([-0.5, 1.5])`` means from 0.5 seconds
+        before the event up to 1.5 seconds after the event. The default
+        (``None``) infers time limits from min and max spike times.
+    n_trials : int | None
+        Number of trials. Optional, if the number of trials can't be
+        inferred from the ``trials`` argument (for example when none of the
+        cells fire for the last few trials).
+    waveform : list of numpy ndarrays | None
+        List of spikes x samples waveform arrays.
+    waveform_time : np.ndarray | None
+        One-dimensional array of time values in milliseconds for
+        consecutive samples of the waveform.
+    cell_names : list of str | None
+        String identifiers of cells. First string corresponds to first
+        cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
+        Optional, the default (``None``) names the first cell
+        ``'cell000'``, the second cell ``'cell001'`` and so on.
+    metadata : pandas.DataFrame
+        DataFrame with trial-level metadata.
+    cellinfo : pandas.DataFrame
+        DataFrame with additional information about the cells.
+    timestamps : list-like of np.ndarray | None
+        Original spike timestamps. Should be in the same format as ``time``
+        and ``trial`` arguments.
+    """
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  waveform=None, waveform_time=None, cell_names=None,
                  metadata=None, cellinfo=None, timestamps=None):
-        '''Create ``SpikeEpochs`` object for convenient storage, analysis and
-        visualization of spikes data.
 
-        Parameters
-        ----------
-        time : listlike of np.ndarray
-            List of arrays, where each array contains spike times for one
-            cell (neuron). The times are centered with respect to epoch onset
-            (for example stimulus presentation).
-        trial : listlike of np.ndarray
-            List of arrays, where each array contains trial membership of
-            spikes from respective ``time`` array for one cell (neuron). The
-            trial indices are zero-based integers.
-        time_limits : listlike | None
-            Optional. Two-element array with epoch time limits with respect to
-            epoch-centering event. The limits have to be in seconds.
-            For example ``np.array([-0.5, 1.5])`` means from 0.5 seconds
-            before the event up to 1.5 seconds after the event. The default
-            (``None``) infers time limits from min and max spike times.
-        n_trials : int | None
-            Number of trials. Optional, if the number of trials can't be
-            inferred from the ``trials`` argument (for example when none of the
-            cells fire for the last few trials).
-        waveform : list of numpy ndarrays | None
-            List of spikes x samples waveform arrays.
-        waveform_time : np.ndarray | None
-            One-dimensional array of time values in milliseconds for
-            consecutive samples of the waveform.
-        cell_names : list of str | None
-            String identifiers of cells. First string corresponds to first
-            cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
-            Optional, the default (``None``) names the first cell
-            ``'cell000'``, the second cell ``'cell001'`` and so on.
-        metadata : pandas.DataFrame
-            DataFrame with trial-level metadata.
-        cellinfo : pandas.DataFrame
-            DataFrame with additional information about the cells.
-        timestamps : listlike of np.ndarray | None
-            Original spike timestamps. Should be in the same format as ``time``
-            and ``trial`` arguments.
-        '''
         _validate_spike_epochs_input(time, trial)
 
         self.time = time
@@ -676,33 +677,34 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 
 
 class Spikes(object):
+    """Class for convenient storage, analysis and visualization of raw
+    spikes data.
+
+    Parameters
+    ----------
+    timestamps : list-like of np.ndarray
+        List of arrays, where each array contains spike timestamps for one
+        cell (neuron).
+    sfreq : float
+        Sampling frequency of the timestamps. For example in Neuralynx
+        system one timestamp occurs once per microsecond, so the sampling
+        frequency is one million (``1e6``).
+    cell_names : list of str | None
+        String identifiers of cells. First string corresponds to first
+        cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
+        Optional, the default (``None``) names the first cell
+        ``'cell000'``, the second cell ``'cell001'`` and so on.
+    cellinfo : pandas.DataFrame | None
+        Additional cell information.
+    waveform : list of np.ndarray
+        List of spikes x samples waveform arrays.
+    waveform_time : np.ndarray | None
+        One-dimensional array of time values in milliseconds for
+        consecutive samples of the waveform.
+    """
     def __init__(self, timestamps, sfreq, cell_names=None,
                  cellinfo=None, waveform=None, waveform_time=None):
-        '''Create ``Spikes`` object for convenient storage, analysis and
-        visualization of spikes data.
 
-        Parameters
-        ----------
-        timestamps : listlike of np.ndarray
-            List of arrays, where each array contains spike timestamps for one
-            cell (neuron).
-        sfreq : float
-            Sampling frequency of the timestamps. For example in Neuralynx
-            system one timestamp occurs once per microsecond, so the sampling
-            frequency is one million (``1e6``).
-        cell_names : list of str | None
-            String identifiers of cells. First string corresponds to first
-            cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
-            Optional, the default (``None``) names the first cell
-            ``'cell000'``, the second cell ``'cell001'`` and so on.
-        cellinfo : pandas.DataFrame | None
-            Additional cell information.
-        waveform : list of np.ndarray
-            List of spikes x samples waveform arrays.
-        waveform_time : np.ndarray | None
-            One-dimensional array of time values in milliseconds for
-            consecutive samples of the waveform.
-        '''
         n_cells = len(timestamps)
         self.timestamps = timestamps
         self.sfreq = sfreq
