@@ -66,7 +66,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     ----------
     times : numpy array | str
         Vector of time points for which spike rate was calculated (middle
-        timepoints for the time window used). Can also be a string
+        time points for the time window used). Can also be a string
         describing the time window if static window was used.
     frate : numpy array
         Numpy array with firing rate, with the following dimensions:
@@ -518,14 +518,14 @@ def _realign_waveforms(waveforms, pad_nans=False, reject=True):
         if diff_idx == 0:
             new_waveforms[spk_msk, :] = waveforms[spk_msk, :]
         elif diff_idx > 0:
-            # indiv peak too early
+            # individual peak too early
             new_waveforms[spk_msk, diff_idx:] = waveforms[spk_msk, :-diff_idx]
 
             if not pad_nans:
                 new_waveforms[spk_msk, :diff_idx] = (
                     waveforms[spk_msk, [0]][:, None])
         else:
-            # indiv peak too late
+            # individual peak too late
             new_waveforms[spk_msk, :diff_idx] = waveforms[spk_msk, -diff_idx:]
 
             if not pad_nans:
@@ -876,9 +876,9 @@ def xr_find_nested_dims(arr, dim_name):
     names = list()
     coords = list(arr.coords)
     coords.remove(dim_name)
-    subdim = (dim_name,)
+    sub_dim = (dim_name,)
     for coord in coords:
-        if arr.coords[coord].dims == subdim:
+        if arr.coords[coord].dims == sub_dim:
             names.append(coord)
 
     return names
