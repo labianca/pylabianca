@@ -796,15 +796,17 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
         return Spikes(times, **args)
 
 
+def is_list_or_object_array(obj):
+    return (isinstance(obj, list)
+            or (isinstance(obj, np.ndarray)
+                and np.issubdtype(obj.dtype, np.object_))
+    )
+
+
 def _validate_spike_epochs_input(time, trial):
     '''Validate input for SpikeEpochs object.'''
 
     # both time and trial have to be lists ...
-    def is_list_or_object_array(obj):
-        return (isinstance(obj, list)
-                or (isinstance(obj, np.ndarray)
-                    and np.issubdtype(obj.dtype, np.object_))
-        )
 
     if not (is_list_or_object_array(time) and is_list_or_object_array(trial)):
         raise ValueError('Both time and trial have to be lists or object '
@@ -830,6 +832,28 @@ def _validate_spike_epochs_input(time, trial):
                 and cell_trial.min() >= 0):
             raise ValueError(
                 'Trial list of arrays must contain non-negative integers.')
+
+
+def _validate_spikes_input(times):
+    '''Validate input for SpikeEpochs object.'''
+
+    # both time and trial have to be lists ...
+
+    if not is_list_or_object_array(times):
+        raise ValueError('Timestamps have to be lists or object arrays.')
+
+    # ... and all elements have to be numpy arrays
+    if not all([isinstance(cell_times, np.ndarray) for cell_times in times]):
+        raise ValueError('All elements of timestamp list must be numpy '
+                         'arrays.')
+
+    # timestamp arrays have to contain non-negative integers
+    for cell_times in times:
+        if not (np.issubdtype(cell_times.dtype, np.integer)
+                and cell_times.min() >= 0):
+            raise ValueError(
+                'Timestamp lists of arrays must contain non-negative '
+                'integers.')
 
 
 def _validate_cellinfo(spk, cellinfo):

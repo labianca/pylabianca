@@ -4,7 +4,7 @@ import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _get_trial_boundaries, _validate_spike_epochs_input,
-                    _validate_cellinfo)
+                    _validate_spikes_input, _validate_cellinfo)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import compare_spike_times, xcorr_hist
 
@@ -704,7 +704,7 @@ class Spikes(object):
     """
     def __init__(self, timestamps, sfreq, cell_names=None,
                  cellinfo=None, waveform=None, waveform_time=None):
-
+        _validate_spikes_input(timestamps)
         n_cells = len(timestamps)
         self.timestamps = timestamps
         self.sfreq = sfreq
