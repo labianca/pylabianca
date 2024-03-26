@@ -117,11 +117,11 @@ class SpikeEpochs():
         return len(self.time)
 
     def pick_cells(self, picks=None, query=None):
-        '''Select cells by name or index. Operates in-place.
+        '''Select cells by name, index or query. Operates in-place.
 
         Parameters
         ----------
-        picks : int | str | listlike of int | list of str | None
+        picks : int | str | list-like of int | list of str | None
             Cell names or indices to select.
         query : str | None
             Query for ``.cellinfo`` - to pick cells by their properties, not
@@ -130,11 +130,11 @@ class SpikeEpochs():
         return _pick_cells(self, picks=picks, query=query)
 
     def drop_cells(self, picks):
-        '''Drop cells by index. Operates in-place.
+        '''Drop cells by name of index. Operates in-place.
 
         Parameters
         ----------
-        picks : int | str | listlike of int
+        picks : int | str | list-like of int
             Cell  indices to drop.
         '''
         return _drop_cells(self, picks)
@@ -182,7 +182,7 @@ class SpikeEpochs():
 
         Parameters
         ----------
-        picks : int | listlike of int | None
+        picks : int | list-like of int | None
             The neuron index to use in the calculations. The default (``None``)
             uses all cells.
         winlen : float
@@ -212,7 +212,7 @@ class SpikeEpochs():
 
         Parameters
         ----------
-        picks : int | listlike of int | None
+        picks : int | list-like of int | None
             The neuron indices to use in the calculations. The default
             (``None``) uses all cells.
         winlen : float
@@ -253,22 +253,22 @@ class SpikeEpochs():
         Parameters
         ----------
         picks : int | str | list-like of int | list-like of str | None
-            List of cell indices or names to perform cross- and auto- correlations
-            for. If ``picks2`` is ``None`` then all combinations of cells from
-            ``picks`` will be used.
+            List of cell indices or names to perform cross- and auto-
+            correlations for. If ``picks2`` is ``None`` then all combinations
+            of cells from ``picks`` will be used.
         picks2 : int | str | list-like of int | list-like of str | None
             List of cell indices or names to perform cross-correlations with.
             ``picks2`` is used as pairs for ``picks``. The interaction between
             ``picks`` and ``picks2`` is the following:
-            * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
-                combinations of pairs.
-            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
-                pairs are constructed from successive elements of ``picks`` and
-                ``picks2``. For example, if ``picks = [0, 1, 2]`` and
-                ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+            * if ``picks2`` is ``None`` only ``picks`` is consider to construct
+                all combinations of pairs.
+            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)``
+                then pairs are constructed from successive elements of
+                ``picks`` and ``picks2``. For example, if ``picks = [0, 1, 2]``
+                and ``picks2 = [3, 4, 5]`` then pairs will be constructed as
                 ``[(0, 3), (1, 4), (2, 5)]``.
-            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
-                all combinations of ``picks`` and ``picks2`` are used.
+            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)``
+                then all combinations of ``picks`` and ``picks2`` are used.
         sfreq : float
             Sampling frequency of the bins. The bin width will be ``1 / sfreq``
             seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
@@ -276,11 +276,12 @@ class SpikeEpochs():
             Maximum lag in seconds. Used only when ``bins is None``. Defaults
             to ``0.2``.
         bins : numpy array | None
-            Array representing edges of the histogram bins. If ``None`` (default)
-            the bins are constructed based on ``sfreq`` and ``max_lag``.
+            Array representing edges of the histogram bins. If ``None``
+            (default) the bins are constructed based on ``sfreq`` and
+            ``max_lag``.
         gauss_fwhm : float | None
             Full-width at half maximum of the gaussian kernel to convolve the
-            cross-correlation histograms with. Defaults to ``None`` which ommits
+            cross-correlation histograms with. Defaults to ``None`` which omits
             convolution.
 
         Returns
@@ -337,7 +338,6 @@ class SpikeEpochs():
     def cellinfo(self, df):
         self._cellinfo = _validate_cellinfo(self, df)
 
-    # TODO:
     def to_neo(self, cell_idx, join=False, sep_time=0.):
         '''Turn spikes of given cell into neo.SpikeTrain format.
 
@@ -373,10 +373,10 @@ class SpikeEpochs():
             trials = range(self.n_trials)
             for tri in trials:
                 times = self.time[cell_idx][self.trial[cell_idx] == tri]
-                spiketrain = neo.SpikeTrain(
+                spike_train = neo.SpikeTrain(
                     times * s, t_stop=self.time_limits[1],
                     t_start=self.time_limits[0])
-                spikes.append(spiketrain)
+                spikes.append(spike_train)
         elif join == 'concat':
             trial_len = self.time_limits[1] - self.time_limits[0]
             full_sep = trial_len + sep_time
@@ -411,7 +411,7 @@ class SpikeEpochs():
         times : numpy array
             1d array of time labels.
         trials_raw : numpy array
-            ``trials x cells x timesamples`` array with binary spike
+            ``trials x cells x time samples`` array with binary spike
             information.
         '''
         return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
@@ -649,7 +649,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     times : numpy array
         1d array of time labels.
     trials_raw : numpy array
-        ``trials x cells x timesamples`` array with binary spike information.
+        ``trials x cells x time samples`` array with binary spike information.
     '''
     picks = _deal_with_picks(spk, picks)
     sample_time = 1 / sfreq
@@ -815,7 +815,7 @@ class Spikes(object):
 
         Parameters
         ----------
-        picks : int | str | listlike of int | list of str | None
+        picks : int | str | list-like of int | list of str | None
             Cell names or indices to select.
         query : str | None
             Query for ``.cellinfo`` - to pick cells by their properties, not
@@ -833,7 +833,7 @@ class Spikes(object):
 
         Parameters
         ----------
-        picks : int | str | listlike of int
+        picks : int | str | list-like of int
             Cell  indices to drop.
         '''
         return _drop_cells(self, picks)
@@ -1046,22 +1046,22 @@ class Spikes(object):
         Parameters
         ----------
         picks : int | str | list-like of int | list-like of str | None
-            List of cell indices or names to perform cross- and auto- correlations
-            for. If ``picks2`` is ``None`` then all combinations of cells from
-            ``picks`` will be used.
+            List of cell indices or names to perform cross- and auto-
+            correlations for. If ``picks2`` is ``None`` then all combinations
+            of cells from ``picks`` will be used.
         picks2 : int | str | list-like of int | list-like of str | None
             List of cell indices or names to perform cross-correlations with.
             ``picks2`` is used as pairs for ``picks``. The interaction between
             ``picks`` and ``picks2`` is the following:
-            * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
-                combinations of pairs.
-            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
-                pairs are constructed from successive elements of ``picks`` and
-                ``picks2``. For example, if ``picks = [0, 1, 2]`` and
-                ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+            * if ``picks2`` is ``None`` only ``picks`` is consider to construct
+                all combinations of pairs.
+            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)``
+                then pairs are constructed from successive elements of
+                ``picks`` and ``picks2``. For example, if ``picks = [0, 1, 2]``
+                and ``picks2 = [3, 4, 5]`` then pairs will be constructed as
                 ``[(0, 3), (1, 4), (2, 5)]``.
-            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
-                all combinations of ``picks`` and ``picks2`` are used.
+            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)``
+                then all combinations of ``picks`` and ``picks2`` are used.
         sfreq : float
             Sampling frequency of the bins. The bin width will be ``1 / sfreq``
             seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
@@ -1069,17 +1069,18 @@ class Spikes(object):
             Maximum lag in seconds. Used only when ``bins is None``. Defaults
             to ``0.2``.
         bins : numpy array | None
-            Array representing edges of the histogram bins. If ``None`` (default)
-            the bins are constructed based on ``sfreq`` and ``max_lag``.
+            Array representing edges of the histogram bins. If ``None``
+            (default) the bins are constructed based on ``sfreq`` and
+            ``max_lag``.
         gauss_fwhm : float | None
             Full-width at half maximum of the gaussian kernel to convolve the
-            cross-correlation histograms with. Defaults to ``None`` which ommits
+            cross-correlation histograms with. Defaults to ``None`` which omits
             convolution.
         backend : str
-            Backend to use for the computation. Can be ``'numpy'``, ``'numba'`` or
-            ``'auto'``. Defaults to ``'auto'`` which will use ``'numba'`` if
-            numba is available (and number of spikes is > 1000 in any of the cells
-            picked) and ``'numpy'`` otherwise.
+            Backend to use for the computation. Can be ``'numpy'``, ``'numba'``
+            or ``'auto'``. Defaults to ``'auto'`` which will use ``'numba'`` if
+            numba is available (and number of spikes is > 1000 in any of the
+            cells picked) and ``'numpy'`` otherwise.
 
         Returns
         -------
@@ -1110,17 +1111,17 @@ def _check_waveforms(times, waveform, waveform_time):
     if waveform_time is not None:
         n_times = len(waveform_time)
         check_waveforms = np.where(~np.array(ignore_waveforms))[0]
-        n_times_wvfm_arr = [waveform[ix].shape[1]
-                            for ix in check_waveforms]
+        n_times_waveform_arr = [waveform[ix].shape[1]
+                                for ix in check_waveforms]
 
         if n_waveforms > 1:
             msg = ('If `waveform_time` is passed, waveforms for each unit '
                    'need to have the same number of samples (second dimension'
                    ').')
-            assert all([n_times_wvfm_arr[0] == x
-                        for x in n_times_wvfm_arr[1:]]), msg
+            assert all([n_times_waveform_arr[0] == x
+                        for x in n_times_waveform_arr[1:]]), msg
 
-        if not n_times == n_times_wvfm_arr[0]:
+        if not n_times == n_times_waveform_arr[0]:
             msg = ('Length of `waveform_times` and the second dimension of '
                    '`waveform` must be equal.')
             raise RuntimeError(msg)
@@ -1133,7 +1134,7 @@ def _pick_cells(spk, picks=None, query=None):
     ----------
     spk : Spikes | SpikeEpochs
         Spikes object to select cells from.
-    picks : int | str | listlike of int | list of str | None
+    picks : int | str | list-like of int | list of str | None
         Cell names or indices to select.
     query : str | None
         Query for ``.cellinfo`` - to pick cells by their properties, not
@@ -1173,7 +1174,7 @@ def _drop_cells(spk, picks):
 
     Parameters
     ----------
-    picks : int | str | listlike of int
+    picks : int | str | list-like of int
         Cell  indices to drop.
     '''
     all_idx = np.arange(spk.n_units())
