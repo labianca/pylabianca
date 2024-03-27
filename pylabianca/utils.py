@@ -66,7 +66,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     ----------
     times : numpy array | str
         Vector of time points for which spike rate was calculated (middle
-        timepoints for the time window used). Can also be a string
+        time points for the time window used). Can also be a string
         describing the time window if static window was used.
     frate : numpy array
         Numpy array with firing rate, with the following dimensions:
@@ -518,14 +518,14 @@ def _realign_waveforms(waveforms, pad_nans=False, reject=True):
         if diff_idx == 0:
             new_waveforms[spk_msk, :] = waveforms[spk_msk, :]
         elif diff_idx > 0:
-            # indiv peak too early
+            # individual peak too early
             new_waveforms[spk_msk, diff_idx:] = waveforms[spk_msk, :-diff_idx]
 
             if not pad_nans:
                 new_waveforms[spk_msk, :diff_idx] = (
                     waveforms[spk_msk, [0]][:, None])
         else:
-            # indiv peak too late
+            # individual peak too late
             new_waveforms[spk_msk, :diff_idx] = waveforms[spk_msk, -diff_idx:]
 
             if not pad_nans:
@@ -796,15 +796,17 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
         return Spikes(times, **args)
 
 
+def is_list_or_object_array(obj):
+    return (isinstance(obj, list)
+            or (isinstance(obj, np.ndarray)
+                and np.issubdtype(obj.dtype, np.object_))
+    )
+
+
 def _validate_spike_epochs_input(time, trial):
     '''Validate input for SpikeEpochs object.'''
 
     # both time and trial have to be lists ...
-    def is_list_or_object_array(obj):
-        return (isinstance(obj, list)
-                or (isinstance(obj, np.ndarray)
-                    and np.issubdtype(obj.dtype, np.object_))
-        )
 
     if not (is_list_or_object_array(time) and is_list_or_object_array(trial)):
         raise ValueError('Both time and trial have to be lists or object '
@@ -832,6 +834,28 @@ def _validate_spike_epochs_input(time, trial):
                 'Trial list of arrays must contain non-negative integers.')
 
 
+def _validate_spikes_input(times):
+    '''Validate input for SpikeEpochs object.'''
+
+    # both time and trial have to be lists ...
+
+    if not is_list_or_object_array(times):
+        raise ValueError('Timestamps have to be lists or object arrays.')
+
+    # ... and all elements have to be numpy arrays
+    if not all([isinstance(cell_times, np.ndarray) for cell_times in times]):
+        raise ValueError('All elements of timestamp list must be numpy '
+                         'arrays.')
+
+    # timestamp arrays have to contain non-negative integers
+    for cell_times in times:
+        if not (np.issubdtype(cell_times.dtype, np.integer)
+                and cell_times.min() >= 0):
+            raise ValueError(
+                'Timestamp lists of arrays must contain non-negative '
+                'integers.')
+
+
 def _validate_cellinfo(spk, cellinfo):
     '''Validate cellinfo input for SpikeEpochs object.'''
     if cellinfo is not None:
@@ -852,9 +876,9 @@ def xr_find_nested_dims(arr, dim_name):
     names = list()
     coords = list(arr.coords)
     coords.remove(dim_name)
-    subdim = (dim_name,)
+    sub_dim = (dim_name,)
     for coord in coords:
-        if arr.coords[coord].dims == subdim:
+        if arr.coords[coord].dims == sub_dim:
             names.append(coord)
 
     return names
