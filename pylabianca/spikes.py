@@ -707,6 +707,8 @@ class Spikes(object):
         if cell_names is None:
             cell_names = np.array(['cell{:03d}'.format(idx)
                                    for idx in range(n_cells)])
+        else:
+            assert len(cell_names) == len(timestamps)
 
         self.cell_names = cell_names
         self._cellinfo = _validate_cellinfo(self, cellinfo)
