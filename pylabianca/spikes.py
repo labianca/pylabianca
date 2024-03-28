@@ -930,8 +930,8 @@ class Spikes(object):
             Axes with the plot.
         '''
         from .viz import plot_isi
-        return plot_isi(self, picks=None, unit='ms', bins=None, min_spikes=100,
-                        max_isi=None, ax=None)
+        return plot_isi(self, picks=picks, unit=unit, bins=bins,
+                        min_spikes=min_spikes, max_isi=max_isi, ax=ax)
 
     # TODO: pad_timestamps could be thrown away if we read / store recording
     #       start for example or allow another keyword argument for recording
