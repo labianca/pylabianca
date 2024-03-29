@@ -796,11 +796,20 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
         return Spikes(times, **args)
 
 
-def is_list_or_object_array(obj):
-    return (isinstance(obj, list)
-            or (isinstance(obj, np.ndarray)
-                and np.issubdtype(obj.dtype, np.object_))
-    )
+def is_list_or_array(obj, dtype=None):
+    if isinstance(obj, list):
+        return True
+    return is_array(obj, dtype=dtype)
+
+
+def is_array(obj, dtype=None):
+    if isinstance(obj, np.ndarray):
+        if dtype is None:
+            return True
+        dtype = (dtype,) if not isinstance(dtype, tuple) else dtype
+        return any([np.issubdtype(obj.dtype, dtp) for dtp in dtype])
+    return False
+
 
 def is_list_of_non_negative_integer_arrays(this_list, error_str):
     for cell_values in this_list:
@@ -817,8 +826,8 @@ def _validate_spike_epochs_input(time, trial):
     '''Validate input for SpikeEpochs object.'''
 
     # both time and trial have to be lists ...
-
-    if not (is_list_or_object_array(time) and is_list_or_object_array(trial)):
+    if not (is_list_or_array(time, dtype=np.object_)
+            and is_list_or_array(trial, dtype=np.object_)):
         raise ValueError('Both time and trial have to be lists or object '
                          'arrays.')
 
@@ -845,7 +854,7 @@ def _validate_spikes_input(times):
     '''Validate input for SpikeEpochs object.'''
 
     # timestamps have to be lists ...
-    if not is_list_or_object_array(times):
+    if not is_list_or_array(times, dtype=np.object_):
         raise ValueError('Timestamps have to be list or object array.')
 
     # ... and all elements have to be numpy arrays
@@ -854,9 +863,10 @@ def _validate_spikes_input(times):
                          'arrays.')
 
     # timestamp arrays have to contain non-negative integers
-    error_str = 'Timestamp lists of arrays must contain non-negative integers.'
-    is_list_of_non_negative_integer_arrays(times, error_str)
-
+    error_str = 'Timestamp lists of arrays must contain integers or floats.'
+    if not all(is_array(obj, dtype=(np.integer, np.floating))
+               for obj in times):
+        raise ValueError(error_str)
 
 def _handle_cell_names(cell_names, time):
     if cell_names is None:
@@ -864,7 +874,7 @@ def _handle_cell_names(cell_names, time):
         cell_names = np.array(['cell{:03d}'.format(idx)
                                for idx in range(n_cells)])
     else:
-        if not is_list_or_object_array(cell_names):
+        if not is_list_or_array(cell_names, dtype=(np.unicode_, np.object_)):
             raise ValueError('cell_names has to be list or object array.')
         if not is_iterable_of_strings(cell_names):
             raise ValueError('All elements of cell_names have to be strings.')

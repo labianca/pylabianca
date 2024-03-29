@@ -6,7 +6,7 @@ import pytest
 import pylabianca as pln
 from pylabianca.utils import (download_test_data, get_data_path,
                               create_random_spikes)
-from pylabianca.testing import spk_epochs
+from pylabianca.testing import ft_data, spk_epochs
 
 
 download_test_data()
@@ -46,37 +46,40 @@ def test_input_validation():
 
     # Spikes
     # ------
+    sfreq = 10_000
     timestamps = 'abcd'
     msg = 'Timestamps have to be list or object array.'
     with pytest.raises(ValueError, match=msg):
-        pln.Spikes(timestamps)
+        pln.Spikes(timestamps, sfreq)
 
-    timestamps = [np.random.random(10) for _ in range(4)] + ['abcd']
+    timestamps = [np.random.rand(10) for _ in range(4)] + ['abcd']
     msg = 'All elements of timestamp list must be numpy arrays.'
     with pytest.raises(ValueError, match=msg):
-        pln.Spikes(timestamps)
+        pln.Spikes(timestamps, sfreq)
 
-    timestamps = timestamps[:-1]
-    msg = ' must contain non-negative integers.'
+    timestamps = [np.random.randint(10_000, size=10) for _ in range(4)]
+    timestamps[-1] = np.array([True, False, True, False, False])
+    msg = ' must contain integers or floats.'
     with pytest.raises(ValueError, match=msg):
-        pln.Spikes(timestamps)
+        pln.Spikes(timestamps, sfreq)
 
     # cell names
     # ----------
+    timestamps[-1] = np.random.randint(10_000, size=10)
     msg = 'cell_names has to be list or object array.'
     cell_names = 'abcde'
     with pytest.raises(ValueError, match=msg):
-        pln.Spikes(timestamps, cell_names=cell_names)
+        pln.Spikes(timestamps, sfreq, cell_names=cell_names)
 
     msg = ' have to be strings.'
     cell_names = ['a', 'b', 'c', 1]
     with pytest.raises(ValueError, match=msg):
-        pln.Spikes(timestamps, cell_names=cell_names)
+        pln.Spikes(timestamps, sfreq, cell_names=cell_names)
 
     msg = ' has to be equal '
     cell_names = ['a', 'b', 'c', 'd', 'e']
     with pytest.raises(ValueError, match=msg):
-        pln.Spikes(timestamps, cell_names=cell_names)
+        pln.Spikes(timestamps, sfreq, cell_names=cell_names)
 
     # cellinfo
     # --------
