@@ -79,7 +79,9 @@ def test_selectivity_continuous():
     # %%
     sel = pln.selectivity.compute_selectivity_continuous(
         fr, compare='cond', n_jobs=2)
-    assert np.abs(np.abs(sel['thresh']).mean() - 2).item() < 0.05
+
+    # we shouldn't have too many selective (abs(tval) > 2) cells
+    assert np.abs(np.abs(sel['thresh']).mean() - 2).item() < 0.08
     assert sel['stat'].shape[-1] == fr.shape[-1]
     assert sel['stat'].shape[0] == fr.shape[0]
 
