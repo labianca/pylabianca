@@ -139,6 +139,7 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
 
 
 # TODO: add n_jobs
+#       (use mne.parallel.parallel_func)
 # TODO: check if time is symmetric wrt 0 (in most cases it should be as epochs
 #       are constructed wrt specific event)
 # TODO: consider an exact mode where the spikes are not transformed to raw /
