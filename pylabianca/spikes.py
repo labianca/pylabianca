@@ -119,7 +119,7 @@ class SpikeEpochs():
         return _pick_cells(self, picks=picks, query=query)
 
     def drop_cells(self, picks):
-        '''Drop cells by name of index. Operates in-place.
+        '''Drop cells by name or index. Operates in-place.
 
         Parameters
         ----------
@@ -162,9 +162,6 @@ class SpikeEpochs():
         self.time_limits = [tmin, tmax]
         return self
 
-    # TODO: refactor (DRY: merge both loops into one?)
-    # TODO: better handling of numpy vs numba implementation
-    # TODO: consider adding `return_type` with `Epochs` option (mne object)
     def spike_rate(self, picks=None, winlen=0.25, step=0.01, tmin=None,
                    tmax=None, backend='numpy'):
         '''Calculate spike rate with a running window.
@@ -814,7 +811,7 @@ class Spikes(object):
         return _pick_cells(self, picks=picks, query=query)
 
     def drop_cells(self, picks):
-        '''Drop cells by index. Operates in-place.
+        '''Drop cells by name or index. Operates in-place.
 
         Parameters
         ----------
@@ -1155,7 +1152,7 @@ def _pick_cells(spk, picks=None, query=None):
 
 
 def _drop_cells(spk, picks):
-    '''Drop cells by index. Operates in-place.
+    '''Drop cells by name or index. Operates in-place.
 
     Parameters
     ----------
