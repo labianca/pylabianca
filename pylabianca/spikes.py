@@ -4,7 +4,8 @@ import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _get_trial_boundaries, _validate_spike_epochs_input,
-                    _validate_spikes_input, _validate_cellinfo)
+                    _validate_spikes_input, _validate_cellinfo,
+                    _handle_cell_names)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import compare_spike_times, xcorr_hist
 
@@ -69,19 +70,7 @@ class SpikeEpochs():
         if n_trials is None:
             n_trials = int(max(max(tri) + 1 if len(tri) > 0 else 0
                            for tri in self.trial))
-        if cell_names is None:
-            n_cells = len(time)
-            cell_names = np.array(['cell{:03d}'.format(idx)
-                                   for idx in range(n_cells)])
-        else:
-            cell_names = np.asarray(cell_names)
-            assert len(cell_names) == len(time)
-
-        if metadata is not None:
-            assert isinstance(metadata, pd.DataFrame)
-            assert metadata.shape[0] == n_trials
-
-        n_cells = len(self.time)
+        cell_names = _handle_cell_names(cell_names, time)
         self._cellinfo = _validate_cellinfo(self, cellinfo)
 
         if waveform is not None:
@@ -709,11 +698,7 @@ class Spikes(object):
         self.timestamps = timestamps
         self.sfreq = sfreq
 
-        if cell_names is None:
-            cell_names = np.array(['cell{:03d}'.format(idx)
-                                   for idx in range(n_cells)])
-
-        self.cell_names = cell_names
+        self.cell_names = _handle_cell_names(cell_names, timestamps)
         self._cellinfo = _validate_cellinfo(self, cellinfo)
 
         if waveform is not None:
