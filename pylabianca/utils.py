@@ -802,6 +802,16 @@ def is_list_or_object_array(obj):
                 and np.issubdtype(obj.dtype, np.object_))
     )
 
+def is_list_of_non_negative_integer_arrays(this_list, error_str):
+    for cell_values in this_list:
+        if not (np.issubdtype(cell_values.dtype, np.integer)
+                and cell_values.min() >= 0):
+            raise ValueError(error_str)
+
+
+def is_iterable_of_strings(this_list):
+    return all([isinstance(x, str) for x in this_list])
+
 
 def _validate_spike_epochs_input(time, trial):
     '''Validate input for SpikeEpochs object.'''
@@ -827,20 +837,16 @@ def _validate_spike_epochs_input(time, trial):
         raise ValueError('All time and trial arrays must have the same length.')
 
     # trial arrays have to contain non-negative integers
-    for cell_trial in trial:
-        if not (np.issubdtype(cell_trial.dtype, np.integer)
-                and cell_trial.min() >= 0):
-            raise ValueError(
-                'Trial list of arrays must contain non-negative integers.')
+    error_str = 'Trial list of arrays must contain non-negative integers.'
+    is_list_of_non_negative_integer_arrays(trial, error_str)
 
 
 def _validate_spikes_input(times):
     '''Validate input for SpikeEpochs object.'''
 
-    # both time and trial have to be lists ...
-
+    # timestamps have to be lists ...
     if not is_list_or_object_array(times):
-        raise ValueError('Timestamps have to be lists or object arrays.')
+        raise ValueError('Timestamps have to be list or object array.')
 
     # ... and all elements have to be numpy arrays
     if not all([isinstance(cell_times, np.ndarray) for cell_times in times]):
@@ -848,12 +854,26 @@ def _validate_spikes_input(times):
                          'arrays.')
 
     # timestamp arrays have to contain non-negative integers
-    for cell_times in times:
-        if not (np.issubdtype(cell_times.dtype, np.integer)
-                and cell_times.min() >= 0):
-            raise ValueError(
-                'Timestamp lists of arrays must contain non-negative '
-                'integers.')
+    error_str = 'Timestamp lists of arrays must contain non-negative integers.'
+    is_list_of_non_negative_integer_arrays(times, error_str)
+
+
+def _handle_cell_names(cell_names, time):
+    if cell_names is None:
+        n_cells = len(time)
+        cell_names = np.array(['cell{:03d}'.format(idx)
+                               for idx in range(n_cells)])
+    else:
+        if not is_list_or_object_array(cell_names):
+            raise ValueError('cell_names has to be list or object array.')
+        if not is_iterable_of_strings(cell_names):
+            raise ValueError('All elements of cell_names have to be strings.')
+        cell_names = np.asarray(cell_names)
+        equal_len = len(cell_names) == len(time)
+        if not equal_len:
+            raise ValueError('Length of cell_names has to be equal to the '
+                             'length of list of time arrays.')
+    return cell_names
 
 
 def _validate_cellinfo(spk, cellinfo):
