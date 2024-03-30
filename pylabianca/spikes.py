@@ -552,7 +552,7 @@ class SpikeEpochs():
         return out
 
 
-def _epoch_spikes(timestamps, event_times, tmin, tmax):
+def _epoch_spikes(timestamps, event_times, tmin, tmax, return_idx=False):
     '''Epoch spike data with respect to event timestamps.
 
     Helper function that epochs spikes for a single neuron.
@@ -580,35 +580,37 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
     '''
     trial = list()
     time = list()
-    idx = list()
+    idx = list() if return_idx else None
 
     t_idx = 0
+    n_spikes = len(timestamps)
     n_epochs = event_times.shape[0]
     this_epo = (timestamps[t_idx] < (event_times + tmax)).argmax()
 
     for epo_idx in range(this_epo, n_epochs):
         # find spikes that fit within the epoch
-        above_lower = timestamps[t_idx:] > (event_times[epo_idx] + tmin)
-        # first_idx = above_lower.argmax() + t_idx
-        first_idx = np.where(above_lower)[0]
-        if len(first_idx) > 0:
-            first_idx = first_idx[0] + t_idx
-            msk = timestamps[first_idx:] < (event_times[epo_idx] + tmax)
+        first_idx, last_idx = np.searchsorted(
+            timestamps[t_idx:],
+            [event_times[epo_idx] + tmin, event_times[epo_idx] + tmax]
+        ) + t_idx
 
+        if first_idx < n_spikes:
             # select these spikes and center wrt event time
-            tms = timestamps[first_idx:][msk] - event_times[epo_idx]
+            tms = timestamps[first_idx:last_idx] - event_times[epo_idx]
             if len(tms) > 0:
                 tri = np.ones(len(tms), dtype='int') * epo_idx
                 trial.append(tri)
                 time.append(tms)
 
-                idx.append(np.where(msk)[0] + first_idx)
+                if return_idx:
+                    idx.append(np.arange(first_idx, last_idx))
             t_idx = first_idx
 
     if len(trial) > 0:
         trial = np.concatenate(trial)
         time = np.concatenate(time)
-        idx = np.concatenate(idx)
+        if return_idx:
+            idx = np.concatenate(idx)
     else:
         trial = np.array([])
         time = np.array([])
@@ -759,11 +761,12 @@ class Spikes(object):
         has_waveform = self.waveform is not None
         waveforms = list() if has_waveform else None
         timestamps = list() if keep_timestamps else None
+        return_idx = has_waveform or keep_timestamps
 
         for neuron_idx in range(n_neurons):
             tri, tim, idx = _epoch_spikes(
                 self.timestamps[neuron_idx] / self.sfreq, event_times,
-                tmin, tmax)
+                tmin, tmax, return_idx=return_idx)
             trial.append(tri)
             time.append(tim)
 
