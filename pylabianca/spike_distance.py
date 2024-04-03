@@ -369,6 +369,7 @@ def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     xcorrs = _turn_spike_rate_to_xarray(
         bin_centers, xcorrs, spk, cell_names=cell, x_dim_name='lag')
     xcorrs.name = 'count'
+    xcorrs.attrs['unit'] = 'n'
     xcorrs.attrs['coord_units'] = {'lag': 's'}
 
     # add cell1_idx etc.
