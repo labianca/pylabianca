@@ -263,7 +263,7 @@ def check_modify_progressbar(pbar, total=None):
 # - [ ] allow to plot multiple average waveforms as lines
 # - [ ] allow `y_bins` to be specific bins? or rename to `n_bins_y`?
 def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
-                  y_bins=100, times=None):
+                  y_bins=100, times=None, cmap='viridis', backend='numpy'):
     '''Plot waveform heatmap for one cell.
 
     Parameters
@@ -299,66 +299,64 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
     use_ax = _simplify_axes(ax)
 
     time_unit = 'samples' if times is None else 'ms'
+    upsample = (1 if not upsample else 3 if isinstance(upsample, bool)
+                else upsample)
+
+    n_samples = spk.waveform[picks[0]].shape[-1]
+    if times is not None:
+        time_edges = [times[0], times[-1]]
+    else:
+        time_edges = [0, n_samples / upsample]
+        times = np.linspace(time_edges[0], time_edges[1],
+                            num=n_samples * upsample)
 
     for idx, unit_idx in enumerate(picks):
-        hist, _, ybins, time_edges = _calculate_waveform_density_image(
-            spk, unit_idx, upsample, y_bins, times=times
-        )
-        max_alpha = np.percentile(hist[hist > 0], 45)
-        max_lim = np.percentile(hist[hist > 0], 99)
+        this_waveform = spk.waveform[unit_idx]
 
-        alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
-        alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
-        alpha_sum[alpha_sum > 1] = 1
-
-        use_ax[idx].imshow(
-            hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
-            extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
-            aspect='auto'
-        )
         if labels:
             use_ax[idx].set_xlabel(f'Time ({time_unit})')
             use_ax[idx].set_ylabel('Amplitude ($\mu$V)')
             use_ax[idx].set_title(spk.cell_names[unit_idx])
 
+        if upsample > 1:
+            this_waveform = _upsample_waveform(this_waveform, upsample)
+
+        if backend == 'numpy':
+            hist, _, y_bins = _calculate_waveform_density_image(
+                this_waveform, y_bins
+            )
+            alpha_map, vmax = _calculate_alpha_map(hist)
+
+            use_ax[idx].imshow(
+                hist.T, alpha=alpha_map, vmax=vmax, origin='lower',
+                extent=(time_edges[0], time_edges[-1], y_bins[0], y_bins[-1]),
+                aspect='auto', cmap=cmap
+            )
+        elif backend == 'datashader':
+            img = _draw_waveform_datashader(this_waveform, times,
+                                            use_ax[idx], cmap=cmap)
+            x_ext = img.coords['x'].values[[0, -1]].tolist()
+            y_ext = img.coords['y'].values[[0, -1]].tolist()
+            use_ax[idx].imshow(np.array(img.to_pil()), aspect='auto',
+                               extent=x_ext + y_ext, interpolation='none')
+
     return ax
 
 
-def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
-                                      density=True, y_range=None, times=None):
-    '''Helps in calculating 2d density histogram of the waveforms.'''
-    from .utils import _deal_with_picks
+def _calculate_waveform_density_image(waveform, y_bins, density=True,
+                                      y_range=None):
+    '''Helps in calculating 2d density histogram of the waveforms.
 
-    pick = _deal_with_picks(spk, pick)[0]
-    n_spikes, n_samples = spk.waveform[pick].shape
-    waveform = spk.waveform[pick]
-    if upsample:
-        if isinstance(upsample, bool):
-            upsample = 3
-        from scipy import interpolate
+    Parameters
+    ----------
+    waveform : np.array
+        Waveform to plot.
+    y_bins : int
+        How many bins to use for the y axis. Defaults to 100.
+    '''
 
-        x = np.arange(n_samples)
-        interp = interpolate.interp1d(x, waveform, kind='cubic',
-                                      assume_sorted=True)
-
-        new_x = np.linspace(0, n_samples - 1, num=n_samples * upsample)
-        waveform = interp(new_x)
-        n_samples = len(new_x)
-    else:
-        upsample = 1
-
+    n_spikes, n_samples = waveform.shape
     x_coords = np.tile(np.arange(n_samples), (n_spikes, 1))
-
-    # sample_time = 1000 / sfreq  (combinato)
-    # sample_time = 1 if times is None else np.diff(times).mean()
-    # sample_edge = -94  # -19 for combinato
-    # time_edges = [sample_edge * sample_time,
-    #               (n_samples / upsample + (sample_edge - 1)) * sample_time]
-
-    if times is not None:
-        time_edges = [times[0], times[-1]]
-    else:
-        time_edges = [0, n_samples / upsample]
 
     xs = x_coords.ravel()
     ys = waveform.ravel()
@@ -377,10 +375,76 @@ def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
         else:
             range = [[np.min(xs), np.max(xs)], y_range]
 
-    hist, xbins, ybins = np.histogram2d(xs, ys, bins=[n_samples, y_bins],
-                                        range=range, density=density)
+    hist, xbins, ybins = np.histogram2d(
+        xs, ys, bins=[n_samples, y_bins], range=range, density=density
+    )
 
-    return hist, xbins, ybins, time_edges
+    return hist, xbins, ybins
+
+
+def _upsample_waveform(waveform, upsample=3):
+    from scipy import interpolate
+
+    n_samples = waveform.shape[-1]
+    x = np.arange(n_samples)
+    interp = interpolate.interp1d(
+        x, waveform, kind='cubic', assume_sorted=True)
+
+    new_x = np.linspace(0, n_samples - 1, num=n_samples * upsample)
+    waveform = interp(new_x)
+    return waveform
+
+
+def _calculate_alpha_map(hist, percentile_nontransparent=45,
+                         percentile_max=99):
+    nonzero_hist = hist[hist > 0]
+    max_alpha, vmax = np.percentile(
+        nonzero_hist, [percentile_nontransparent, percentile_max])
+
+    alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
+    alpha_map = (hist.T > max_alpha).astype('float') + alpha2
+    alpha_map[alpha_map > 1] = 1
+
+    return alpha_map, vmax
+
+
+def get_axis_size_pix(ax):
+    '''Get the size of the axis in pixels.
+
+    Parameters
+    ----------
+    ax : matplotlib.Axes
+        Axis to get the size of.
+
+    Returns
+    -------
+    size : tuple
+        Size of the axis in pixels.
+    '''
+    fig = ax.figure
+    bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+    bbox = ax.get_window_extent()
+    width, height = bbox.width, bbox.height
+    return width, height
+
+
+def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
+                              how='eq_hist'):
+    import pandas as pd
+    import datashader as ds
+    import datashader.transfer_functions as tf
+
+    n_spikes, n_samples = waveform.shape
+    waves = pd.DataFrame(waveform)
+
+    w_pix, h_pix = get_axis_size_pix(ax)
+    cvs = ds.Canvas(plot_height=int(h_pix), plot_width=int(w_pix))
+    agg = cvs.line(waves, x=waveform_time, y=list(range(n_samples)),
+                agg=ds.count(), axis=1, line_width=0)
+    colormap = getattr(plt.cm, cmap)
+    img = tf.shade(agg, how=how, cmap=colormap)
+
+    return img
 
 
 # TODO: add order=False for groupby?
