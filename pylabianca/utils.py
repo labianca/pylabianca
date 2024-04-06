@@ -727,6 +727,15 @@ def has_elephant():
         return False
 
 
+def has_datashader():
+    '''Test if datashader is available.'''
+    try:
+        import datashader
+        return True
+    except ImportError:
+        return False
+
+
 def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
                          **args):
     '''Create random spike data. Mostly useful for testing.
