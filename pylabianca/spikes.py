@@ -480,7 +480,8 @@ class SpikeEpochs():
                            metadata=new_metadata, cellinfo=new_cellinfo,
                            waveform=waveform, timestamps=timestamps)
 
-    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
+    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
+                      cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -496,7 +497,8 @@ class SpikeEpochs():
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, times=self.waveform_time)
+                             labels=labels, times=self.waveform_time,
+                             cmap=cmap, backend=backend)
 
     def apply(self, func, picks=None, args=None, kwargs=None):
         '''Apply a function to each cell and trial.
