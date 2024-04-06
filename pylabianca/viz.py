@@ -261,6 +261,7 @@ def check_modify_progressbar(pbar, total=None):
 # - [ ] kind='line' ?
 # - [ ] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
+# - [ ] allow `y_bins` to be specific bins? or rename to `n_bins_y`?
 def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
                   y_bins=100, times=None):
     '''Plot waveform heatmap for one cell.
@@ -280,7 +281,10 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
     labels : bool
         Whether to add labels to the axes.
     y_bins : int
-        How many bins to use for the y axis.
+        How many bins to use for the y axis. Defaults to 100.
+    times : None | array-like
+        If not None, the times to use for the x axis (in milliseconds).
+        If None, the x axis is labelled as samples.
 
     Returns
     -------
@@ -484,7 +488,7 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
         Minimum p-value of cluster to mark on the plot. Only used if
         ``df_clst`` is not None.
     ax: matplotlib.Axes | None
-        Two axes to plot on: first is used for average firing ratem the second
+        Two axes to plot on: first is used for average firing rate the second
         is used for raster plot. If None, a new figure is created.
 
     Returns
