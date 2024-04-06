@@ -866,7 +866,8 @@ class Spikes(object):
         self = _sort_spikes(self, by, inplace=inplace)
         return self
 
-    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
+    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
+                      cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -887,7 +888,8 @@ class Spikes(object):
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, times=self.waveform_time)
+                             labels=labels, times=self.waveform_time,
+                             cmap=cmap, backend=backend)
 
     def plot_isi(self, picks=None, unit='ms', bins=None, min_spikes=100,
                  max_isi=None, ax=None):
