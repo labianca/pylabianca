@@ -259,7 +259,7 @@ def check_modify_progressbar(pbar, total=None):
 
 # TODO:
 # - [ ] kind='line' ?
-# - [ ] datashader backend?
+# - [x] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
 # - [ ] allow `y_bins` to be specific bins? or rename to `n_bins_y`?
 def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
@@ -270,7 +270,7 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
     ----------
     spk : pylabianca.spikes.Spikes | pylabianca.spikes.SpikeEpochs
         Spike object to use.
-    pick : int | str
+    picks : int | str
         Cell index to plot waveform for.
     upsample : bool | float
         Whether to upsample the waveform (defaults to ``False``). If
@@ -281,10 +281,17 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
     labels : bool
         Whether to add labels to the axes.
     y_bins : int
-        How many bins to use for the y axis. Defaults to 100.
+        How many bins to use for the y axis. Defaults to 100. Used only in
+        the 'numpy' backend.
     times : None | array-like
         If not None, the times to use for the x axis (in milliseconds).
         If None, the x axis is labelled as samples.
+    cmap : str
+        Colormap to use. Defaults to 'viridis'.
+    backend : str
+        Computation backend to use. Can be 'numpy' or 'datashader' (defaults
+        to 'numpy'). The 'datashader' backend is currently experimental and
+        requires the ``datashader`` package.
 
     Returns
     -------
@@ -339,6 +346,8 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
             y_ext = img.coords['y'].values[[0, -1]].tolist()
             use_ax[idx].imshow(np.array(img.to_pil()), aspect='auto',
                                extent=x_ext + y_ext, interpolation='none')
+        else:
+            raise ValueError('Backend can be only "numpy" or "datashader".')
 
     return ax
 

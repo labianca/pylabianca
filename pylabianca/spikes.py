@@ -481,12 +481,12 @@ class SpikeEpochs():
                            waveform=waveform, timestamps=timestamps)
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
-                      cmap='viridis', backend='numpy'):
+                      y_bins=100, cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
         ----------
-        pick : int
+        picks : int
             Cell index to plot waveform for.
         upsample : bool | float
             Whether to upsample the waveform (defaults to ``False``). If
@@ -494,11 +494,23 @@ class SpikeEpochs():
             be a value to specify the upsampling factor.
         ax : matplotlib.Axes | None
             Axis to plot to. By default opens a new figure.
+        labels : bool
+            Whether to add labels to the axes.
+        y_bins : int
+            How many bins to use for the y axis. Defaults to 100. Used only in
+            the 'numpy' backend.
+        cmap : str
+            Colormap to use. Defaults to 'viridis'.
+        backend : str
+            Computation backend to use. Can be 'numpy' or 'datashader' (defaults
+            to 'numpy'). The 'datashader' backend is currently experimental and
+            requires the ``datashader`` package.
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, times=self.waveform_time,
-                             cmap=cmap, backend=backend)
+                             labels=labels, y_bins=y_bins,
+                             times=self.waveform_time, cmap=cmap,
+                             backend=backend)
 
     def apply(self, func, picks=None, args=None, kwargs=None):
         '''Apply a function to each cell and trial.
@@ -869,12 +881,12 @@ class Spikes(object):
         return self
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
-                      cmap='viridis', backend='numpy'):
+                      y_bins=100, cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
         ----------
-        pick : int
+        picks : int
             Cell index to plot waveform for.
         upsample : bool | float
             Whether to upsample the waveform (defaults to ``False``). If
@@ -882,6 +894,17 @@ class Spikes(object):
             be a value to specify the upsampling factor.
         ax : matplotlib.Axes | None
             Axis to plot to. By default opens a new figure.
+        labels : bool
+            Whether to add labels to the axes.
+        y_bins : int
+            How many bins to use for the y axis. Defaults to 100. Used only in
+            the 'numpy' backend.
+        cmap : str
+            Colormap to use. Defaults to 'viridis'.
+        backend : str
+            Computation backend to use. Can be 'numpy' or 'datashader' (defaults
+            to 'numpy'). The 'datashader' backend is currently experimental and
+            requires the ``datashader`` package.
 
         Returns
         -------
@@ -890,8 +913,9 @@ class Spikes(object):
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, times=self.waveform_time,
-                             cmap=cmap, backend=backend)
+                             labels=labels, y_bins=y_bins,
+                             times=self.waveform_time, cmap=cmap,
+                             backend=backend)
 
     def plot_isi(self, picks=None, unit='ms', bins=None, min_spikes=100,
                  max_isi=None, ax=None):
