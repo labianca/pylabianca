@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
-                labels=True):
+                labels=True, **kwargs):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -90,7 +90,7 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
 
     ax = plot_xarray_shaded(
         arr, reduce_dim=reduce_dim, x_dim=x_dim, groupby=groupby, ax=ax,
-        legend=legend, legend_pos=legend_pos, colors=colors
+        legend=legend, legend_pos=legend_pos, colors=colors, **kwargs
     )
 
     # clean up ax title if groupby is used
@@ -124,7 +124,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
 
 # TODO: allow different error shades
 def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
-                       ax=None, legend=True, legend_pos=None, colors=None):
+                       ax=None, legend=True, legend_pos=None, colors=None,
+                       **kwargs):
     """
     arr : xarray.DataArray
         Xarray with at least two dimensions: one is plotted along the x axis
@@ -196,13 +197,23 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
             sel[groupby] = val
 
             add_arg = {'color': colors[val]} if colors is not None else dict()
-            lines = avg.sel(**sel).plot(label=val, ax=ax, **add_arg)
+            if len(kwargs) > 0:
+                line_args = add_arg.copy()
+                line_args.update(kwargs)
+                lines = avg.sel(**sel).plot(label=val, ax=ax, **line_args)
+            else:
+                lines = avg.sel(**sel).plot(label=val, ax=ax, **add_arg)
             ax.fill_between(avg.coords[x_dim], ci_low.sel(**sel),
                             ci_high.sel(**sel), alpha=0.3, linewidth=0,
                             **add_arg)
     else:
         add_arg = {'color': colors['base']} if colors is not None else dict()
-        lines = avg.plot(ax=ax, **add_arg)
+        if len(kwargs) > 0:
+            line_args = add_arg.copy()
+            line_args.update(kwargs)
+            lines = avg.plot(ax=ax, **line_args)
+        else:
+            lines = avg.plot(ax=ax, **add_arg)
         ax.fill_between(avg.coords[x_dim], ci_low, ci_high, linewidth=0,
                         alpha=0.3, **add_arg)
 
