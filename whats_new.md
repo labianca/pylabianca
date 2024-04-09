@@ -3,8 +3,11 @@
 ## DEV (upcoming version 0.3)
 * much increased code coverage of automated tests
 
+<br/><br/>
+
 * API: `per_trial=False` option was removed from `.apply()` method of `SpikeEpochs` - it didn't seem to be useful and its behavior was not well defined. If you need to apply a function to each trial separately, you can still use `.apply()`.
 
+<br/><br/>
 
 * ENH: around 10-fold speed up to `Spikes.epoch()` (20-fold for thousands of spikes and thousands epoching events)
 * ENH: further speed up to `Spikes.epoch()` (around 5 - 13-fold) is now also possible by using `backend='numba'` (if numba is installed)
@@ -17,10 +20,12 @@
 * ENH: added better input validation to `Spikes` to avoid silly errors
 * ENH: when adding or modifying `.cellinfo` it is now verified to have correct format and length
 
+<br/><br/>
 
 * DOC: added docstring to `pylabianca.stats.permutation_test()`
 * DOC: improved the FieldTrip data example in the documentation: [notebook](doc/fieldtrip_example.ipynb)
 
+<br/><br/>
 
 * FIX: allow to `.drop_cells()` using cell names, not only indices
 * FIX: `Spikes` `.sort()` method now raises error when using `Spikes` with empty `.cellinfo` attribute or when the attribute does not contain a pandas DataFrame.
@@ -30,7 +35,7 @@
 * FIX: make sure cellinfo columns inherited by firing rate xarray survive through `pylabianca.selectivity.compute_selectivity_continuous()`
 * FIX: fix error when no spikes were present in fixed time window in `pylabianca.spike_rate._compute_spike_rate_fixed()` used when `step=False` in `.spike_rate()` method of `SpikeEpochs`
 * FIX: fix bug in `pylabianca.io.read_events_neuralynx()`: if no reference file for first timestamp was given an error was thrown - now we fill the start column (time in seconds from recording start) with NaN
-
+<br/><br/><br/><br/>
 
 ## Version 0.2
 
@@ -47,10 +52,12 @@
 * ENH: added a very fast numba implementation of auto- and cross-correlation for `Spikes` objects.
 * ENH: A new argument `backend` was added to `.xcorr()` method of `Spikes`. The default value is `backend='auto'`, which automatically selects the backend (if numba is available and there are many spikes in the data, numba is used). Other options are `backend='numpy'` and `backend='numba'`.
 
+<br/><br/>
 
 * DOC: added example of working with pylabianca together with spiketools: [notebook](doc/working_with_spiketools.ipynb)
 * DOC: added example of spike-field analysis combining pylabianca and MNE-Python: [notebook](doc/spike-triggered_analysis.ipynb)
 
+<br/><br/>
 
 * FIX: removed incorrect condition label when using `pylabianca.viz.plot_shaded()` with `groupby` argument. Previously the last condition label was used for the figure, although one line per condition was shown.
 * FIX: `.plot_isi()` `Spikes` method was not committed in 0.1 version, now added. It is just a wrapper around `pylabianca.viz.plot_isi()`
