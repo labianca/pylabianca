@@ -733,8 +733,10 @@ class Spikes(object):
         '''Return the number of units in Spikes.'''
         return len(self.timestamps)
 
-    # TODO: return idx from _epoch_spikes only when self.waveform is not None?
-    # TODO: time and consider speeding up
+    # TODO: potential speedup: epoch on timestamps directly, only then convert
+    #       to spike times in seconds (this would have been easier if
+    #       timestamps were always int, but for osort they can be floating
+    #       point)
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.,
               keep_timestamps=False):
         '''Epoch spikes with respect to selected events.

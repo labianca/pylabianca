@@ -11,17 +11,17 @@ def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
     epoch_len = time_limits[1] - time_limits[0]
     n_steps = int(np.floor((epoch_len - winlen) / step + 1))
 
-    fr_tstart = time_limits[0] + half_win
+    fr_t_start = time_limits[0] + half_win
     fr_tend = time_limits[1] - half_win + step * 0.001
-    times = np.arange(fr_tstart, fr_tend, step=step)
+    times = np.arange(fr_t_start, fr_tend, step=step)
     frate = np.zeros((n_trials, n_steps))
 
     for step_idx in range(n_steps):
         winlims = times[step_idx] + window_limits
         msk = (spike_times >= winlims[0]) & (spike_times < winlims[1])
         tri = spike_trials[msk]
-        intri, count = _monotonic_unique_counts(tri)
-        frate[intri, step_idx] = count / winlen
+        in_tri, count = _monotonic_unique_counts(tri)
+        frate[in_tri, step_idx] = count / winlen
 
     return times, frate
 
