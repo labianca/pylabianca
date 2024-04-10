@@ -12,6 +12,7 @@
 * ENH: around 10-fold speed up to `Spikes.epoch()` (20-fold for thousands of spikes and thousands epoching events)
 * ENH: further speed up to `Spikes.epoch()` (around 5 - 13-fold) is now also possible by using `backend='numba'` (if numba is installed)
 * ENH: added an experimental datashader backend to `.plot_waveform()` method of `Spikes` and `SpikeEpochs` (`backend='datashader'`).
+* ENH: `.plot_waveform()` method of `Spikes` and `SpikeEpochs` now allows to control the colormap to plot the waveform density with (`cmap` argument) and the number of y axis bins (`y_bins` argument)
 * ENH: expose `.to_spiketools()` as `SpikeEpochs` method (previously it was only available as a function in `pylabianca.io` module)
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
 * ENH: `Spikes` `.sort()` method now exposes `inplace` argument to allow for sorting on a copy of the object (this can be also easily done by using `spk.copy().sort()`)
@@ -35,6 +36,7 @@
 * FIX: make sure cellinfo columns inherited by firing rate xarray survive through `pylabianca.selectivity.compute_selectivity_continuous()`
 * FIX: fix error when no spikes were present in fixed time window in `pylabianca.spike_rate._compute_spike_rate_fixed()` used when `step=False` in `.spike_rate()` method of `SpikeEpochs`
 * FIX: fix bug in `pylabianca.io.read_events_neuralynx()`: if no reference file for first timestamp was given an error was thrown - now we fill the start column (time in seconds from recording start) with NaN
+* FIX: when plotting only one line passing one color to `pylabianca.viz.plot_shaded()` or `pylabianca.viz.plot_xarray_shaded()` now works correctly (previously it resulted in an error)
 <br/><br/><br/><br/>
 
 ## Version 0.2
