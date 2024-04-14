@@ -2,7 +2,7 @@ import numpy as np
 import pylabianca as pln
 import pytest
 
-from pylabianca.utils import download_test_data, get_data_path
+from pylabianca.utils import download_test_data, get_data_path, has_numba
 
 
 download_test_data()
@@ -27,7 +27,6 @@ def simple_xcorr_hist(times1, times2, bins):
 
 
 def test_xcorr():
-    from borsar.utils import has_numba
     if has_numba:
         from pylabianca._numba import (_xcorr_hist_auto_numba,
                                     _xcorr_hist_cross_numba)

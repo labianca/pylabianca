@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import pylabianca as pln
-from pylabianca.utils import has_elephant
+from pylabianca.utils import has_elephant, find_index
 from pylabianca.testing import ft_data, spk_epochs
 
 
@@ -55,9 +55,9 @@ def test_firing_rate_against_elephant(spk_epochs):
             rate = elestat.instantaneous_rate(
                 spike_train[tri_idx], 1 / 500. * q.second, kernel=kernel)
 
-            idx = borsar.find_index(np.array(rate.times), fr.time[[0, -1]].values)
-            elph_fr = rate.magnitude.ravel()[idx[0]:idx[1] + 1]
-            rval, _ = pearsonr(fr[cell_idx, tri_idx].values, elph_fr)
+            idx = find_index(np.array(rate.times), fr.time[[0, -1]].values)
+            elephant_fr = rate.magnitude.ravel()[idx[0]:idx[1] + 1]
+            rval, _ = pearsonr(fr[cell_idx, tri_idx].values, elephant_fr)
             assert rval > 0.999
 
     # test a case where times vector and n_steps did not align (lead to error)

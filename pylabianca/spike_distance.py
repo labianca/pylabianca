@@ -4,7 +4,7 @@ import numpy as np
 from . import utils, viz
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _symmetric_window_samples, _gauss_kernel_samples,
-                    spike_centered_windows)
+                    spike_centered_windows, has_numba)
 
 
 # TODO: ``tol=None`` could return the distances without thresholding
@@ -291,7 +291,6 @@ def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
     bins = _construct_bins(sfreq, max_lag, bins=bins)
 
     if backend == 'auto':
-        from borsar.utils import has_numba
         min_spikes_numba = 1_000
 
         if picks2 is not None:
@@ -457,8 +456,6 @@ def _xcorr_hist_auto_py(times, bins, batch_size=1_000):
 
     return counts
 
-
-# test numba presence: mne.fixes.has_numba
 
 def _xcorr_hist_cross_py(times, times2, bins, batch_size=1_000):
     '''Compute cross-correlation histogram for a single cell.
