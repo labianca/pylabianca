@@ -1,9 +1,8 @@
 import warnings
 import numpy as np
 
+# this could be done in try-except block
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
-from sklearn.utils.multiclass import unique_labels
 
 
 def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
@@ -219,8 +218,8 @@ def frate_to_sklearn(frate, target=None, select=None,
     cell_names : list of str | None
         Cell names to select.
     time_idx : int | array of int | None
-        Select specific time point or timepoints. If ``None``, no specific
-        timepoints are picked (apart from decimation controlled by ``decim``).
+        Select specific time point or time points. If ``None``, no specific
+        time points are picked (apart from decimation controlled by ``decim``).
     decim : int
         Decimation factor.
 
@@ -331,7 +330,7 @@ def frates_dict_to_sklearn(frates, target=None, select=None,
 
 
 def join_subjects(Xs, ys, random_state=None, shuffle=True):
-    '''Concatenate subjects keeping target the same but shuffling tirals
+    '''Concatenate subjects keeping target the same but shuffling trials
     within target categories.
 
     The concatenated array is trials x subjects_cells x time.
@@ -414,7 +413,7 @@ def permute(arr, decoding_fun, target=None, n_permutations=200, n_jobs=1,
     if n_jobs > 1:
         from joblib import Parallel, delayed
 
-        # perocess in parallel only at the top (permutation) level
+        # preprocess in parallel only at the top (permutation) level
         arguments['n_jobs'] = 1
 
         scores = Parallel(n_jobs=n_jobs)(
@@ -661,6 +660,9 @@ class maxCorrClassifier(BaseEstimator):
             Fit classifier to training data. Works in-place so the output
             does not have to be stored (but it's useful for chaining).
         '''
+        from sklearn.utils.validation import check_X_y
+        from sklearn.utils.multiclass import unique_labels
+
         X, y = check_X_y(X, y)
         self.classes_ = unique_labels(y)
         self.class_averages_ = list()
@@ -691,6 +693,8 @@ class maxCorrClassifier(BaseEstimator):
         y_pred : numpy.array
             Vector of predicted classes.
         '''
+        from sklearn.utils.validation import check_array, check_is_fitted
+
         # Check if fit has been called
         check_is_fitted(self)
         X = check_array(X)
@@ -743,57 +747,3 @@ class maxCorrClassifier(BaseEstimator):
         scorer = get_scorer(self.scoring)
         score = scorer(self, X, Y)
         return score
-
-
-class SparseRemover(BaseEstimator, TransformerMixin):
-    def __init__(self, n_select, threshold=1e-5):
-        self.n_select = n_select
-        self.threshold = threshold
-
-    def fit(self, X, y):
-        X, y = check_X_y(X, y)
-
-        bad_prop = (X < self.threshold).mean(axis=0)
-        bad_prop_thresh = np.sort(bad_prop)[self.n_select]
-        self.sel_features_ = bad_prop <= bad_prop_thresh
-
-        return self
-
-    def transform(self, X):
-        # Check if fit has been called
-        check_is_fitted(self)
-        X = check_array(X)
-
-        return X[:, self.sel_features_]
-
-    def fit_transform(self, X, y):
-        self.fit(X, y)
-        return self.transform(X)
-
-
-class SelectKBestLeastSparse(BaseEstimator, TransformerMixin):
-    def __init__(self, stat_fun, k=10, threshold=1e-5):
-        self.n_select = k
-        self.stat_fun = stat_fun
-        self.threshold = threshold
-
-    def fit(self, X, y):
-        X, y = check_X_y(X, y)
-
-        bad_prop = (X < self.threshold).mean(axis=0)
-        stat, _ = self.stat_fun(X, y)
-        select = stat * (1 - bad_prop)
-        self.sel_features_ = np.argsort(select)[::-1][:self.n_select]
-
-        return self
-
-    def transform(self, X):
-        # Check if fit has been called
-        check_is_fitted(self)
-        X = check_array(X)
-
-        return X[:, self.sel_features_]
-
-    def fit_transform(self, X, y):
-        self.fit(X, y)
-        return self.transform(X)
