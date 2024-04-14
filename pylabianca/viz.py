@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 # TODO - title is now removed, so for groupby it would be good to specify the
@@ -153,6 +152,7 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         a dictionary linking condition names / values and RBG arrays. Default
         is ``None`` which uses the default matplotlib color cycle.
     """
+    import matplotlib.pyplot as plt
     assert reduce_dim is not None
 
     if ax is None:
@@ -439,6 +439,7 @@ def get_axis_size_pix(ax):
 
 def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
                               how='eq_hist'):
+    import matplotlib.pyplot as plt
     import pandas as pd
     import datashader as ds
     import datashader.transfer_functions as tf
@@ -479,6 +480,7 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     ax : matplotlib.Axes
         Axis with the raster plot.
     '''
+    import matplotlib.pyplot as plt
 
     if ax is None:
         _, ax = plt.subplots()
@@ -569,6 +571,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
     fig : matplotlib.Figure
         Figure with the plots.
     '''
+    import matplotlib.pyplot as plt
+
     # select cell from frate
     if isinstance(pick, str):
         cell_name = pick
@@ -664,7 +668,9 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     ax : matplotlib.Axes
         Axis with the plot.
     '''
+    import matplotlib.pyplot as plt
     from borsar.viz import highlight
+
     try:
         import xarray as xr
         has_xarray = True
@@ -758,6 +764,8 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 # - [ ] combine with layout functions from sarna
 def align_axes_limits(axes=None, ylim=True, xlim=False):
     '''Align the limits of all ``axes``.'''
+    import matplotlib.pyplot as plt
+
     if axes is None:
         axes = plt.gcf().get_axes()
 
@@ -834,6 +842,8 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
 
 def auto_multipanel(n_to_show, ax=None, figsize=None):
     '''Create a multipanel figure that fits at least ``n_to_show`` axes.'''
+    import matplotlib.pyplot as plt
+
     n = np.sqrt(n_to_show)
     n_left = 0
 
