@@ -226,6 +226,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
 
 # TODO: ! add n_jobs
+# TODO: pick columns from cellinfo before passing do characterize_clusters
 # TODO: create more progress bars and pass to cluster_based_test
 def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
                               n_permutations=1000, n_stat_permutations=0,
@@ -299,21 +300,24 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
 
     n_cells = len(frate)
     correct_window = [-correct_window, correct_window]
-
     pbar = check_modify_progressbar(pbar, total=n_cells)
 
-    # init dataframe for storing results
+    # this could be simplified or moved to a separate function
     do_copy_cellinfo = (
         (isinstance(copy_cellinfo, bool) and copy_cellinfo)
         or (isinstance(copy_cellinfo, list) and len(copy_cellinfo) > 0)
     )
     if do_copy_cellinfo:
         cellinfo = cellinfo_from_xarray(frate)
-        if isinstance(copy_cellinfo, bool):
-            copy_cellinfo = cellinfo.columns.tolist()
+        if cellinfo is not None and len(cellinfo) > 0:
+            if isinstance(copy_cellinfo, bool):
+                copy_cellinfo = cellinfo.columns.tolist()
+        else:
+            copy_cellinfo = list()
     else:
         copy_cellinfo = list()
 
+    # init dataframe for storing results
     df_cluster = _init_df_cluster(
         calculate_pev, calculate_dos, calculate_peak_pev, baseline_window,
         cellinfo_cols=copy_cellinfo)
@@ -328,11 +332,11 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
             n_stat_permutations=n_stat_permutations, progress=False)
 
         # process clusters
+        cellinfo_row = cellinfo.iloc[pick, :] if cellinfo is not None else None
         df_part = characterize_clusters(
             fr_cell, clusters, pvals, min_cluster_pval, df_cluster,
-            correct_window, cell_name, cellinfo.iloc[pick, :], copy_cellinfo,
-            compare, calculate_dos, calculate_pev, calculate_peak_pev,
-            baseline_window
+            correct_window, cellinfo_row, copy_cellinfo, compare,
+            calculate_dos, calculate_pev, calculate_peak_pev, baseline_window
         )
         df_parts.append(df_part)
         pbar.update(1)
@@ -348,7 +352,7 @@ def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
     add_cols = ['pval', 'window', 'preferred', 'n_preferred', 'FR_preferred']
     cols = ['cell']
 
-    if cellinfo is not None and len(cellinfo_cols) > 0:
+    if cellinfo_cols is not None and len(cellinfo_cols) > 0:
         cols = cols + cellinfo_cols
     cols += add_cols
 
@@ -467,7 +471,11 @@ def characterize_clusters(fr_cell, clusters, pvals, min_cluster_pval,
             )
             df_clst.append(df_part)
 
-    df_clst = pd.concat(df_clst, ignore_index=True)
+    if len(df_clst) == 0:
+        df_clst = df_cluster.copy()
+    else:
+        df_clst = pd.concat(df_clst, ignore_index=True)
+
     return df_clst
 
 
