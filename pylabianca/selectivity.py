@@ -225,17 +225,15 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     return results
 
 
-# TODO: add n_jobs
-# TODO: refactor to separate cluster-based and cell selection
+# TODO: ! add n_jobs
 # TODO: create more progress bars and pass to cluster_based_test
-# TODO: use calculate_dos to ignore DoS calculation
-def cluster_based_selectivity(frate, compare, spk=None,
-                              cluster_entry_pval=0.05, n_permutations=1000,
-                              n_stat_permutations=0, pbar='notebook',
-                              correct_window=0., min_cluster_pval=0.1,
-                              calculate_pev=False, calculate_dos=True,
-                              calculate_peak_pev=False, stat_fun=None,
-                              baseline_window=(-0.5, 0)):
+def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
+                              n_permutations=1000, n_stat_permutations=0,
+                              pbar='notebook', correct_window=0.,
+                              min_cluster_pval=0.1, calculate_pev=False,
+                              calculate_dos=True, calculate_peak_pev=False,
+                              stat_fun=None, baseline_window=(-0.5, 0),
+                              copy_cellinfo=True):
     '''Calculate category-sensitivity of neurons using cluster-based tests.
 
     Performs cluster-based ANOVA on firing rate of each neuron to test
@@ -249,10 +247,6 @@ def cluster_based_selectivity(frate, compare, spk=None,
     compare : str
         Dimension labels specified for ``'trial'`` dimension that constitutes
         categories to test selectivity for.
-    spk : SpikeEpochs
-        Spikes object to use when calculating depth of sensitivity (DoS) or
-        percentage of explained variance (PEV) in cluster time window.
-        Not used if ``calculate_pev`` and ``calculate_dos`` are ``False``.
     cluster_entry_pval : float
         P value used as a cluster-entry threshold. The default is ``0.05``.
     n_permutations : int
@@ -271,25 +265,93 @@ def cluster_based_selectivity(frate, compare, spk=None,
         window average statistics (DoS, PEV). The default is ``0.``.
     min_cluster_pval : float
         Minimum p value for a cluster to be stored in the results dataframe.
+    calculate_pev : bool
+        Whether to calculate percentage of explained variance (PEV) for each
+        cluster. The default is ``False``.
+    calculate_dos : bool
+        Whether to calculate depth of selectivity (DoS) for each cluster. The
+        default is ``True``.
+    calculate_peak_pev : bool
+        Whether to calculate peak PEV for each cluster. The default is
+        ``False``.
+    stat_fun : callable
+        Function to used in cluster based test for calculating the test
+        statistic. The default is ``None``, which means that the test statistic
+        is inferred (repeated measures t test or ANOVA).
+    baseline_window : tuple of float
+        Time window to use as baseline for calculating the baseline-normalized
+        firing rate. The default is ``(-0.5, 0)``.
+    copy_cellinfo : bool | list of str
+        Whether to copy cell information from the xarray to the results
+        dataframe. If ``True``, all cell information is copied. If a list of
+        strings, only the specified columns are copied. The default is
+        ``True``.
 
     Returns
     -------
     df_cluster : pandas.DataFrame
         Dataframe with category-sensitivity information.
     '''
-    import pandas as pd
     import xarray as xr
 
     from .stats import cluster_based_test
     from .viz import check_modify_progressbar
 
     n_cells = len(frate)
-    corrwin = [-correct_window, correct_window]
+    correct_window = [-correct_window, correct_window]
+
     pbar = check_modify_progressbar(pbar, total=n_cells)
 
     # init dataframe for storing results
-    cols = ['pval', 'window', 'preferred', 'n_preferred', 'FR_preferred']
-    cols = ['neuron', 'region', 'region_short', 'anat', 'cluster'] + cols
+    do_copy_cellinfo = (
+        (isinstance(copy_cellinfo, bool) and copy_cellinfo)
+        or (isinstance(copy_cellinfo, list) and len(copy_cellinfo) > 0)
+    )
+    if do_copy_cellinfo:
+        cellinfo = cellinfo_from_xarray(frate)
+        if isinstance(copy_cellinfo, bool):
+            copy_cellinfo = cellinfo.columns.tolist()
+    else:
+        copy_cellinfo = list()
+
+    df_cluster = _init_df_cluster(
+        calculate_pev, calculate_dos, calculate_peak_pev, baseline_window,
+        cellinfo_cols=copy_cellinfo)
+    df_parts = list()
+
+    for pick, fr_cell in enumerate(frate):
+
+        # TODO - pass relevant arrays
+        _, clusters, pvals = cluster_based_test(
+            fr_cell, compare=compare, cluster_entry_pval=cluster_entry_pval,
+            paired=False, stat_fun=stat_fun, n_permutations=n_permutations,
+            n_stat_permutations=n_stat_permutations, progress=False)
+
+        # process clusters
+        df_part = characterize_clusters(
+            fr_cell, clusters, pvals, min_cluster_pval, df_cluster,
+            correct_window, cell_name, cellinfo.iloc[pick, :], copy_cellinfo,
+            compare, calculate_dos, calculate_pev, calculate_peak_pev,
+            baseline_window
+        )
+        df_parts.append(df_part)
+        pbar.update(1)
+
+    # make sure that the dataframe columns are of the right type
+    df_cluster = pd.concat(df_parts, ignore_index=True)
+    df_cluster = df_cluster.infer_objects()
+    return df_cluster
+
+
+def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
+                     baseline_window, cellinfo_cols=None):
+    add_cols = ['pval', 'window', 'preferred', 'n_preferred', 'FR_preferred']
+    cols = ['cell']
+
+    if cellinfo is not None and len(cellinfo_cols) > 0:
+        cols = cols + cellinfo_cols
+    cols += add_cols
+
     if calculate_pev:
         cols += ['pev']
     if calculate_dos:
@@ -300,133 +362,113 @@ def cluster_based_selectivity(frate, compare, spk=None,
         cols += ['FR_vs_baseline']
 
     df_cluster = pd.DataFrame(columns=cols)
-
-    for pick, fr_cell in enumerate(frate):
-        cell_name = fr_cell.cell.item()
-        row_idx = df_cluster.shape[0]
-
-        # TODO - pass relevant arrays
-        _, clusters, pval = cluster_based_test(
-            fr_cell, compare=compare, cluster_entry_pval=cluster_entry_pval,
-            paired=False, stat_fun=stat_fun, n_permutations=n_permutations,
-            n_stat_permutations=n_stat_permutations, progress=False)
-
-        # process clusters
-        # TODO - separate function
-        n_clusters = len(pval)
-        if n_clusters > 0:
-
-            # select clusters to save in df
-            good_clst = pval <= min_cluster_pval
-            clst_idx = np.where(good_clst)[0]
-
-            for ord_idx, idx in enumerate(clst_idx):
-                # get cluster time window
-                clst_msk = clusters[idx]
-                this_pval = pval[idx]
-                twin = fr_cell.time[clst_msk].values[[0, -1]]
-                twin_str = '{:.03f} - {:.03f}'.format(*twin)
-
-                # get anatomical information
-                if 'region' in fr_cell.coords:
-                    region_name = fr_cell.region.item()
-
-                    if 'region2' in fr_cell.coords:
-                        short_name = fr_cell.region2.item()
-                    else:
-                        short_name = region_name[1:-1]
-                else:
-                    region_name = None
-                    short_name = None
-
-                if 'anat' in fr_cell.coords:
-                    anat_name = fr_cell.anat.item()
-                else:
-                    anat_name = None
-
-                df_idx = row_idx + ord_idx
-                df_cluster.loc[df_idx, 'neuron'] = cell_name
-                df_cluster.loc[df_idx, 'region'] = region_name
-                df_cluster.loc[df_idx, 'region_short'] = short_name
-                df_cluster.loc[df_idx, 'anat'] = anat_name
-                df_cluster.loc[df_idx, 'cluster'] = ord_idx + 1
-                df_cluster.loc[df_idx, 'pval'] = this_pval
-                df_cluster.loc[df_idx, 'window'] = twin_str
-
-                # calculate depth of selectivity for each selective window
-                tmin, tmax = twin + corrwin
-                if spk is not None:
-                    frate_avg = spk.spike_rate(
-                        picks=pick, step=False, tmin=tmin, tmax=tmax
-                        ).isel(cell=0)
-
-                    # TODO: for GammBur I used only correct trials,
-                    #       but it may not always make sense...
-                    # .sel(trial=frate_avg.ifcorrect)
-
-                    if baseline_window is not None:
-                        frate_bsln = spk.spike_rate(
-                            picks=pick, step=False, tmin=baseline_window[0],
-                            tmax=baseline_window[1]).isel(cell=0)
-
-                else:
-                    frate_avg = fr_cell.sel(time=slice(tmin, tmax)).mean(
-                        dim='time')  # .sel(trial=frate.ifcorrect)
-
-                    if baseline_window is not None:
-                        frate_bsln = fr_cell.sel(
-                            time=slice(baseline_window[0], baseline_window[1])
-                            ).mean(dim='time')
-
-                depth, preferred = depth_of_selectivity(
-                    frate_avg, groupby=compare)
-                if isinstance(depth, xr.DataArray):
-                    depth = depth.item()
-
-                # TODO - this also could be moved outside
-                # find preferred categories
-                perc_pref = preferred / preferred.max()
-                pref_idx = np.where(perc_pref >= 0.75)[0]
-                perc_pref_sel = perc_pref.values[pref_idx].argsort()[::-1]
-
-                # TODO - use category labels in preferred!
-                pref = pref_idx[perc_pref_sel].tolist()
-                pref_str = str(pref)
-
-                # calculate PEV and peak PEV
-                if calculate_pev:
-                    pev = explained_variance(
-                        frate_avg, compare).item()
-
-                if calculate_peak_pev:
-                    peak_pev = explained_variance(
-                        fr_cell.sel(time=slice(tmin, tmax)),
-                        compare
-                        ).max().item()
-
-                if baseline_window is not None:
-                    FR_vs_bsln = (preferred.max().item()
-                                  / frate_bsln.mean().item())
-
-                df_cluster.loc[df_idx, 'preferred'] = pref_str
-                df_cluster.loc[df_idx, 'n_preferred'] = len(pref)
-                df_cluster.loc[df_idx, 'FR_preferred'] = preferred.max().item()
-                df_cluster.loc[df_idx, 'DoS'] = depth
-
-                if calculate_pev:
-                    df_cluster.loc[df_idx, 'PEV'] = pev
-
-                if calculate_peak_pev:
-                    df_cluster.loc[df_idx, 'peak_PEV'] = peak_pev
-
-                if baseline_window is not None:
-                    df_cluster.loc[df_idx, 'FR_vs_baseline'] = FR_vs_bsln
-
-        pbar.update(1)
-
-    # make sure that the dataframe columns are of the right type
-    df_cluster = df_cluster.infer_objects()
     return df_cluster
+
+
+def characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
+                         correct_window, ord_idx, cellinfo_row, copy_cellinfo,
+                         compare, calculate_dos, calculate_pev,
+                         calculate_peak_pev, baseline_window):
+    import xarray as xr
+
+    # get cluster time window
+    twin = fr_cell.time[cluster_mask].values[[0, -1]]
+    twin_str = '{:.03f} - {:.03f}'.format(*twin)
+    tmin, tmax = twin + correct_window
+
+    df_cluster.loc[0, 'cell'] = fr_cell.cell.item()
+    df_cluster.loc[0, 'cluster'] = ord_idx + 1
+    df_cluster.loc[0, 'pval'] = cluster_pval
+    df_cluster.loc[0, 'window'] = twin_str
+
+    # copy info from cellinfo
+    for col in copy_cellinfo:
+        df_cluster.loc[0, col] = cellinfo_row[col]
+
+    # calculate depth of selectivity for each selective window
+    frate_avg = fr_cell.sel(
+        time=slice(tmin, tmax)
+        ).mean(dim='time')
+
+    if baseline_window is not None:
+        frate_bsln = fr_cell.sel(
+            time=slice(baseline_window[0], baseline_window[1])
+            ).mean(dim='time')
+
+    if calculate_dos:
+        depth, preferred = depth_of_selectivity(
+            frate_avg, groupby=compare)
+        if isinstance(depth, xr.DataArray):
+            depth = depth.item()
+    else:
+        preferred = frate_avg.groupby(compare).mean(dim='trial')
+
+    # TODO - this also could be moved outside
+    # find preferred categories
+    perc_pref = preferred / preferred.max()
+    pref_idx = np.where(perc_pref >= 0.75)[0]
+    perc_pref_sel = perc_pref.values[pref_idx].argsort()[::-1]
+
+    # TODO - use category labels in preferred!
+    pref = pref_idx[perc_pref_sel].tolist()
+    pref_str = str(pref)
+
+    # calculate PEV and peak PEV
+    if calculate_pev:
+        pev = explained_variance(
+            frate_avg, compare).item()
+
+    if calculate_peak_pev:
+        peak_pev = explained_variance(
+            fr_cell.sel(time=slice(tmin, tmax)),
+            compare
+            ).max().item()
+
+    if baseline_window is not None:
+        FR_vs_bsln = (preferred.max().item()
+                        / frate_bsln.mean().item())
+
+    df_cluster.loc[0, 'preferred'] = pref_str
+    df_cluster.loc[0, 'n_preferred'] = len(pref)
+    df_cluster.loc[0, 'FR_preferred'] = preferred.max().item()
+
+    if calculate_dos:
+        df_cluster.loc[0, 'DoS'] = depth
+
+    if calculate_pev:
+        df_cluster.loc[0, 'PEV'] = pev
+
+    if calculate_peak_pev:
+        df_cluster.loc[0, 'peak_PEV'] = peak_pev
+
+    if baseline_window is not None:
+        df_cluster.loc[0, 'FR_vs_baseline'] = FR_vs_bsln
+
+    return df_cluster
+
+
+def characterize_clusters(fr_cell, clusters, pvals, min_cluster_pval,
+                          df_cluster, correct_window, cellinfo_row,
+                          copy_cellinfo, compare, calculate_dos, calculate_pev,
+                          calculate_peak_pev, baseline_window):
+    df_clst = list()
+    n_clusters = len(pvals)
+    if n_clusters > 0:
+        # select clusters to save in df
+        good_clst = pvals <= min_cluster_pval
+        clst_idx = np.where(good_clst)[0]
+
+        for ord_idx, idx in enumerate(clst_idx):
+            df_part = characterize_cluster(
+                fr_cell, clusters[idx], pvals[idx], df_cluster.copy(),
+                correct_window, ord_idx, cellinfo_row, copy_cellinfo, compare,
+                calculate_dos, calculate_pev, calculate_peak_pev,
+                baseline_window
+            )
+            df_clst.append(df_part)
+
+    df_clst = pd.concat(df_clst, ignore_index=True)
+    return df_clst
 
 
 def assess_selectivity(df_cluster, min_cluster_p=0.05,
@@ -462,7 +504,7 @@ def assess_selectivity(df_cluster, min_cluster_p=0.05,
 
 
 def _compute_time_in_window(clst_window, window_of_interest):
-    # clst_limits = times[clst_msk].values[[0, -1]]
+    # clst_limits = times[cluster_mask].values[[0, -1]]
     twin = [0., 0.]
     clst_limits = _parse_window(clst_window)
     twin[0] = min(max(window_of_interest[0], clst_limits[0]),
@@ -497,6 +539,39 @@ def compute_time_in_window(df_cluster, window_of_interest):
     df_cluster.loc[:, 'in_toi'] = df_cluster.window.apply(
         _compute_time_in_window, args=(window_of_interest,))
     return df_cluster
+
+
+def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
+    # one xarray and session_coord is None: assumes one subject
+    #    - if same order of cells -> simple bool selection
+    #    - if different order -> select by unique cell names
+    #    raise Warning that can be silenced with ``session_coord=False``
+    # one xarray and session_coord is not None: assumes multiple subjects
+    #    - ...
+    #    - ...
+    # dictionary of xarrays: assumes multiple subjects/sessions, one per key
+    import xarray as xr
+
+    same_cells = (frate.cell.values == selectivity.cell.values).all()
+    has_session_coord = session_coord in frate.coords
+    if has_session_coord:
+        same_sessions = (frate[session_coord].values
+                         == selectivity[session_coord].values).all()
+
+    if threshold is not None:
+        selectivity = np.abs(selectivity) > threshold
+
+    # if same_cells and same_sessions:
+    fr_sel2 = frate_mix.isel(cell=np.where(sel)[0])
+
+    # if has_session_coord but not same_sessions / cells:
+    fr_list = list()
+    for ses, fr in frate_mix.groupby('session'):
+        stat_ses = stat.query({'cell': f'session == "{ses}"'})
+        sel_cell = stat_ses.cell.values[stat_ses.values > threshold]
+        fr_sel = fr.sel(cell=sel_cell)
+        fr_list.append(fr_sel)
+    fr_sel = xr.concat(fr_list, dim='cell')
 
 
 # TODO: compare with time resolved selectivity
