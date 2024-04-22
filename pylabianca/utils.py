@@ -949,8 +949,12 @@ def find_index(vec, vals):
 def cellinfo_from_xarray(xarr):
     cell_dims = xr_find_nested_dims(xarr, 'cell')
 
-    cellinfo = dict()
-    for dim in cell_dims:
-        cellinfo[dim] = xarr.coords[dim].values
+    if len(cell_dims) > 1:
+        cellinfo = dict()
+        for dim in cell_dims:
+            cellinfo[dim] = xarr.coords[dim].values
+        cellinfo = pd.DataFrame(cellinfo)
+    else:
+        cellinfo = None
 
-    return pd.DataFrame(cellinfo)
+    return cellinfo
