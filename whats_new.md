@@ -6,6 +6,7 @@
 <br/><br/>
 
 * API: `per_trial=False` option was removed from `.apply()` method of `SpikeEpochs` - it didn't seem to be useful and its behavior was not well defined. If you need to apply a function to each trial separately, you can still use `.apply()`.
+* API: remove unnecessary `spk` argument from `pylabianca.selectivity.cluster_based_selectivity()`. It was used to calculate spike rate and various selectivity indices from cluster-test defined window. Now the function calculates this measures from the provided firing rate xarray.
 
 <br/><br/>
 
@@ -13,6 +14,8 @@
 * ENH: further speed up to `Spikes.epoch()` (around 5 - 13-fold) is now also possible by using `backend='numba'` (if numba is installed)
 * ENH: added an experimental datashader backend to `.plot_waveform()` method of `Spikes` and `SpikeEpochs` (`backend='datashader'`).
 * ENH: `.plot_waveform()` method of `Spikes` and `SpikeEpochs` now allows to control the colormap to plot the waveform density with (`cmap` argument) and the number of y axis bins (`y_bins` argument)
+* ENH: added `pylabianca.utils.cellinfo_from_xarray()` function to extract/reconstruct cellinfo dataframe from xarray DataArray coordinates.
+* ENH: added `copy_cellinfo` argument to `pylabianca.selectivity.cluster_based_selectivity()`. It allows to select which cellinfo columns are copied to the selectivity dataframe.
 * ENH: expose `.to_spiketools()` as `SpikeEpochs` method (previously it was only available as a function in `pylabianca.io` module)
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
 * ENH: `Spikes` `.sort()` method now exposes `inplace` argument to allow for sorting on a copy of the object (this can be also easily done by using `spk.copy().sort()`)
@@ -24,6 +27,7 @@
 <br/><br/>
 
 * DOC: added docstring to `pylabianca.stats.permutation_test()`
+* DOC: add missing entries to docstring of `pylabianca.selectivity.cluster_based_selectivity()`
 * DOC: improved the FieldTrip data example in the documentation: [notebook](doc/fieldtrip_example.ipynb)
 
 <br/><br/>
