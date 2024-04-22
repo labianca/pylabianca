@@ -1,12 +1,13 @@
 import numpy as np
+import pandas as pd
 
-from .utils import xr_find_nested_dims
+from .utils import xr_find_nested_dims, cellinfo_from_xarray
 
 
 # TODO: ensure same ``frate`` explanation for all functions
 #       - obtained with SpikeEpochs.spike_rate or SpikeEpochs.spike_density
 #       - dimensions: ..., ..., ...
-# TODO: adapt for multiple cells
+# TODO: ! adapt for multiple cells
 # TODO: make more universal (do not require 'time' and 'trial' dimensions)
 def explained_variance(frate, groupby, kind='omega'):
     """Calculate percentage of explained variance (PEV) effect size.
@@ -214,10 +215,9 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         data=results['thresh'], dims=dims2, coords=coords, name='t value')
 
     # add cell coords
-    # TODO: this could be smarter and take all columns from cellinfo...
-    for key in results.keys():
-        copy_coords = xr_find_nested_dims(frate, 'cell')
-        if len(copy_coords) > 0:
+    copy_coords = xr_find_nested_dims(frate, 'cell')
+    if len(copy_coords) > 0:
+        for key in results.keys():
             coords = {coord: ('cell', frate.coords[coord].values)
                       for coord in copy_coords}
             results[key] = results[key].assign_coords(coords)
@@ -534,7 +534,6 @@ def compute_selectivity_windows(spk, windows=None, compare='image',
         dictionary key and each dataframe corresponds to a time window of given
         name.
     '''
-    import pandas as pd
     from scipy.stats import kruskal
     from sarna.utils import progressbar
 
