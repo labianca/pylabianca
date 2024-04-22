@@ -944,3 +944,13 @@ def find_index(vec, vals):
     idxs += ngb[closest_idx]
 
     return idxs
+
+
+def cellinfo_from_xarray(xarr):
+    cell_dims = xr_find_nested_dims(xarr, 'cell')
+
+    cellinfo = dict()
+    for dim in cell_dims:
+        cellinfo[dim] = xarr.coords[dim].values
+
+    return pd.DataFrame(cellinfo)

@@ -38,6 +38,17 @@ def test_inherit_metadata():
     assert (coords['b'][1] == metadata['b']).all()
 
 
+def test_cellinfo_from_xarray():
+    spk = create_random_spikes(n_trials=10, n_cells=10)
+    cellinfo = pd.DataFrame({'a': np.arange(10), 'b': list('ABCDEFGHIJ'),
+                             'd': np.random.rand(10) > 0.5})
+    spk.cellinfo = cellinfo
+
+    frate = spk.spike_rate(winlen=0.5, step=0.1)
+    cellinfo_reconstructed = pln.utils.cellinfo_from_xarray(frate)
+    assert cellinfo_reconstructed.equals(cellinfo)
+
+
 def test_find_cells_by_cluster_id():
     spk = create_random_spikes(n_trials=10, n_cells=10)
     channel = (np.tile(np.arange(5)[:, None], [1, 2]) + 1).ravel()
