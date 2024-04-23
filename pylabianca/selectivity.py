@@ -227,11 +227,10 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     return results
 
 
-# TODO: ! add n_jobs
 # TODO: create more progress bars and pass to cluster_based_test
 def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
                               n_permutations=1000, n_stat_permutations=0,
-                              pbar='notebook', correct_window=0.,
+                              n_jobs=1, pbar='notebook', correct_window=0.,
                               min_cluster_pval=0.1, calculate_pev=False,
                               calculate_dos=True, calculate_peak_pev=False,
                               stat_fun=None, baseline_window=(-0.5, 0),
@@ -259,6 +258,11 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
         value for the test statistic (see ``stat_fun``). The default is ``0``,
         which means that the p value is calculated parametrically. Using
         non-parametric calculation is slower but more resistant to parametric
+        assumptions.
+    n_jobs : int
+        Number of parallel jobs to use. The default is ``1``. If ``-1``, all
+        available CPUs are used. ``n_jobs > 1`` requires the ``joblib``
+        package.
     pbar : str | tqdm progressbar
         Progressbar to use. The default is ``'notebook'`` which creates a
         ``tqdm.notebook.tqdm`` progressbar.
@@ -295,8 +299,6 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
         Dataframe with category-sensitivity information.
     '''
     import xarray as xr
-
-    from .stats import cluster_based_test
     from .viz import check_modify_progressbar
 
     n_cells = len(frate)
@@ -309,26 +311,35 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
     # init dataframe for storing results
     df_cluster = _init_df_cluster(
         calculate_pev, calculate_dos, calculate_peak_pev, baseline_window,
-        cellinfo_cols=copy_cellinfo)
+        cellinfo=cellinfo)
     df_parts = list()
 
-    for pick, fr_cell in enumerate(frate):
+    def pick_cellinfo(cellinfo, pick):
+        return cellinfo.iloc[pick, :] if cellinfo is not None else None
 
-        # TODO - pass relevant arrays
-        _, clusters, pvals = cluster_based_test(
-            fr_cell, compare=compare, cluster_entry_pval=cluster_entry_pval,
-            paired=False, stat_fun=stat_fun, n_permutations=n_permutations,
-            n_stat_permutations=n_stat_permutations, progress=False)
+    if n_jobs == 1:
+        for pick, fr_cell in enumerate(frate):
+            cellinfo_row = pick_cellinfo(cellinfo, pick)
+            df_part = _cluster_sel_process_cell(
+                fr_cell, compare, cluster_entry_pval, stat_fun, n_permutations,
+                n_stat_permutations, min_cluster_pval, df_cluster, correct_window,
+                cellinfo_row, calculate_pev, calculate_dos, calculate_peak_pev,
+                baseline_window
+            )
+            df_parts.append(df_part)
+            pbar.update(1)
+    else:
+        from joblib import Parallel, delayed
 
-        # process clusters
-        cellinfo_row = cellinfo.iloc[pick, :] if cellinfo is not None else None
-        df_part = _characterize_clusters(
-            fr_cell, clusters, pvals, min_cluster_pval, df_cluster,
-            correct_window, cellinfo_row, compare, calculate_dos,
-            calculate_pev, calculate_peak_pev, baseline_window
+        df_parts = Parallel(n_jobs=n_jobs)(
+            delayed(_cluster_sel_process_cell)(
+                frate.isel(cell=pick), compare, cluster_entry_pval, stat_fun,
+                n_permutations, n_stat_permutations, min_cluster_pval,
+                df_cluster, correct_window, pick_cellinfo(cellinfo, pick),
+                calculate_pev, calculate_dos, calculate_peak_pev,
+                baseline_window
+            ) for pick in range(n_cells)
         )
-        df_parts.append(df_part)
-        pbar.update(1)
 
     # make sure that the dataframe columns are of the right type
     df_cluster = pd.concat(df_parts, ignore_index=True)
@@ -336,13 +347,35 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
     return df_cluster
 
 
+def _cluster_sel_process_cell(fr_cell, compare, cluster_entry_pval,
+        stat_fun, n_permutations, n_stat_permutations, min_cluster_pval,
+        df_cluster, correct_window, cellinfo_row, calculate_pev,
+        calculate_dos, calculate_peak_pev, baseline_window):
+    from .stats import cluster_based_test
+
+    # TODO - pass relevant arrays
+    _, clusters, pvals = cluster_based_test(
+        fr_cell, compare=compare, cluster_entry_pval=cluster_entry_pval,
+        paired=False, stat_fun=stat_fun, n_permutations=n_permutations,
+        n_stat_permutations=n_stat_permutations, progress=False)
+
+    # process clusters
+    df_part = _characterize_clusters(
+        fr_cell, clusters, pvals, min_cluster_pval, df_cluster,
+        correct_window, cellinfo_row, compare, calculate_dos,
+        calculate_pev, calculate_peak_pev, baseline_window
+    )
+
+    return df_part
+
+
 def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
-                     baseline_window, cellinfo_cols=None):
+                     baseline_window, cellinfo=None):
     add_cols = ['pval', 'window', 'preferred', 'n_preferred', 'FR_preferred']
     cols = ['cell']
 
-    if cellinfo_cols is not None and len(cellinfo_cols) > 0:
-        cols = cols + cellinfo_cols
+    if cellinfo is not None and len(cellinfo) > 0:
+        cols = cols + cellinfo.columns.tolist()
     cols += add_cols
 
     if calculate_pev:
@@ -403,8 +436,9 @@ def _characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
     df_cluster.loc[0, 'window'] = twin_str
 
     # copy info from cellinfo
-    for col in copy_cellinfo:
-        df_cluster.loc[0, col] = cellinfo_row[col]
+    if cellinfo_row is not None:
+        for col in cellinfo_row.columns:
+            df_cluster.loc[0, col] = cellinfo_row[col]
 
     # calculate depth of selectivity for each selective window
     frate_avg = fr_cell.sel(
@@ -587,12 +621,12 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
         selectivity = np.abs(selectivity) > threshold
 
     # if same_cells and same_sessions:
-    fr_sel2 = frate_mix.isel(cell=np.where(sel)[0])
+    fr_sel2 = frate.isel(cell=np.where(sel)[0])
 
     # if has_session_coord but not same_sessions / cells:
     fr_list = list()
-    for ses, fr in frate_mix.groupby('session'):
-        stat_ses = stat.query({'cell': f'session == "{ses}"'})
+    for ses, fr in frate.groupby(session_coord):
+        stat_ses = s.query({'cell': f'{session_coord} == "{ses}"'})
         sel_cell = stat_ses.cell.values[stat_ses.values > threshold]
         fr_sel = fr.sel(cell=sel_cell)
         fr_list.append(fr_sel)
