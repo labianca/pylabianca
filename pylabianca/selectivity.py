@@ -4,10 +4,12 @@ import pandas as pd
 from .utils import xr_find_nested_dims, cellinfo_from_xarray
 
 
+# TODO: ! adapt for multiple cells
 # TODO: ensure same ``frate`` explanation for all functions
+#         Xarray with spike rate  or spike density containing ``'cell'``,
+#        ``'trial'`` and ``'time'`` dimensions.
 #       - obtained with SpikeEpochs.spike_rate or SpikeEpochs.spike_density
 #       - dimensions: ..., ..., ...
-# TODO: ! adapt for multiple cells
 # TODO: make more universal (do not require 'time' and 'trial' dimensions)
 def explained_variance(frate, groupby, kind='omega'):
     """Calculate percentage of explained variance (PEV) effect size.
@@ -226,7 +228,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
 
 # TODO: ! add n_jobs
-# TODO: pick columns from cellinfo before passing do characterize_clusters
 # TODO: create more progress bars and pass to cluster_based_test
 def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
                               n_permutations=1000, n_stat_permutations=0,
@@ -303,19 +304,7 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
     pbar = check_modify_progressbar(pbar, total=n_cells)
 
     # this could be simplified or moved to a separate function
-    do_copy_cellinfo = (
-        (isinstance(copy_cellinfo, bool) and copy_cellinfo)
-        or (isinstance(copy_cellinfo, list) and len(copy_cellinfo) > 0)
-    )
-    if do_copy_cellinfo:
-        cellinfo = cellinfo_from_xarray(frate)
-        if cellinfo is not None and len(cellinfo) > 0:
-            if isinstance(copy_cellinfo, bool):
-                copy_cellinfo = cellinfo.columns.tolist()
-        else:
-            copy_cellinfo = list()
-    else:
-        copy_cellinfo = list()
+    cellinfo = _which_copy_cellinfo(frate, copy_cellinfo)
 
     # init dataframe for storing results
     df_cluster = _init_df_cluster(
@@ -333,10 +322,10 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
 
         # process clusters
         cellinfo_row = cellinfo.iloc[pick, :] if cellinfo is not None else None
-        df_part = characterize_clusters(
+        df_part = _characterize_clusters(
             fr_cell, clusters, pvals, min_cluster_pval, df_cluster,
-            correct_window, cellinfo_row, copy_cellinfo, compare,
-            calculate_dos, calculate_pev, calculate_peak_pev, baseline_window
+            correct_window, cellinfo_row, compare, calculate_dos,
+            calculate_pev, calculate_peak_pev, baseline_window
         )
         df_parts.append(df_part)
         pbar.update(1)
@@ -369,10 +358,38 @@ def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
     return df_cluster
 
 
-def characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
-                         correct_window, ord_idx, cellinfo_row, copy_cellinfo,
-                         compare, calculate_dos, calculate_pev,
-                         calculate_peak_pev, baseline_window):
+def _which_copy_cellinfo(frate, copy_cellinfo):
+    do_copy_cellinfo = (
+        (isinstance(copy_cellinfo, bool) and copy_cellinfo)
+        or (isinstance(copy_cellinfo, list) and len(copy_cellinfo) > 0)
+    )
+    if do_copy_cellinfo:
+        cellinfo = cellinfo_from_xarray(frate)
+
+        if cellinfo is not None and len(cellinfo) > 0:
+            if isinstance(copy_cellinfo, bool):
+                copy_cellinfo = cellinfo.columns.tolist()
+            else:
+                copy_cellinfo_has_not = [col for col in copy_cellinfo
+                                         if col not in cellinfo.columns]
+                if len(copy_cellinfo_has_not) > 0:
+                    raise ValueError('Some columns in copy_cellinfo are not '
+                                     'present in the cellinfo dataframe: '
+                                     f'{copy_cellinfo_has_not}')
+
+                cellinfo = cellinfo.loc[:, copy_cellinfo]
+        else:
+            cellinfo = None
+    else:
+        cellinfo = None
+
+    return cellinfo
+
+
+def _characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
+                          correct_window, ord_idx, cellinfo_row, compare,
+                          calculate_dos, calculate_pev, calculate_peak_pev,
+                          baseline_window):
     import xarray as xr
 
     # get cluster time window
@@ -451,9 +468,9 @@ def characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
     return df_cluster
 
 
-def characterize_clusters(fr_cell, clusters, pvals, min_cluster_pval,
+def _characterize_clusters(fr_cell, clusters, pvals, min_cluster_pval,
                           df_cluster, correct_window, cellinfo_row,
-                          copy_cellinfo, compare, calculate_dos, calculate_pev,
+                          compare, calculate_dos, calculate_pev,
                           calculate_peak_pev, baseline_window):
     df_clst = list()
     n_clusters = len(pvals)
@@ -463,9 +480,9 @@ def characterize_clusters(fr_cell, clusters, pvals, min_cluster_pval,
         clst_idx = np.where(good_clst)[0]
 
         for ord_idx, idx in enumerate(clst_idx):
-            df_part = characterize_cluster(
+            df_part = _characterize_cluster(
                 fr_cell, clusters[idx], pvals[idx], df_cluster.copy(),
-                correct_window, ord_idx, cellinfo_row, copy_cellinfo, compare,
+                correct_window, ord_idx, cellinfo_row, compare,
                 calculate_dos, calculate_pev, calculate_peak_pev,
                 baseline_window
             )
