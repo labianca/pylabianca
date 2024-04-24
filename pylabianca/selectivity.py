@@ -625,26 +625,37 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
     # dictionary of xarrays: assumes multiple subjects/sessions, one per key
     import xarray as xr
 
-    same_cells = (frate.cell.values == selectivity.cell.values).all()
-    has_session_coord = session_coord in frate.coords
-    if has_session_coord:
-        same_sessions = (frate[session_coord].values
-                         == selectivity[session_coord].values).all()
+    frate_xarr = isinstance(frate, xr.DataArray)
 
-    if threshold is not None:
-        selectivity = np.abs(selectivity) > threshold
+    if frate_xarr:
+        has_session_coord = session_coord in frate.coords
+        same_cells = (frate.cell.values == selectivity.cell.values).all()
 
-    # if same_cells and same_sessions:
-    fr_sel2 = frate.isel(cell=np.where(sel)[0])
+        if not has_session_coord:
+            same_sessions = True
+        else:
+            same_sessions = (frate[session_coord].values
+                             == selectivity[session_coord].values).all()
 
-    # if has_session_coord but not same_sessions / cells:
-    fr_list = list()
-    for ses, fr in frate.groupby(session_coord):
-        stat_ses = s.query({'cell': f'{session_coord} == "{ses}"'})
-        sel_cell = stat_ses.cell.values[stat_ses.values > threshold]
-        fr_sel = fr.sel(cell=sel_cell)
-        fr_list.append(fr_sel)
-    fr_sel = xr.concat(fr_list, dim='cell')
+        if threshold is not None:
+            selectivity = np.abs(selectivity) > threshold
+
+        # if same_cells and same_sessions:
+        if same_cells and same_sessions:
+            fr_sel = frate.isel(cell=np.where(selectivity)[0])
+        else:
+            # TODO: check if same sessions but with different order (or maybe
+            #       that all sessions from frate are in selectivity)
+            # if has_session_coord but not same_sessions / cells:
+            fr_list = list()
+            for ses, fr in frate.groupby(session_coord):
+                stat_ses = s.query({'cell': f'{session_coord} == "{ses}"'})
+                sel_cell = stat_ses.cell.values[stat_ses.values > threshold]
+                fr_sel = fr.sel(cell=sel_cell)
+                fr_list.append(fr_sel)
+            fr_sel = xr.concat(fr_list, dim='cell')
+    else:
+        raise NotImplementedError('Only xarray is supported for now')
 
 
 # TODO: compare with time resolved selectivity
