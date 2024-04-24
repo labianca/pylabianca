@@ -73,6 +73,7 @@ def explained_variance(frate, groupby, kind='omega'):
     return es
 
 
+# TODO: ! adapt for multiple cells
 def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
     '''Compute depth of selectivity for given category.
 
@@ -119,6 +120,8 @@ def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
     return selectivity, avg_by_probe
 
 
+# CONSIDER: could add an attribute informing about condition order
+#           (important for t test interpretation for example)
 def compute_selectivity_continuous(frate, compare='image', n_perm=500,
                                    n_jobs=1, min_Hz=False):
     '''
@@ -177,6 +180,8 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     # permutations
     # ------------
     arrs = [arr for _, arr in frate.groupby(compare)]
+    stat_name = 't value' if len(arrs) == 2 else 'F value'
+    stat_unit = stat_name[0]
     results = permutation_test(
         *arrs, paired=False, n_perm=n_perm,
         return_pvalue=False, return_distribution=True, n_jobs=n_jobs)
@@ -184,6 +189,8 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     # turn to xarray
     # --------------
     cells = frate.cell.values
+
+    # TODO: this is not documented and not very clear, could be moved outside
     if 'subject' in frate.attrs:
         subj = frate.attrs['subject']
         cells = ['_'.join([subj, x]) for x in cells]
@@ -197,12 +204,12 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         coords['time'] = frate.time.values
 
     results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
-                                   coords=coords, name='t value')
+                                   coords=coords, name=stat_name)
 
     # stat
     coords = {k: coords[k] for k in dims[1:]}
     results['stat'] = xr.DataArray(
-        data=results['stat'], dims=dims[1:], coords=coords, name='t value')
+        data=results['stat'], dims=dims[1:], coords=coords, name=stat_name)
 
     # thresh
     if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
@@ -214,7 +221,13 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         dims2 = dims[1:]
 
     results['thresh'] = xr.DataArray(
-        data=results['thresh'], dims=dims2, coords=coords, name='t value')
+        data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
+
+    # copy unit information
+    for key in results.keys():
+        results[key].attrs['unit'] = stat_unit
+        if 'coord_units' in frate.attrs:
+            results[key].attrs['coord_units'] = frate.attrs['coord_units']
 
     # add cell coords
     copy_coords = xr_find_nested_dims(frate, 'cell')
@@ -353,7 +366,7 @@ def _cluster_sel_process_cell(fr_cell, compare, cluster_entry_pval,
         calculate_dos, calculate_peak_pev, baseline_window):
     from .stats import cluster_based_test
 
-    # TODO - pass relevant arrays
+    # TODO - pass relevant arrays (not sure what I meant here ...)
     _, clusters, pvals = cluster_based_test(
         fr_cell, compare=compare, cluster_entry_pval=cluster_entry_pval,
         paired=False, stat_fun=stat_fun, n_permutations=n_permutations,
@@ -600,6 +613,7 @@ def compute_time_in_window(df_cluster, window_of_interest):
     return df_cluster
 
 
+# CONSIDER: selectivity as list of names / dict of lists of names ?
 def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
     # one xarray and session_coord is None: assumes one subject
     #    - if same order of cells -> simple bool selection
