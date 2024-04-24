@@ -1,8 +1,11 @@
 import warnings
 import numpy as np
 
-# this could be done in try-except block
-from sklearn.base import BaseEstimator, TransformerMixin
+# avoid errors when no sklearn
+try:
+    from sklearn.base import BaseEstimator
+except ImportError:
+    BaseEstimator = object
 
 
 def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
@@ -329,6 +332,9 @@ def frates_dict_to_sklearn(frates, target=None, select=None,
     return Xs, ys, full_time
 
 
+# TODO: DOC - explain shuffle argument better - it does not abolish the
+#             relationship between trials of X and y, but only shuffles the
+#             order of trials within each condition (y value)
 def join_subjects(Xs, ys, random_state=None, shuffle=True):
     '''Concatenate subjects keeping target the same but shuffling trials
     within target categories.
@@ -635,6 +641,8 @@ def correlation(X1, X2):
     return rval_sel
 
 
+# TODO: profile and consider using a better correlation function
+#       (numba for example)
 class maxCorrClassifier(BaseEstimator):
     '''Simple implementation of maxCorr classifier.'''
     def __init__(self):
