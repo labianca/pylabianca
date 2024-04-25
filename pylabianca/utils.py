@@ -931,6 +931,70 @@ def xr_find_nested_dims(arr, dim_name):
     return names
 
 
+def dict_to_xarray(data, dim_name='cell', query=None):
+    '''Convert dictionary to xarray.DataArray.
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary with xarray data to concatenate. Keys are subject / session
+        names and values are xarrays.
+    dim_name : str
+        Name of the dimension to concatenate along. Defaults to ``'cell'``.
+        This dimension is also enriched with subject / session information from
+        the dictionary keys.
+    query : dict | None
+        If not None, the query is passed to .query() method of the xarray. This
+        can be useful to select only specific data from the xarray, which can
+        be difficult to do after concatenation (some coordinates may become
+        multi-dimensional and querying would raise an error "Unlabeled
+        multi-dimensional array cannot be used for indexing").
+
+    Returns
+    -------
+    arr : xarray.DataArray
+        DataArray with data from the dictionary.
+    '''
+    import xarray as xr
+
+    assert isinstance(data, dict)
+    keys = list(data.keys())
+    all_xarr = [isinstance(data[sb], xr.DataArray) for sb in keys]
+    assert all(all_xarr)
+
+    use_coords = None
+    arr_list = list()
+    different_coords = False
+    for key, arr in data.items():
+        if query is not None:
+            arr = arr.query(query)
+
+        # add subject / session information to the concatenated dimension
+        n_cells = len(arr)
+        sub_dim = [key] * n_cells
+        arr = arr.assign_coords({'sub': (dim_name, sub_dim)})
+
+        # check if coordinates are shared
+        if use_coords is None:
+            use_coords = set(list(arr.coords))
+        else:
+            coords = set(list(arr.coords))
+            use_coords = use_coords & coords
+            if not different_coords and len(coords) != len(use_coords):
+                different_coords = True
+
+        arr_list.append(arr)
+
+    # drop coordinates that are not shared
+    if different_coords:
+        for idx, arr in enumerate(arr_list):
+            drop_coords = set(list(arr.coords)) - use_coords
+            arr_list[idx] = arr.drop(drop_coords)
+
+    arr = xr.concat(arr_list, dim=dim_name)
+    return arr
+
+
 def find_index(vec, vals):
     if not isinstance(vals, (list, tuple, np.ndarray)):
         vals = [vals]
