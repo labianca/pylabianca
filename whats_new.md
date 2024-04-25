@@ -32,7 +32,7 @@
 
 * ENH: added `pylabianca.io.from_spiketools()` function to convert data from list of arrays format used by spiketools to pylabianca `SpikeEpochs`
 * ENH: added `pylabianca.io.to_spiketools()` function to convert data from pylabianca `SpikeEpochs` to list of arrays format used by spiketools
-* ENH: added `pylabianca.io.read_analog_plexon_nex()` function to read analog (continuous) data from Plexon NEX files. The continuous data are stored in `mne.io.RawArray` object.
+* ENH: added `pylabianca.io.read_signal_plexon_nex()` function to read continuous data from Plexon NEX files. The continuous data are stored in `mne.io.RawArray` object.
 * ENH: added `.apply()` method to `SpikeEpochs` allowing to run arbitrary functions on the spike data. At the moment the function has to take one trial (or all trials) and return a single value.
 * ENH: improved `pylabianca.utils.spike_centered_windows()` to handle xarray DataArrays and mne.Epochs objects. Also, the returned windows xarray now inherits metadata from SpikeEpochs object (or from mne.Epochs object if
 the SpikeEpochs object does not contain metadata).
