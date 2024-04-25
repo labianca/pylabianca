@@ -1,9 +1,9 @@
 import numpy as np
-import numba
+from numba import jit
 from numba.extending import overload
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
                               n_trials, winlen=0.25, step=0.05):
     half_win = winlen / 2
@@ -11,22 +11,22 @@ def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
     epoch_len = time_limits[1] - time_limits[0]
     n_steps = int(np.floor((epoch_len - winlen) / step + 1))
 
-    fr_tstart = time_limits[0] + half_win
+    fr_t_start = time_limits[0] + half_win
     fr_tend = time_limits[1] - half_win + step * 0.001
-    times = np.arange(fr_tstart, fr_tend, step=step)
+    times = np.arange(fr_t_start, fr_tend, step=step)
     frate = np.zeros((n_trials, n_steps))
 
     for step_idx in range(n_steps):
         winlims = times[step_idx] + window_limits
         msk = (spike_times >= winlims[0]) & (spike_times < winlims[1])
         tri = spike_trials[msk]
-        intri, count = _monotonic_unique_counts(tri)
-        frate[intri, step_idx] = count / winlen
+        in_tri, count = _monotonic_unique_counts(tri)
+        frate[in_tri, step_idx] = count / winlen
 
     return times, frate
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def _monotonic_unique_counts(values):
     n_val = len(values)
     if n_val == 0:
@@ -67,7 +67,7 @@ def numba_compare_times(spk, cell_idx1, cell_idx2, spk2=None):
     return res
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def _numba_compare_times(times1, times2, distances):
     n_times1 = times1.shape[0]
     n_times2 = times2.shape[0]
@@ -87,7 +87,7 @@ def _numba_compare_times(times1, times2, distances):
     return distances
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
     '''Compute auto-correlation histogram for a single cell.
 
@@ -125,7 +125,7 @@ def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
     return counts
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
     '''Compute cross-correlation histogram for a single cell.
 
@@ -179,7 +179,7 @@ def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
     return counts
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def compute_bin(x, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
     # assuming uniform bins for now
@@ -199,7 +199,7 @@ def compute_bin(x, bin_edges):
         return bin
 
 
-@numba.jit(nopython=True)
+@jit(nopython=True)
 def numba_histogram(a, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
     n_bins = len(bin_edges) - 1
@@ -212,3 +212,78 @@ def numba_histogram(a, bin_edges):
             hist[int(bin)] += 1
 
     return hist, bin_edges
+
+
+# FIXME: this function assumes non-overlapping epochs
+@jit(nopython=True)
+def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
+    trial_idx = [-1]
+    n_in_trial = [0]
+    time = [np.array([0.2])]
+
+    t_idx_low = 0
+    t_idx_hi = 0
+    n_spikes = len(timestamps)
+    n_epochs = event_times.shape[0]
+    this_epo = (timestamps[0] < (event_times + tmax)).argmax()
+    epo_indices = np.arange(this_epo, n_epochs, dtype=np.int16)
+
+    for epo_idx in epo_indices:
+        # find spikes that fit within the epoch
+        still_looking = True
+        event_time = event_times[epo_idx]
+        t_low = event_time + tmin
+        t_high = event_time + tmax
+        current_idx = t_idx_hi if t_idx_hi < t_low else t_idx_low
+
+        while still_looking and current_idx < n_spikes:
+            if timestamps[current_idx] >= t_low:
+                t_idx_low = current_idx
+                still_looking = False
+            current_idx += 1
+
+        still_looking = True
+        while still_looking and current_idx < n_spikes:
+            if timestamps[current_idx] >= t_high:
+                t_idx_hi = current_idx
+                still_looking = False
+            current_idx += 1
+
+        # select these spikes and center wrt event time
+        tms = timestamps[t_idx_low:t_idx_hi] - event_time
+        n_spk_in_tri = len(tms)
+        if n_spk_in_tri > 0:
+            time.append(tms)
+            trial_idx.append(epo_idx)
+            n_in_trial.append(n_spk_in_tri)
+
+    trial = create_trials_from_short(trial_idx[1:], n_in_trial[1:])
+    time = concat_times(time[1:], n_in_trial[1:])
+
+    return trial, time
+
+
+@jit(nopython=True)
+def create_trials_from_short(trial_idx, n_in_trial):
+    n_all = sum(n_in_trial)
+    trial = np.empty(n_all, dtype=np.int16)
+    idx = 0
+    for tri_idx, n_fill in zip(trial_idx, n_in_trial):
+        idx_end = idx + n_fill
+        trial[idx:idx_end] = tri_idx
+        idx = idx_end
+
+    return trial
+
+
+@jit(nopython=True)
+def concat_times(times, n_in_trial):
+    n_all = sum(n_in_trial)
+    time = np.empty(n_all, dtype=np.float64)
+    idx = 0
+    for tms, n_fill in zip(times, n_in_trial):
+        idx_end = idx + n_fill
+        time[idx:idx_end] = tms
+        idx = idx_end
+
+    return time

@@ -1,13 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 # TODO - title is now removed, so for groupby it would be good to specify the
 #        groupby coord name in legend "title"
 # TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
-# TODO - the info about "one other dimension" (that is reduced) seems to be no
-#        longer accurate
-
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
                 labels=True):
@@ -23,7 +19,10 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         plotted as a shaded area.
     reduce_dim : str
         The dimension to reduce (average). The standard error is also computed
-        along this dimension. The default is ``'trial'``.
+        along this dimension. If ``reduce_dim`` is ``None`` (default) then the
+        following dimensions are tested in this order: ``['trial', 'fold',
+        'perm', 'permutation', 'cell', 'spike']``. If none of these dimensions
+        are found, the first dimension is reduced.
     groupby : str | None
         The dimension (or sub-dimension) to use as grouping variable plotting
         the spike rate into separate lines. The default is ``None``, which
@@ -153,6 +152,7 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         a dictionary linking condition names / values and RBG arrays. Default
         is ``None`` which uses the default matplotlib color cycle.
     """
+    import matplotlib.pyplot as plt
     assert reduce_dim is not None
 
     if ax is None:
@@ -216,7 +216,7 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
     return lines[0].axes
 
 
-# TODO: move to sarna sometime
+# TODO: move to borsar sometime
 # TODO: make sure the pbar is cleared ... (tqdm._instances.clear() may help)
 def check_modify_progressbar(pbar, total=None):
     '''Reset ``pbar`` and change its total if it is a tqdm progressbar.
@@ -439,6 +439,7 @@ def get_axis_size_pix(ax):
 
 def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
                               how='eq_hist'):
+    import matplotlib.pyplot as plt
     import pandas as pd
     import datashader as ds
     import datashader.transfer_functions as tf
@@ -449,7 +450,7 @@ def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
     w_pix, h_pix = get_axis_size_pix(ax)
     cvs = ds.Canvas(plot_height=int(h_pix), plot_width=int(w_pix))
     agg = cvs.line(waves, x=waveform_time, y=list(range(n_samples)),
-                agg=ds.count(), axis=1, line_width=0)
+                   agg=ds.count(), axis=1, line_width=0)
     colormap = getattr(plt.cm, cmap)
     img = tf.shade(agg, how=how, cmap=colormap)
 
@@ -479,6 +480,7 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     ax : matplotlib.Axes
         Axis with the raster plot.
     '''
+    import matplotlib.pyplot as plt
 
     if ax is None:
         _, ax = plt.subplots()
@@ -569,6 +571,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
     fig : matplotlib.Figure
         Figure with the plots.
     '''
+    import matplotlib.pyplot as plt
+
     # select cell from frate
     if isinstance(pick, str):
         cell_name = pick
@@ -664,7 +668,9 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     ax : matplotlib.Axes
         Axis with the plot.
     '''
+    import matplotlib.pyplot as plt
     from borsar.viz import highlight
+
     try:
         import xarray as xr
         has_xarray = True
@@ -758,6 +764,8 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 # - [ ] combine with layout functions from sarna
 def align_axes_limits(axes=None, ylim=True, xlim=False):
     '''Align the limits of all ``axes``.'''
+    import matplotlib.pyplot as plt
+
     if axes is None:
         axes = plt.gcf().get_axes()
 
@@ -788,7 +796,7 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
 # TODO - move this to separate submodule .waveform ?
 def calculate_perceptual_waveform_density(spk, cell_idx):
     # get waveform 2d histogram image
-    hist, xbins, ybins, time_edges = (
+    hist, _, ybins, _ = (
         _calculate_waveform_density_image(
             spk, cell_idx, False, 100)
     )
@@ -817,7 +825,7 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
 
     # create the 2d hist image with corrected y range
     y_range = [ybins[start_ix], ybins[end_ix]]
-    hist, xbins, ybins, time_edges = (
+    hist, _, ybins, _ = (
         _calculate_waveform_density_image(
             spk, cell_idx, False, 100, y_range=y_range)
     )
@@ -834,6 +842,8 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
 
 def auto_multipanel(n_to_show, ax=None, figsize=None):
     '''Create a multipanel figure that fits at least ``n_to_show`` axes.'''
+    import matplotlib.pyplot as plt
+
     n = np.sqrt(n_to_show)
     n_left = 0
 

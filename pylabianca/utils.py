@@ -180,8 +180,9 @@ def _gauss_kernel_samples(window, gauss_sd):
     return kernel
 
 
+# ENH: change `sel` var creation to use trial boundaries
+# ENH: test speed and consider numba
 # ENH: allow for asymmetric windows (like in fieldtrip)
-# ENH: inherit metadata from spike_epochs?
 def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
                            winlen=0.1):
     '''Cut out windows from signal centered on spike times.
@@ -218,7 +219,6 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
         Spike-centered windows. ``n_spikes x n_channels x n_times``.
     '''
     import xarray as xr
-    from borsar.utils import find_index
 
     # check inputs
     picks = _deal_with_picks(spk, pick)
@@ -281,7 +281,6 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
 
     n_tri = max(spk.trial[cell_idx]) + 1
     for tri_idx in range(n_tri):
-        # ENH: change to trial boundaries
         sel = spk.trial[cell_idx] == tri_idx
         if sel.any():
             tms = spk.time[cell_idx][sel]
@@ -718,6 +717,15 @@ def download_test_data():
     os.remove(destination)
 
 
+def has_numba():
+    """Check if numba is available."""
+    try:
+        from numba import jit
+        return True
+    except ImportError:
+        return False
+
+
 def has_elephant():
     '''Test if elephant is available.'''
     try:
@@ -985,3 +993,32 @@ def dict_to_xarray(data, dim_name='cell', query=None):
 
     arr = xr.concat(arr_list, dim=dim_name)
     return arr
+
+
+def find_index(vec, vals):
+    if not isinstance(vals, (list, tuple, np.ndarray)):
+        vals = [vals]
+
+    vals = np.asarray(vals)
+    ngb = np.array([-1, 0, 1])
+    idxs = np.searchsorted(vec, vals)
+
+    test_idx = idxs[None, :] + ngb[:, None]
+    closest_idx = np.abs(vec[test_idx] - vals[None, :]).argmin(axis=0)
+    idxs += ngb[closest_idx]
+
+    return idxs
+
+
+def cellinfo_from_xarray(xarr):
+    cell_dims = xr_find_nested_dims(xarr, 'cell')
+
+    if len(cell_dims) > 1:
+        cellinfo = dict()
+        for dim in cell_dims:
+            cellinfo[dim] = xarr.coords[dim].values
+        cellinfo = pd.DataFrame(cellinfo)
+    else:
+        cellinfo = None
+
+    return cellinfo

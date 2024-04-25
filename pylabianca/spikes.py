@@ -733,10 +733,12 @@ class Spikes(object):
         '''Return the number of units in Spikes.'''
         return len(self.timestamps)
 
-    # TODO: return idx from _epoch_spikes only when self.waveform is not None?
-    # TODO: time and consider speeding up
+    # TODO: potential speedup: epoch on timestamps directly, only then convert
+    #       to spike times in seconds (this would have been easier if
+    #       timestamps were always int, but for osort they can be floating
+    #       point)
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.,
-              keep_timestamps=False):
+              keep_timestamps=False, backend='numpy'):
         '''Epoch spikes with respect to selected events.
 
         Parameters
@@ -757,6 +759,10 @@ class Spikes(object):
         keep_timestamps : bool
             Whether to keep the original spike timestamps and store them in the
             epochs. Defaults to ``False``.
+        backend : str
+            Computation backend to use. Can be 'numpy' or 'numba' (defaults
+            to 'numpy'). The 'numba' backend does not support keeping the
+            original timestamps and waveforms currently.
 
         Returns
         -------
@@ -777,10 +783,26 @@ class Spikes(object):
         timestamps = list() if keep_timestamps else None
         return_idx = has_waveform or keep_timestamps
 
+        if backend == 'numba':
+            from borsar.utils import has_numba
+            assert has_numba(), 'Numba is required for the "numba" backend.'
+            assert not has_waveform, ('Waveforms are not supported with the '
+                                      '"numba" backend.')
+            assert not keep_timestamps, ('Keeping timestamps is not supported '
+                                         'with the "numba" backend.')
+            from ._numba import _epoch_spikes_numba
+
         for neuron_idx in range(n_neurons):
-            tri, tim, idx = _epoch_spikes(
-                self.timestamps[neuron_idx] / self.sfreq, event_times,
-                tmin, tmax, return_idx=return_idx)
+            if backend == 'numpy':
+                tri, tim, idx = _epoch_spikes(
+                    self.timestamps[neuron_idx] / self.sfreq, event_times,
+                    tmin, tmax, return_idx=return_idx
+                )
+            elif backend == 'numba':
+                tri, tim = _epoch_spikes_numba(
+                    self.timestamps[neuron_idx] / self.sfreq, event_times,
+                    tmin, tmax
+                )
             trial.append(tri)
             time.append(tim)
 
