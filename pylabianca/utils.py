@@ -931,6 +931,13 @@ def xr_find_nested_dims(arr, dim_name):
     return names
 
 
+def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
+    n_cells = len(arr.coords[dim_name])
+    sub_dim = [ses] * n_cells
+    arr = arr.assign_coords({ses_name: (dim_name, sub_dim)})
+    return arr
+
+
 def dict_to_xarray(data, dim_name='cell', query=None):
     '''Convert dictionary to xarray.DataArray.
 
@@ -970,9 +977,7 @@ def dict_to_xarray(data, dim_name='cell', query=None):
             arr = arr.query(query)
 
         # add subject / session information to the concatenated dimension
-        n_cells = len(arr)
-        sub_dim = [key] * n_cells
-        arr = arr.assign_coords({'sub': (dim_name, sub_dim)})
+        arr = assign_session_coord(arr, key, dim_name=dim_name, ses_name='sub')
 
         # check if coordinates are shared
         if use_coords is None:
