@@ -4,56 +4,58 @@ import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _get_trial_boundaries, _validate_spike_epochs_input,
-                    _validate_cellinfo)
+                    _validate_spikes_input, _validate_cellinfo,
+                    _handle_cell_names)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import compare_spike_times, xcorr_hist
 
 
 class SpikeEpochs():
+    """Class for convenient storage, analysis and visualization of epoched
+    spikes data.
+
+    Parameters
+    ----------
+    time : list-like of np.ndarray
+        List of arrays, where each array contains spike times for one
+        cell (neuron). The times are centered with respect to epoch onset
+        (for example stimulus presentation).
+    trial : list-like of np.ndarray
+        List of arrays, where each array contains trial membership of
+        spikes from respective ``time`` array for one cell (neuron). The
+        trial indices are zero-based integers.
+    time_limits : list-like | None
+        Optional. Two-element array with epoch time limits with respect to
+        epoch-centering event. The limits have to be in seconds.
+        For example ``np.array([-0.5, 1.5])`` means from 0.5 seconds
+        before the event up to 1.5 seconds after the event. The default
+        (``None``) infers time limits from min and max spike times.
+    n_trials : int | None
+        Number of trials. Optional, if the number of trials can't be
+        inferred from the ``trials`` argument (for example when none of the
+        cells fire for the last few trials).
+    waveform : list of numpy ndarrays | None
+        List of spikes x samples waveform arrays.
+    waveform_time : np.ndarray | None
+        One-dimensional array of time values in milliseconds for
+        consecutive samples of the waveform.
+    cell_names : list of str | None
+        String identifiers of cells. First string corresponds to first
+        cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
+        Optional, the default (``None``) names the first cell
+        ``'cell000'``, the second cell ``'cell001'`` and so on.
+    metadata : pandas.DataFrame
+        DataFrame with trial-level metadata.
+    cellinfo : pandas.DataFrame
+        DataFrame with additional information about the cells.
+    timestamps : list-like of np.ndarray | None
+        Original spike timestamps. Should be in the same format as ``time``
+        and ``trial`` arguments.
+    """
     def __init__(self, time, trial, time_limits=None, n_trials=None,
                  waveform=None, waveform_time=None, cell_names=None,
                  metadata=None, cellinfo=None, timestamps=None):
-        '''Create ``SpikeEpochs`` object for convenient storage, analysis and
-        visualization of spikes data.
 
-        Parameters
-        ----------
-        time : listlike of np.ndarray
-            List of arrays, where each array contains spike times for one
-            cell (neuron). The times are centered with respect to epoch onset
-            (for example stimulus presentation).
-        trial : listlike of np.ndarray
-            List of arrays, where each array contains trial membership of
-            spikes from respective ``time`` array for one cell (neuron). The
-            trial indices are zero-based integers.
-        time_limits : listlike | None
-            Optional. Two-element array with epoch time limits with respect to
-            epoch-centering event. The limits have to be in seconds.
-            For example ``np.array([-0.5, 1.5])`` means from 0.5 seconds
-            before the event up to 1.5 seconds after the event. The default
-            (``None``) infers time limits from min and max spike times.
-        n_trials : int | None
-            Number of trials. Optional, if the number of trials can't be
-            inferred from the ``trials`` argument (for example when none of the
-            cells fire for the last few trials).
-        waveform : list of numpy ndarrays | None
-            List of spikes x samples waveform arrays.
-        waveform_time : np.ndarray | None
-            One-dimensional array of time values in milliseconds for
-            consecutive samples of the waveform.
-        cell_names : list of str | None
-            String identifiers of cells. First string corresponds to first
-            cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
-            Optional, the default (``None``) names the first cell
-            ``'cell000'``, the second cell ``'cell001'`` and so on.
-        metadata : pandas.DataFrame
-            DataFrame with trial-level metadata.
-        cellinfo : pandas.DataFrame
-            DataFrame with additional information about the cells.
-        timestamps : listlike of np.ndarray | None
-            Original spike timestamps. Should be in the same format as ``time``
-            and ``trial`` arguments.
-        '''
         _validate_spike_epochs_input(time, trial)
 
         self.time = time
@@ -68,19 +70,7 @@ class SpikeEpochs():
         if n_trials is None:
             n_trials = int(max(max(tri) + 1 if len(tri) > 0 else 0
                            for tri in self.trial))
-        if cell_names is None:
-            n_cells = len(time)
-            cell_names = np.array(['cell{:03d}'.format(idx)
-                                   for idx in range(n_cells)])
-        else:
-            cell_names = np.asarray(cell_names)
-            assert len(cell_names) == len(time)
-
-        if metadata is not None:
-            assert isinstance(metadata, pd.DataFrame)
-            assert metadata.shape[0] == n_trials
-
-        n_cells = len(self.time)
+        cell_names = _handle_cell_names(cell_names, time)
         self._cellinfo = _validate_cellinfo(self, cellinfo)
 
         if waveform is not None:
@@ -116,11 +106,11 @@ class SpikeEpochs():
         return len(self.time)
 
     def pick_cells(self, picks=None, query=None):
-        '''Select cells by name or index. Operates in-place.
+        '''Select cells by name, index or query. Operates in-place.
 
         Parameters
         ----------
-        picks : int | str | listlike of int | list of str | None
+        picks : int | str | list-like of int | list of str | None
             Cell names or indices to select.
         query : str | None
             Query for ``.cellinfo`` - to pick cells by their properties, not
@@ -129,11 +119,11 @@ class SpikeEpochs():
         return _pick_cells(self, picks=picks, query=query)
 
     def drop_cells(self, picks):
-        '''Drop cells by index. Operates in-place.
+        '''Drop cells by name or index. Operates in-place.
 
         Parameters
         ----------
-        picks : int | str | listlike of int
+        picks : int | str | list-like of int
             Cell  indices to drop.
         '''
         return _drop_cells(self, picks)
@@ -172,16 +162,13 @@ class SpikeEpochs():
         self.time_limits = [tmin, tmax]
         return self
 
-    # TODO: refactor (DRY: merge both loops into one?)
-    # TODO: better handling of numpy vs numba implementation
-    # TODO: consider adding `return_type` with `Epochs` option (mne object)
     def spike_rate(self, picks=None, winlen=0.25, step=0.01, tmin=None,
                    tmax=None, backend='numpy'):
         '''Calculate spike rate with a running window.
 
         Parameters
         ----------
-        picks : int | listlike of int | None
+        picks : int | list-like of int | None
             The neuron index to use in the calculations. The default (``None``)
             uses all cells.
         winlen : float
@@ -211,7 +198,7 @@ class SpikeEpochs():
 
         Parameters
         ----------
-        picks : int | listlike of int | None
+        picks : int | list-like of int | None
             The neuron indices to use in the calculations. The default
             (``None``) uses all cells.
         winlen : float
@@ -252,22 +239,22 @@ class SpikeEpochs():
         Parameters
         ----------
         picks : int | str | list-like of int | list-like of str | None
-            List of cell indices or names to perform cross- and auto- correlations
-            for. If ``picks2`` is ``None`` then all combinations of cells from
-            ``picks`` will be used.
+            List of cell indices or names to perform cross- and auto-
+            correlations for. If ``picks2`` is ``None`` then all combinations
+            of cells from ``picks`` will be used.
         picks2 : int | str | list-like of int | list-like of str | None
             List of cell indices or names to perform cross-correlations with.
             ``picks2`` is used as pairs for ``picks``. The interaction between
             ``picks`` and ``picks2`` is the following:
-            * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
-                combinations of pairs.
-            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
-                pairs are constructed from successive elements of ``picks`` and
-                ``picks2``. For example, if ``picks = [0, 1, 2]`` and
-                ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+            * if ``picks2`` is ``None`` only ``picks`` is consider to construct
+                all combinations of pairs.
+            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)``
+                then pairs are constructed from successive elements of
+                ``picks`` and ``picks2``. For example, if ``picks = [0, 1, 2]``
+                and ``picks2 = [3, 4, 5]`` then pairs will be constructed as
                 ``[(0, 3), (1, 4), (2, 5)]``.
-            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
-                all combinations of ``picks`` and ``picks2`` are used.
+            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)``
+                then all combinations of ``picks`` and ``picks2`` are used.
         sfreq : float
             Sampling frequency of the bins. The bin width will be ``1 / sfreq``
             seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
@@ -275,11 +262,12 @@ class SpikeEpochs():
             Maximum lag in seconds. Used only when ``bins is None``. Defaults
             to ``0.2``.
         bins : numpy array | None
-            Array representing edges of the histogram bins. If ``None`` (default)
-            the bins are constructed based on ``sfreq`` and ``max_lag``.
+            Array representing edges of the histogram bins. If ``None``
+            (default) the bins are constructed based on ``sfreq`` and
+            ``max_lag``.
         gauss_fwhm : float | None
             Full-width at half maximum of the gaussian kernel to convolve the
-            cross-correlation histograms with. Defaults to ``None`` which ommits
+            cross-correlation histograms with. Defaults to ``None`` which omits
             convolution.
 
         Returns
@@ -336,7 +324,6 @@ class SpikeEpochs():
     def cellinfo(self, df):
         self._cellinfo = _validate_cellinfo(self, df)
 
-    # TODO:
     def to_neo(self, cell_idx, join=False, sep_time=0.):
         '''Turn spikes of given cell into neo.SpikeTrain format.
 
@@ -372,10 +359,10 @@ class SpikeEpochs():
             trials = range(self.n_trials)
             for tri in trials:
                 times = self.time[cell_idx][self.trial[cell_idx] == tri]
-                spiketrain = neo.SpikeTrain(
+                spike_train = neo.SpikeTrain(
                     times * s, t_stop=self.time_limits[1],
                     t_start=self.time_limits[0])
-                spikes.append(spiketrain)
+                spikes.append(spike_train)
         elif join == 'concat':
             trial_len = self.time_limits[1] - self.time_limits[0]
             full_sep = trial_len + sep_time
@@ -410,7 +397,7 @@ class SpikeEpochs():
         times : numpy array
             1d array of time labels.
         trials_raw : numpy array
-            ``trials x cells x timesamples`` array with binary spike
+            ``trials x cells x time samples`` array with binary spike
             information.
         '''
         return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
@@ -493,12 +480,13 @@ class SpikeEpochs():
                            metadata=new_metadata, cellinfo=new_cellinfo,
                            waveform=waveform, timestamps=timestamps)
 
-    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
+    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
+                      y_bins=100, cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
         ----------
-        pick : int
+        picks : int
             Cell index to plot waveform for.
         upsample : bool | float
             Whether to upsample the waveform (defaults to ``False``). If
@@ -506,10 +494,23 @@ class SpikeEpochs():
             be a value to specify the upsampling factor.
         ax : matplotlib.Axes | None
             Axis to plot to. By default opens a new figure.
+        labels : bool
+            Whether to add labels to the axes.
+        y_bins : int
+            How many bins to use for the y axis. Defaults to 100. Used only in
+            the 'numpy' backend.
+        cmap : str
+            Colormap to use. Defaults to 'viridis'.
+        backend : str
+            Computation backend to use. Can be 'numpy' or 'datashader' (defaults
+            to 'numpy'). The 'datashader' backend is currently experimental and
+            requires the ``datashader`` package.
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, times=self.waveform_time)
+                             labels=labels, y_bins=y_bins,
+                             times=self.waveform_time, cmap=cmap,
+                             backend=backend)
 
     def apply(self, func, picks=None, args=None, kwargs=None):
         '''Apply a function to each cell and trial.
@@ -565,7 +566,7 @@ class SpikeEpochs():
         return out
 
 
-def _epoch_spikes(timestamps, event_times, tmin, tmax):
+def _epoch_spikes(timestamps, event_times, tmin, tmax, return_idx=False):
     '''Epoch spike data with respect to event timestamps.
 
     Helper function that epochs spikes for a single neuron.
@@ -593,35 +594,37 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax):
     '''
     trial = list()
     time = list()
-    idx = list()
+    idx = list() if return_idx else None
 
     t_idx = 0
+    n_spikes = len(timestamps)
     n_epochs = event_times.shape[0]
     this_epo = (timestamps[t_idx] < (event_times + tmax)).argmax()
 
     for epo_idx in range(this_epo, n_epochs):
         # find spikes that fit within the epoch
-        above_lower = timestamps[t_idx:] > (event_times[epo_idx] + tmin)
-        # first_idx = above_lower.argmax() + t_idx
-        first_idx = np.where(above_lower)[0]
-        if len(first_idx) > 0:
-            first_idx = first_idx[0] + t_idx
-            msk = timestamps[first_idx:] < (event_times[epo_idx] + tmax)
+        first_idx, last_idx = np.searchsorted(
+            timestamps[t_idx:],
+            [event_times[epo_idx] + tmin, event_times[epo_idx] + tmax]
+        ) + t_idx
 
+        if first_idx < n_spikes:
             # select these spikes and center wrt event time
-            tms = timestamps[first_idx:][msk] - event_times[epo_idx]
+            tms = timestamps[first_idx:last_idx] - event_times[epo_idx]
             if len(tms) > 0:
                 tri = np.ones(len(tms), dtype='int') * epo_idx
                 trial.append(tri)
                 time.append(tms)
 
-                idx.append(np.where(msk)[0] + first_idx)
+                if return_idx:
+                    idx.append(np.arange(first_idx, last_idx))
             t_idx = first_idx
 
     if len(trial) > 0:
         trial = np.concatenate(trial)
         time = np.concatenate(time)
-        idx = np.concatenate(idx)
+        if return_idx:
+            idx = np.concatenate(idx)
     else:
         trial = np.array([])
         time = np.array([])
@@ -648,7 +651,7 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
     times : numpy array
         1d array of time labels.
     trials_raw : numpy array
-        ``trials x cells x timesamples`` array with binary spike information.
+        ``trials x cells x time samples`` array with binary spike information.
     '''
     picks = _deal_with_picks(spk, picks)
     sample_time = 1 / sfreq
@@ -676,44 +679,39 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
 
 
 class Spikes(object):
+    """Class for convenient storage, analysis and visualization of raw
+    spikes data.
+
+    Parameters
+    ----------
+    timestamps : list-like of np.ndarray
+        List of arrays, where each array contains spike timestamps for one
+        cell (neuron).
+    sfreq : float
+        Sampling frequency of the timestamps. For example in Neuralynx
+        system one timestamp occurs once per microsecond, so the sampling
+        frequency is one million (``1e6``).
+    cell_names : list of str | None
+        String identifiers of cells. First string corresponds to first
+        cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
+        Optional, the default (``None``) names the first cell
+        ``'cell000'``, the second cell ``'cell001'`` and so on.
+    cellinfo : pandas.DataFrame | None
+        Additional cell information.
+    waveform : list of np.ndarray
+        List of spikes x samples waveform arrays.
+    waveform_time : np.ndarray | None
+        One-dimensional array of time values in milliseconds for
+        consecutive samples of the waveform.
+    """
     def __init__(self, timestamps, sfreq, cell_names=None,
                  cellinfo=None, waveform=None, waveform_time=None):
-        '''Create ``Spikes`` object for convenient storage, analysis and
-        visualization of spikes data.
-
-        Parameters
-        ----------
-        timestamps : listlike of np.ndarray
-            List of arrays, where each array contains spike timestamps for one
-            cell (neuron).
-        sfreq : float
-            Sampling frequency of the timestamps. For example in Neuralynx
-            system one timestamp occurs once per microsecond, so the sampling
-            frequency is one million (``1e6``).
-        cell_names : list of str | None
-            String identifiers of cells. First string corresponds to first
-            cell, that is ``time[0]`` and ``trial[0]`` (and so forth).
-            Optional, the default (``None``) names the first cell
-            ``'cell000'``, the second cell ``'cell001'`` and so on.
-        cellinfo : pandas.DataFrame | None
-            Additional cell information.
-        waveform : list of np.ndarray
-            List of spikes x samples waveform arrays.
-        waveform_time : np.ndarray | None
-            One-dimensional array of time values in milliseconds for
-            consecutive samples of the waveform.
-        '''
+        _validate_spikes_input(timestamps)
         n_cells = len(timestamps)
         self.timestamps = timestamps
         self.sfreq = sfreq
 
-        if cell_names is None:
-            cell_names = np.array(['cell{:03d}'.format(idx)
-                                   for idx in range(n_cells)])
-        else:
-            assert len(cell_names) == len(timestamps)
-
-        self.cell_names = cell_names
+        self.cell_names = _handle_cell_names(cell_names, timestamps)
         self._cellinfo = _validate_cellinfo(self, cellinfo)
 
         if waveform is not None:
@@ -735,10 +733,12 @@ class Spikes(object):
         '''Return the number of units in Spikes.'''
         return len(self.timestamps)
 
-    # TODO: return idx from _epoch_spikes only when self.waveform is not None?
-    # TODO: time and consider speeding up
+    # TODO: potential speedup: epoch on timestamps directly, only then convert
+    #       to spike times in seconds (this would have been easier if
+    #       timestamps were always int, but for osort they can be floating
+    #       point)
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.,
-              keep_timestamps=False):
+              keep_timestamps=False, backend='numpy'):
         '''Epoch spikes with respect to selected events.
 
         Parameters
@@ -759,6 +759,10 @@ class Spikes(object):
         keep_timestamps : bool
             Whether to keep the original spike timestamps and store them in the
             epochs. Defaults to ``False``.
+        backend : str
+            Computation backend to use. Can be 'numpy' or 'numba' (defaults
+            to 'numpy'). The 'numba' backend does not support keeping the
+            original timestamps and waveforms currently.
 
         Returns
         -------
@@ -777,11 +781,28 @@ class Spikes(object):
         has_waveform = self.waveform is not None
         waveforms = list() if has_waveform else None
         timestamps = list() if keep_timestamps else None
+        return_idx = has_waveform or keep_timestamps
+
+        if backend == 'numba':
+            from borsar.utils import has_numba
+            assert has_numba(), 'Numba is required for the "numba" backend.'
+            assert not has_waveform, ('Waveforms are not supported with the '
+                                      '"numba" backend.')
+            assert not keep_timestamps, ('Keeping timestamps is not supported '
+                                         'with the "numba" backend.')
+            from ._numba import _epoch_spikes_numba
 
         for neuron_idx in range(n_neurons):
-            tri, tim, idx = _epoch_spikes(
-                self.timestamps[neuron_idx] / self.sfreq, event_times,
-                tmin, tmax)
+            if backend == 'numpy':
+                tri, tim, idx = _epoch_spikes(
+                    self.timestamps[neuron_idx] / self.sfreq, event_times,
+                    tmin, tmax, return_idx=return_idx
+                )
+            elif backend == 'numba':
+                tri, tim = _epoch_spikes_numba(
+                    self.timestamps[neuron_idx] / self.sfreq, event_times,
+                    tmin, tmax
+                )
             trial.append(tri)
             time.append(tim)
 
@@ -815,7 +836,7 @@ class Spikes(object):
 
         Parameters
         ----------
-        picks : int | str | listlike of int | list of str | None
+        picks : int | str | list-like of int | list of str | None
             Cell names or indices to select.
         query : str | None
             Query for ``.cellinfo`` - to pick cells by their properties, not
@@ -829,11 +850,11 @@ class Spikes(object):
         return _pick_cells(self, picks=picks, query=query)
 
     def drop_cells(self, picks):
-        '''Drop cells by index. Operates in-place.
+        '''Drop cells by name or index. Operates in-place.
 
         Parameters
         ----------
-        picks : int | str | listlike of int
+        picks : int | str | list-like of int
             Cell  indices to drop.
         '''
         return _drop_cells(self, picks)
@@ -881,12 +902,13 @@ class Spikes(object):
         self = _sort_spikes(self, by, inplace=inplace)
         return self
 
-    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True):
+    def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
+                      y_bins=100, cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
         ----------
-        pick : int
+        picks : int
             Cell index to plot waveform for.
         upsample : bool | float
             Whether to upsample the waveform (defaults to ``False``). If
@@ -894,6 +916,17 @@ class Spikes(object):
             be a value to specify the upsampling factor.
         ax : matplotlib.Axes | None
             Axis to plot to. By default opens a new figure.
+        labels : bool
+            Whether to add labels to the axes.
+        y_bins : int
+            How many bins to use for the y axis. Defaults to 100. Used only in
+            the 'numpy' backend.
+        cmap : str
+            Colormap to use. Defaults to 'viridis'.
+        backend : str
+            Computation backend to use. Can be 'numpy' or 'datashader' (defaults
+            to 'numpy'). The 'datashader' backend is currently experimental and
+            requires the ``datashader`` package.
 
         Returns
         -------
@@ -902,7 +935,9 @@ class Spikes(object):
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, times=self.waveform_time)
+                             labels=labels, y_bins=y_bins,
+                             times=self.waveform_time, cmap=cmap,
+                             backend=backend)
 
     def plot_isi(self, picks=None, unit='ms', bins=None, min_spikes=100,
                  max_isi=None, ax=None):
@@ -1046,22 +1081,22 @@ class Spikes(object):
         Parameters
         ----------
         picks : int | str | list-like of int | list-like of str | None
-            List of cell indices or names to perform cross- and auto- correlations
-            for. If ``picks2`` is ``None`` then all combinations of cells from
-            ``picks`` will be used.
+            List of cell indices or names to perform cross- and auto-
+            correlations for. If ``picks2`` is ``None`` then all combinations
+            of cells from ``picks`` will be used.
         picks2 : int | str | list-like of int | list-like of str | None
             List of cell indices or names to perform cross-correlations with.
             ``picks2`` is used as pairs for ``picks``. The interaction between
             ``picks`` and ``picks2`` is the following:
-            * if ``picks2`` is ``None`` only ``picks`` is consider to contruct all
-                combinations of pairs.
-            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)`` then
-                pairs are constructed from successive elements of ``picks`` and
-                ``picks2``. For example, if ``picks = [0, 1, 2]`` and
-                ``picks2 = [3, 4, 5]`` then pairs will be constructed as
+            * if ``picks2`` is ``None`` only ``picks`` is consider to construct
+                all combinations of pairs.
+            * if ``picks2`` is not ``None`` and ``len(picks) == len(picks2)``
+                then pairs are constructed from successive elements of
+                ``picks`` and ``picks2``. For example, if ``picks = [0, 1, 2]``
+                and ``picks2 = [3, 4, 5]`` then pairs will be constructed as
                 ``[(0, 3), (1, 4), (2, 5)]``.
-            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)`` then
-                all combinations of ``picks`` and ``picks2`` are used.
+            * if ``picks2`` is not ``None`` and ``len(picks) != len(picks2)``
+                then all combinations of ``picks`` and ``picks2`` are used.
         sfreq : float
             Sampling frequency of the bins. The bin width will be ``1 / sfreq``
             seconds. Used only when ``bins`` is ``None``. Defaults to ``500.``.
@@ -1069,17 +1104,18 @@ class Spikes(object):
             Maximum lag in seconds. Used only when ``bins is None``. Defaults
             to ``0.2``.
         bins : numpy array | None
-            Array representing edges of the histogram bins. If ``None`` (default)
-            the bins are constructed based on ``sfreq`` and ``max_lag``.
+            Array representing edges of the histogram bins. If ``None``
+            (default) the bins are constructed based on ``sfreq`` and
+            ``max_lag``.
         gauss_fwhm : float | None
             Full-width at half maximum of the gaussian kernel to convolve the
-            cross-correlation histograms with. Defaults to ``None`` which ommits
+            cross-correlation histograms with. Defaults to ``None`` which omits
             convolution.
         backend : str
-            Backend to use for the computation. Can be ``'numpy'``, ``'numba'`` or
-            ``'auto'``. Defaults to ``'auto'`` which will use ``'numba'`` if
-            numba is available (and number of spikes is > 1000 in any of the cells
-            picked) and ``'numpy'`` otherwise.
+            Backend to use for the computation. Can be ``'numpy'``, ``'numba'``
+            or ``'auto'``. Defaults to ``'auto'`` which will use ``'numba'`` if
+            numba is available (and number of spikes is > 1000 in any of the
+            cells picked) and ``'numpy'`` otherwise.
 
         Returns
         -------
@@ -1110,17 +1146,17 @@ def _check_waveforms(times, waveform, waveform_time):
     if waveform_time is not None:
         n_times = len(waveform_time)
         check_waveforms = np.where(~np.array(ignore_waveforms))[0]
-        n_times_wvfm_arr = [waveform[ix].shape[1]
-                            for ix in check_waveforms]
+        n_times_waveform_arr = [waveform[ix].shape[1]
+                                for ix in check_waveforms]
 
         if n_waveforms > 1:
             msg = ('If `waveform_time` is passed, waveforms for each unit '
                    'need to have the same number of samples (second dimension'
                    ').')
-            assert all([n_times_wvfm_arr[0] == x
-                        for x in n_times_wvfm_arr[1:]]), msg
+            assert all([n_times_waveform_arr[0] == x
+                        for x in n_times_waveform_arr[1:]]), msg
 
-        if not n_times == n_times_wvfm_arr[0]:
+        if not n_times == n_times_waveform_arr[0]:
             msg = ('Length of `waveform_times` and the second dimension of '
                    '`waveform` must be equal.')
             raise RuntimeError(msg)
@@ -1133,7 +1169,7 @@ def _pick_cells(spk, picks=None, query=None):
     ----------
     spk : Spikes | SpikeEpochs
         Spikes object to select cells from.
-    picks : int | str | listlike of int | list of str | None
+    picks : int | str | list-like of int | list of str | None
         Cell names or indices to select.
     query : str | None
         Query for ``.cellinfo`` - to pick cells by their properties, not
@@ -1169,11 +1205,11 @@ def _pick_cells(spk, picks=None, query=None):
 
 
 def _drop_cells(spk, picks):
-    '''Drop cells by index. Operates in-place.
+    '''Drop cells by name or index. Operates in-place.
 
     Parameters
     ----------
-    picks : int | str | listlike of int
+    picks : int | str | list-like of int
         Cell  indices to drop.
     '''
     all_idx = np.arange(spk.n_units())

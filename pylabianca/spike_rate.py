@@ -4,8 +4,11 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
 
 
 
-# TODO: add n_jobs?
+# TODO: add n_jobs
 # CONSIDER wintype 'rectangular' vs 'gaussian'
+# TODO: refactor (DRY: merge both loops into one?)
+# TODO: better handling of numpy vs numba implementation
+# TODO: consider adding `return_type` with `Epochs` option (mne object)
 def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
                        tmax=None, backend='numpy'):
     '''Calculate spike rate with a running or static window.
@@ -135,13 +138,14 @@ def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
     return frate
 
 
-# TODO: add n_jobs?
+# TODO: add n_jobs
+#       (use mne.parallel.parallel_func)
+# TODO: check if time is symmetric wrt 0 (in most cases it should be as epochs
+#       are constructed wrt specific event)
 # TODO: consider an exact mode where the spikes are not transformed to raw /
 #       binned representation (binned raster) and the gaussian kernel is placed
 #       exactly where the spike is (`loc=spike_time`?) and evaluated
 #       (maybe this is what is done by elephant?)
-# TODO: check if time is symmetric wrt 0 (in most cases it should be as epochs
-#       are constructed wrt specific event)
 def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
                    kernel=None, sfreq=500.):
     '''Calculates normal (constant) spike density.
@@ -188,10 +192,10 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
         trim = int((len(kernel) - 1) / 2)
 
     picks = _deal_with_picks(spk, picks)
-    times, binrep = spk.to_raw(picks=picks, sfreq=sfreq)
+    times, bin_rep = spk.to_raw(picks=picks, sfreq=sfreq)
     cnt_times = times[trim:-trim]
 
-    cnt = correlate(binrep, kernel[None, None, :], mode='valid')
+    cnt = correlate(bin_rep, kernel[None, None, :], mode='valid')
     return cnt_times, cnt
 
 

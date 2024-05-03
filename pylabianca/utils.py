@@ -66,7 +66,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     ----------
     times : numpy array | str
         Vector of time points for which spike rate was calculated (middle
-        timepoints for the time window used). Can also be a string
+        time points for the time window used). Can also be a string
         describing the time window if static window was used.
     frate : numpy array
         Numpy array with firing rate, with the following dimensions:
@@ -180,8 +180,9 @@ def _gauss_kernel_samples(window, gauss_sd):
     return kernel
 
 
+# ENH: change `sel` var creation to use trial boundaries
+# ENH: test speed and consider numba
 # ENH: allow for asymmetric windows (like in fieldtrip)
-# ENH: inherit metadata from spike_epochs?
 def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
                            winlen=0.1):
     '''Cut out windows from signal centered on spike times.
@@ -218,7 +219,6 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
         Spike-centered windows. ``n_spikes x n_channels x n_times``.
     '''
     import xarray as xr
-    from borsar.utils import find_index
 
     # check inputs
     picks = _deal_with_picks(spk, pick)
@@ -281,7 +281,6 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
 
     n_tri = max(spk.trial[cell_idx]) + 1
     for tri_idx in range(n_tri):
-        # ENH: change to trial boundaries
         sel = spk.trial[cell_idx] == tri_idx
         if sel.any():
             tms = spk.time[cell_idx][sel]
@@ -518,14 +517,14 @@ def _realign_waveforms(waveforms, pad_nans=False, reject=True):
         if diff_idx == 0:
             new_waveforms[spk_msk, :] = waveforms[spk_msk, :]
         elif diff_idx > 0:
-            # indiv peak too early
+            # individual peak too early
             new_waveforms[spk_msk, diff_idx:] = waveforms[spk_msk, :-diff_idx]
 
             if not pad_nans:
                 new_waveforms[spk_msk, :diff_idx] = (
                     waveforms[spk_msk, [0]][:, None])
         else:
-            # indiv peak too late
+            # individual peak too late
             new_waveforms[spk_msk, :diff_idx] = waveforms[spk_msk, -diff_idx:]
 
             if not pad_nans:
@@ -718,10 +717,28 @@ def download_test_data():
     os.remove(destination)
 
 
+def has_numba():
+    """Check if numba is available."""
+    try:
+        from numba import jit
+        return True
+    except ImportError:
+        return False
+
+
 def has_elephant():
     '''Test if elephant is available.'''
     try:
         import elephant
+        return True
+    except ImportError:
+        return False
+
+
+def has_datashader():
+    '''Test if datashader is available.'''
+    try:
+        import datashader
         return True
     except ImportError:
         return False
@@ -796,17 +813,38 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
         return Spikes(times, **args)
 
 
+def is_list_or_array(obj, dtype=None):
+    if isinstance(obj, list):
+        return True
+    return is_array(obj, dtype=dtype)
+
+
+def is_array(obj, dtype=None):
+    if isinstance(obj, np.ndarray):
+        if dtype is None:
+            return True
+        dtype = (dtype,) if not isinstance(dtype, tuple) else dtype
+        return any([np.issubdtype(obj.dtype, dtp) for dtp in dtype])
+    return False
+
+
+def is_list_of_non_negative_integer_arrays(this_list, error_str):
+    for cell_values in this_list:
+        if not (np.issubdtype(cell_values.dtype, np.integer)
+                and cell_values.min() >= 0):
+            raise ValueError(error_str)
+
+
+def is_iterable_of_strings(this_list):
+    return all([isinstance(x, str) for x in this_list])
+
+
 def _validate_spike_epochs_input(time, trial):
     '''Validate input for SpikeEpochs object.'''
 
     # both time and trial have to be lists ...
-    def is_list_or_object_array(obj):
-        return (isinstance(obj, list)
-                or (isinstance(obj, np.ndarray)
-                    and np.issubdtype(obj.dtype, np.object_))
-        )
-
-    if not (is_list_or_object_array(time) and is_list_or_object_array(trial)):
+    if not (is_list_or_array(time, dtype=np.object_)
+            and is_list_or_array(trial, dtype=np.object_)):
         raise ValueError('Both time and trial have to be lists or object '
                          'arrays.')
 
@@ -825,11 +863,44 @@ def _validate_spike_epochs_input(time, trial):
         raise ValueError('All time and trial arrays must have the same length.')
 
     # trial arrays have to contain non-negative integers
-    for cell_trial in trial:
-        if not (np.issubdtype(cell_trial.dtype, np.integer)
-                and cell_trial.min() >= 0):
-            raise ValueError(
-                'Trial list of arrays must contain non-negative integers.')
+    error_str = 'Trial list of arrays must contain non-negative integers.'
+    is_list_of_non_negative_integer_arrays(trial, error_str)
+
+
+def _validate_spikes_input(times):
+    '''Validate input for SpikeEpochs object.'''
+
+    # timestamps have to be lists ...
+    if not is_list_or_array(times, dtype=np.object_):
+        raise ValueError('Timestamps have to be list or object array.')
+
+    # ... and all elements have to be numpy arrays
+    if not all([isinstance(cell_times, np.ndarray) for cell_times in times]):
+        raise ValueError('All elements of timestamp list must be numpy '
+                         'arrays.')
+
+    # timestamp arrays have to contain non-negative integers
+    error_str = 'Timestamp lists of arrays must contain integers or floats.'
+    if not all(is_array(obj, dtype=(np.integer, np.floating))
+               for obj in times):
+        raise ValueError(error_str)
+
+def _handle_cell_names(cell_names, time):
+    if cell_names is None:
+        n_cells = len(time)
+        cell_names = np.array(['cell{:03d}'.format(idx)
+                               for idx in range(n_cells)])
+    else:
+        if not is_list_or_array(cell_names, dtype=(np.unicode_, np.object_)):
+            raise ValueError('cell_names has to be list or object array.')
+        if not is_iterable_of_strings(cell_names):
+            raise ValueError('All elements of cell_names have to be strings.')
+        cell_names = np.asarray(cell_names)
+        equal_len = len(cell_names) == len(time)
+        if not equal_len:
+            raise ValueError('Length of cell_names has to be equal to the '
+                             'length of list of time arrays.')
+    return cell_names
 
 
 def _validate_cellinfo(spk, cellinfo):
@@ -852,9 +923,107 @@ def xr_find_nested_dims(arr, dim_name):
     names = list()
     coords = list(arr.coords)
     coords.remove(dim_name)
-    subdim = (dim_name,)
+    sub_dim = (dim_name,)
     for coord in coords:
-        if arr.coords[coord].dims == subdim:
+        if arr.coords[coord].dims == sub_dim:
             names.append(coord)
 
     return names
+
+
+def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
+    n_cells = len(arr.coords[dim_name])
+    sub_dim = [ses] * n_cells
+    arr = arr.assign_coords({ses_name: (dim_name, sub_dim)})
+    return arr
+
+
+def dict_to_xarray(data, dim_name='cell', query=None):
+    '''Convert dictionary to xarray.DataArray.
+
+    Parameters
+    ----------
+    data : dict
+        Dictionary with xarray data to concatenate. Keys are subject / session
+        names and values are xarrays.
+    dim_name : str
+        Name of the dimension to concatenate along. Defaults to ``'cell'``.
+        This dimension is also enriched with subject / session information from
+        the dictionary keys.
+    query : dict | None
+        If not None, the query is passed to .query() method of the xarray. This
+        can be useful to select only specific data from the xarray, which can
+        be difficult to do after concatenation (some coordinates may become
+        multi-dimensional and querying would raise an error "Unlabeled
+        multi-dimensional array cannot be used for indexing").
+
+    Returns
+    -------
+    arr : xarray.DataArray
+        DataArray with data from the dictionary.
+    '''
+    import xarray as xr
+
+    assert isinstance(data, dict)
+    keys = list(data.keys())
+    all_xarr = [isinstance(data[sb], xr.DataArray) for sb in keys]
+    assert all(all_xarr)
+
+    use_coords = None
+    arr_list = list()
+    different_coords = False
+    for key, arr in data.items():
+        if query is not None:
+            arr = arr.query(query)
+
+        # add subject / session information to the concatenated dimension
+        arr = assign_session_coord(arr, key, dim_name=dim_name, ses_name='sub')
+
+        # check if coordinates are shared
+        if use_coords is None:
+            use_coords = set(list(arr.coords))
+        else:
+            coords = set(list(arr.coords))
+            use_coords = use_coords & coords
+            if not different_coords and len(coords) != len(use_coords):
+                different_coords = True
+
+        arr_list.append(arr)
+
+    # drop coordinates that are not shared
+    if different_coords:
+        for idx, arr in enumerate(arr_list):
+            drop_coords = set(list(arr.coords)) - use_coords
+            arr_list[idx] = arr.drop(drop_coords)
+
+    arr = xr.concat(arr_list, dim=dim_name)
+    return arr
+
+
+def find_index(vec, vals):
+    if not isinstance(vals, (list, tuple, np.ndarray)):
+        vals = [vals]
+
+    vals = np.asarray(vals)
+    ngb = np.array([-1, 0, 1])
+    idxs = np.searchsorted(vec, vals)
+
+    test_idx = idxs[None, :] + ngb[:, None]
+    closest_idx = np.abs(vec[test_idx] - vals[None, :]).argmin(axis=0)
+    idxs += ngb[closest_idx]
+
+    return idxs
+
+
+def cellinfo_from_xarray(xarr):
+    cell_dims = xr_find_nested_dims(xarr, 'cell')
+
+    if len(cell_dims) > 1:
+        cellinfo = dict()
+        for dim in cell_dims:
+            cellinfo[dim] = xarr.coords[dim].values
+        cellinfo = pd.DataFrame(cellinfo)
+    else:
+        cellinfo = None
+
+    return cellinfo

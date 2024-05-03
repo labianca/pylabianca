@@ -1,13 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 
 
 # TODO - title is now removed, so for groupby it would be good to specify the
 #        groupby coord name in legend "title"
 # TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
-# TODO - the info about "one other dimension" (that is reduced) seems to be no
-#        longer accurate
-
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
                 labels=True, **kwargs):
@@ -23,7 +19,10 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         plotted as a shaded area.
     reduce_dim : str
         The dimension to reduce (average). The standard error is also computed
-        along this dimension. The default is ``'trial'``.
+        along this dimension. If ``reduce_dim`` is ``None`` (default) then the
+        following dimensions are tested in this order: ``['trial', 'fold',
+        'perm', 'permutation', 'cell', 'spike']``. If none of these dimensions
+        are found, the first dimension is reduced.
     groupby : str | None
         The dimension (or sub-dimension) to use as grouping variable plotting
         the spike rate into separate lines. The default is ``None``, which
@@ -154,6 +153,7 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         a dictionary linking condition names / values and RBG arrays. Default
         is ``None`` which uses the default matplotlib color cycle.
     """
+    import matplotlib.pyplot as plt
     assert reduce_dim is not None
 
     if ax is None:
@@ -179,6 +179,9 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         else:
             n_groups = 1
             group_names = ['base']
+
+            if len(colors) == 3:
+                colors = [colors]
 
         assert len(colors) == n_groups
         if isinstance(colors, (list, tuple, np.ndarray)):
@@ -224,7 +227,7 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
     return lines[0].axes
 
 
-# TODO: move to sarna sometime
+# TODO: move to borsar sometime
 # TODO: make sure the pbar is cleared ... (tqdm._instances.clear() may help)
 def check_modify_progressbar(pbar, total=None):
     '''Reset ``pbar`` and change its total if it is a tqdm progressbar.
@@ -267,17 +270,18 @@ def check_modify_progressbar(pbar, total=None):
 
 # TODO:
 # - [ ] kind='line' ?
-# - [ ] datashader backend?
+# - [x] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
+# - [ ] allow `y_bins` to be specific bins? or rename to `n_bins_y`?
 def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
-                  y_bins=100, times=None):
+                  y_bins=100, times=None, cmap='viridis', backend='numpy'):
     '''Plot waveform heatmap for one cell.
 
     Parameters
     ----------
     spk : pylabianca.spikes.Spikes | pylabianca.spikes.SpikeEpochs
         Spike object to use.
-    pick : int | str
+    picks : int | str
         Cell index to plot waveform for.
     upsample : bool | float
         Whether to upsample the waveform (defaults to ``False``). If
@@ -288,7 +292,17 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
     labels : bool
         Whether to add labels to the axes.
     y_bins : int
-        How many bins to use for the y axis.
+        How many bins to use for the y axis. Defaults to 100. Used only in
+        the 'numpy' backend.
+    times : None | array-like
+        If not None, the times to use for the x axis (in milliseconds).
+        If None, the x axis is labelled as samples.
+    cmap : str
+        Colormap to use. Defaults to 'viridis'.
+    backend : str
+        Computation backend to use. Can be 'numpy' or 'datashader' (defaults
+        to 'numpy'). The 'datashader' backend is currently experimental and
+        requires the ``datashader`` package.
 
     Returns
     -------
@@ -303,66 +317,66 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
     use_ax = _simplify_axes(ax)
 
     time_unit = 'samples' if times is None else 'ms'
+    upsample = (1 if not upsample else 3 if isinstance(upsample, bool)
+                else upsample)
+
+    n_samples = spk.waveform[picks[0]].shape[-1]
+    if times is not None:
+        time_edges = [times[0], times[-1]]
+    else:
+        time_edges = [0, n_samples / upsample]
+        times = np.linspace(time_edges[0], time_edges[1],
+                            num=n_samples * upsample)
 
     for idx, unit_idx in enumerate(picks):
-        hist, _, ybins, time_edges = _calculate_waveform_density_image(
-            spk, unit_idx, upsample, y_bins, times=times
-        )
-        max_alpha = np.percentile(hist[hist > 0], 45)
-        max_lim = np.percentile(hist[hist > 0], 99)
+        this_waveform = spk.waveform[unit_idx]
 
-        alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
-        alpha_sum = (hist.T > max_alpha).astype('float') + alpha2
-        alpha_sum[alpha_sum > 1] = 1
-
-        use_ax[idx].imshow(
-            hist.T, alpha=alpha_sum, vmax=max_lim, origin='lower',
-            extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
-            aspect='auto'
-        )
         if labels:
             use_ax[idx].set_xlabel(f'Time ({time_unit})')
             use_ax[idx].set_ylabel('Amplitude ($\mu$V)')
             use_ax[idx].set_title(spk.cell_names[unit_idx])
 
+        if upsample > 1:
+            this_waveform = _upsample_waveform(this_waveform, upsample)
+
+        if backend == 'numpy':
+            hist, _, y_bins = _calculate_waveform_density_image(
+                this_waveform, y_bins
+            )
+            alpha_map, vmax = _calculate_alpha_map(hist)
+
+            use_ax[idx].imshow(
+                hist.T, alpha=alpha_map, vmax=vmax, origin='lower',
+                extent=(time_edges[0], time_edges[-1], y_bins[0], y_bins[-1]),
+                aspect='auto', cmap=cmap
+            )
+        elif backend == 'datashader':
+            img = _draw_waveform_datashader(this_waveform, times,
+                                            use_ax[idx], cmap=cmap)
+            x_ext = img.coords['x'].values[[0, -1]].tolist()
+            y_ext = img.coords['y'].values[[0, -1]].tolist()
+            use_ax[idx].imshow(np.array(img.to_pil()), aspect='auto',
+                               extent=x_ext + y_ext, interpolation='none')
+        else:
+            raise ValueError('Backend can be only "numpy" or "datashader".')
+
     return ax
 
 
-def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
-                                      density=True, y_range=None, times=None):
-    '''Helps in calculating 2d density histogram of the waveforms.'''
-    from .utils import _deal_with_picks
+def _calculate_waveform_density_image(waveform, y_bins, density=True,
+                                      y_range=None):
+    '''Helps in calculating 2d density histogram of the waveforms.
 
-    pick = _deal_with_picks(spk, pick)[0]
-    n_spikes, n_samples = spk.waveform[pick].shape
-    waveform = spk.waveform[pick]
-    if upsample:
-        if isinstance(upsample, bool):
-            upsample = 3
-        from scipy import interpolate
+    Parameters
+    ----------
+    waveform : np.array
+        Waveform to plot.
+    y_bins : int
+        How many bins to use for the y axis. Defaults to 100.
+    '''
 
-        x = np.arange(n_samples)
-        interp = interpolate.interp1d(x, waveform, kind='cubic',
-                                      assume_sorted=True)
-
-        new_x = np.linspace(0, n_samples - 1, num=n_samples * upsample)
-        waveform = interp(new_x)
-        n_samples = len(new_x)
-    else:
-        upsample = 1
-
+    n_spikes, n_samples = waveform.shape
     x_coords = np.tile(np.arange(n_samples), (n_spikes, 1))
-
-    # sample_time = 1000 / sfreq  (combinato)
-    # sample_time = 1 if times is None else np.diff(times).mean()
-    # sample_edge = -94  # -19 for combinato
-    # time_edges = [sample_edge * sample_time,
-    #               (n_samples / upsample + (sample_edge - 1)) * sample_time]
-
-    if times is not None:
-        time_edges = [times[0], times[-1]]
-    else:
-        time_edges = [0, n_samples / upsample]
 
     xs = x_coords.ravel()
     ys = waveform.ravel()
@@ -381,10 +395,77 @@ def _calculate_waveform_density_image(spk, pick, upsample, y_bins,
         else:
             range = [[np.min(xs), np.max(xs)], y_range]
 
-    hist, xbins, ybins = np.histogram2d(xs, ys, bins=[n_samples, y_bins],
-                                        range=range, density=density)
+    hist, xbins, ybins = np.histogram2d(
+        xs, ys, bins=[n_samples, y_bins], range=range, density=density
+    )
 
-    return hist, xbins, ybins, time_edges
+    return hist, xbins, ybins
+
+
+def _upsample_waveform(waveform, upsample=3):
+    from scipy import interpolate
+
+    n_samples = waveform.shape[-1]
+    x = np.arange(n_samples)
+    interp = interpolate.interp1d(
+        x, waveform, kind='cubic', assume_sorted=True)
+
+    new_x = np.linspace(0, n_samples - 1, num=n_samples * upsample)
+    waveform = interp(new_x)
+    return waveform
+
+
+def _calculate_alpha_map(hist, percentile_nontransparent=45,
+                         percentile_max=99):
+    nonzero_hist = hist[hist > 0]
+    max_alpha, vmax = np.percentile(
+        nonzero_hist, [percentile_nontransparent, percentile_max])
+
+    alpha2 = hist.T * (hist.T <= max_alpha) / max_alpha
+    alpha_map = (hist.T > max_alpha).astype('float') + alpha2
+    alpha_map[alpha_map > 1] = 1
+
+    return alpha_map, vmax
+
+
+def get_axis_size_pix(ax):
+    '''Get the size of the axis in pixels.
+
+    Parameters
+    ----------
+    ax : matplotlib.Axes
+        Axis to get the size of.
+
+    Returns
+    -------
+    size : tuple
+        Size of the axis in pixels.
+    '''
+    fig = ax.figure
+    bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+    bbox = ax.get_window_extent()
+    width, height = bbox.width, bbox.height
+    return width, height
+
+
+def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
+                              how='eq_hist'):
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import datashader as ds
+    import datashader.transfer_functions as tf
+
+    n_spikes, n_samples = waveform.shape
+    waves = pd.DataFrame(waveform)
+
+    w_pix, h_pix = get_axis_size_pix(ax)
+    cvs = ds.Canvas(plot_height=int(h_pix), plot_width=int(w_pix))
+    agg = cvs.line(waves, x=waveform_time, y=list(range(n_samples)),
+                   agg=ds.count(), axis=1, line_width=0)
+    colormap = getattr(plt.cm, cmap)
+    img = tf.shade(agg, how=how, cmap=colormap)
+
+    return img
 
 
 # TODO: add order=False for groupby?
@@ -410,6 +491,7 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     ax : matplotlib.Axes
         Axis with the raster plot.
     '''
+    import matplotlib.pyplot as plt
 
     if ax is None:
         _, ax = plt.subplots()
@@ -492,7 +574,7 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
         Minimum p-value of cluster to mark on the plot. Only used if
         ``df_clst`` is not None.
     ax: matplotlib.Axes | None
-        Two axes to plot on: first is used for average firing ratem the second
+        Two axes to plot on: first is used for average firing rate the second
         is used for raster plot. If None, a new figure is created.
 
     Returns
@@ -500,6 +582,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
     fig : matplotlib.Figure
         Figure with the plots.
     '''
+    import matplotlib.pyplot as plt
+
     # select cell from frate
     if isinstance(pick, str):
         cell_name = pick
@@ -595,7 +679,9 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     ax : matplotlib.Axes
         Axis with the plot.
     '''
+    import matplotlib.pyplot as plt
     from borsar.viz import highlight
+
     try:
         import xarray as xr
         has_xarray = True
@@ -689,6 +775,8 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 # - [ ] combine with layout functions from sarna
 def align_axes_limits(axes=None, ylim=True, xlim=False):
     '''Align the limits of all ``axes``.'''
+    import matplotlib.pyplot as plt
+
     if axes is None:
         axes = plt.gcf().get_axes()
 
@@ -719,7 +807,7 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
 # TODO - move this to separate submodule .waveform ?
 def calculate_perceptual_waveform_density(spk, cell_idx):
     # get waveform 2d histogram image
-    hist, xbins, ybins, time_edges = (
+    hist, _, ybins, _ = (
         _calculate_waveform_density_image(
             spk, cell_idx, False, 100)
     )
@@ -748,7 +836,7 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
 
     # create the 2d hist image with corrected y range
     y_range = [ybins[start_ix], ybins[end_ix]]
-    hist, xbins, ybins, time_edges = (
+    hist, _, ybins, _ = (
         _calculate_waveform_density_image(
             spk, cell_idx, False, 100, y_range=y_range)
     )
@@ -765,6 +853,8 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
 
 def auto_multipanel(n_to_show, ax=None, figsize=None):
     '''Create a multipanel figure that fits at least ``n_to_show`` axes.'''
+    import matplotlib.pyplot as plt
+
     n = np.sqrt(n_to_show)
     n_left = 0
 
