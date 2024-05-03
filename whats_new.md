@@ -13,10 +13,13 @@
 * ENH: around 10-fold speed up to `Spikes.epoch()` (20-fold for thousands of spikes and epoching events)
 * ENH: further speed up to `Spikes.epoch()` (around 5 - 13-fold) is now also possible by using `backend='numba'` (if numba is installed)
 * ENH: added an experimental datashader backend to `.plot_waveform()` method of `Spikes` and `SpikeEpochs` (`backend='datashader'`).
+* ENH: added `n_jobs` argument to `pylabianca.selectivity.cluster_based_selectivity()` to allow for parallel processing of cells
 * ENH: `.plot_waveform()` method of `Spikes` and `SpikeEpochs` now allows to control the colormap to plot the waveform density with (`cmap` argument) and the number of y axis bins (`y_bins` argument)
 * ENH: added `pylabianca.utils.cellinfo_from_xarray()` function to extract/reconstruct cellinfo dataframe from xarray DataArray coordinates.
 * ENH: added `copy_cellinfo` argument to `pylabianca.selectivity.cluster_based_selectivity()`. It allows to select which cellinfo columns are copied to the selectivity dataframe.
 * ENH: expose `.to_spiketools()` as `SpikeEpochs` method (previously it was only available as a function in `pylabianca.io` module)
+* ENH: added `pylabianca.utils.dict_to_xarray()` function to convert dictionary of xarrays (multiple sessions / subjects) to one concatenated xarray DataArray
+* ENH: added `pylabianca.utils.assign_session_coord()` function to assign session / subject coordinate to xarray DataArray (useful when concatenating multiple sessions / subjects)
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
 * ENH: `Spikes` `.sort()` method now exposes `inplace` argument to allow for sorting on a copy of the object (this can be also easily done by using `spk.copy().sort()`)
 * ENH: better error message when the format passed to `pylabianca.io.read_osort()` does not match the data
