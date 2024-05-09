@@ -196,6 +196,16 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
     cnt_times = times[trim:-trim]
 
     cnt = correlate(bin_rep, kernel[None, None, :], mode='valid')
+
+    # FIX: for some reason in scipy.correlate we get a lot of close-to-zero
+    #      numerical errors, that do not seem to be present if we do one
+    #      cell-trial at a time, this needs to be investigated a bit more
+    #      but now we just set them to zero
+    noise_level = 1e-14
+
+    mask = np.abs(cnt) < noise_level
+    cnt[mask] = 0.
+
     return cnt_times, cnt
 
 
