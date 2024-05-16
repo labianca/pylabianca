@@ -134,7 +134,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     Returns
     -------
     stats : numpy.ndarray
-        Anova F statistics for every timepoint.
+        Anova F statistics for every time point.
     clusters : list of numpy.ndarray
         List of cluster memberships.
     pval : numpy.ndarray
