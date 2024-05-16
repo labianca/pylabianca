@@ -1032,3 +1032,95 @@ def cellinfo_from_xarray(xarr):
         cellinfo = None
 
     return cellinfo
+
+
+def parse_sub_ses(sub_ses, remove_sub_prefix=True, remove_ses_prefix=True):
+    if remove_sub_prefix:
+        sub_ses = sub_ses.replace('sub-', '')
+    if remove_ses_prefix:
+        sub_ses = sub_ses.replace('ses-', '')
+
+    if '_' in sub_ses:
+        sub, ses = sub_ses.split('_')
+        ses = ses.replace('ses-', '')
+    else:
+        sub, ses = sub_ses, None
+
+    return sub, ses
+
+
+def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
+    '''Extract data from xarray dictionary using a dataframe.
+
+    Parameters
+    ----------
+    xarr_dict : dict
+        Dictionary with xarrays.
+    df : pandas.DataFrame
+        DataFrame with selection properties.
+    sub_col : str
+        Name of the column in the DataFrame that contains subject / session
+        information.
+    ses_col : str | None
+        Name of the column in the DataFrame that contains session information.
+    df2xarr : dict | None
+        Dictionary that maps DataFrame columns to xarray coordinates. If None,
+        the default is ``{'label': 'region'}``.
+
+    Returns
+    -------
+    xarr_dict_out : dict of xarray.DataArray
+        Dictionary with selected xarray cells.
+    row_indices : np.ndarray
+        Array with indices of rows.
+    '''
+    assert isinstance(xarr_dict, dict)
+
+    if df2xarr is None:
+        df2xarr = {'label': 'region'}
+
+    row_indices = list()
+    keys = list(xarr_dict.keys())
+    xarr_dict_out = dict()
+
+    remove_sub_prefix = 'sub-' in df[sub_col].values[0]
+    if ses_col is not None:
+        remove_ses_prefix = 'ses-' in df[ses_col].values[0]
+    else:
+        remove_ses_prefix = False
+
+    if remove_sub_prefix or remove_ses_prefix:
+        df = df.copy()
+        if remove_sub_prefix:
+            df[sub_col] = df[sub_col].str.replace('sub-', '')
+        if remove_ses_prefix:
+            df[ses_col] = df[ses_col].str.replace('ses-', '')
+
+    for key in keys:
+        sub, ses = parse_sub_ses(key, remove_sub_prefix=remove_sub_prefix,
+                                 remove_ses_prefix=remove_ses_prefix)
+        df_sel = df.query(f'{sub_col} == "{sub}"')
+        if ses is not None and ses_col is not None:
+            df_sel = df_sel.query(f'{ses_col} == "{ses}"')
+
+        xarr = xarr_dict[key]
+        n_cells = len(xarr.coords['cell'])
+        mask_all = np.zeros(n_cells, dtype=bool)
+        row_per_unit = np.zeros(n_cells, dtype=int)
+
+        for row_idx in df_sel.index:
+            mask_this = np.ones(n_cells, dtype=bool)
+            for df_col, xarr_col in df2xarr.items():
+                mask = (xarr.coords[xarr_col].values
+                        == df_sel.loc[row_idx, df_col])
+                mask_this &= mask
+
+            row_per_unit[mask_this] = row_idx
+            mask_all |= mask_this
+
+        xarr_dict_out[key] = xarr.sel(cell=mask_all)
+        row_per_unit = row_per_unit[mask_all]
+        row_indices.append(row_per_unit)
+
+    row_indices = np.concatenate(row_indices)
+    return xarr_dict_out, row_indices
