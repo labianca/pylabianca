@@ -938,7 +938,7 @@ def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
     return arr
 
 
-def dict_to_xarray(data, dim_name='cell', query=None):
+def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
     '''Convert dictionary to xarray.DataArray.
 
     Parameters
@@ -956,6 +956,10 @@ def dict_to_xarray(data, dim_name='cell', query=None):
         be difficult to do after concatenation (some coordinates may become
         multi-dimensional and querying would raise an error "Unlabeled
         multi-dimensional array cannot be used for indexing").
+    ses_name : str
+        Name of the subject / session coordinate that will be automatically
+        added to the concatenated dimension from the dictionary keys. Defaults
+        to ``'sub'``.
 
     Returns
     -------
@@ -977,7 +981,8 @@ def dict_to_xarray(data, dim_name='cell', query=None):
             arr = arr.query(query)
 
         # add subject / session information to the concatenated dimension
-        arr = assign_session_coord(arr, key, dim_name=dim_name, ses_name='sub')
+        arr = assign_session_coord(
+            arr, key, dim_name=dim_name, ses_name=ses_name)
 
         # check if coordinates are shared
         if use_coords is None:
