@@ -4,7 +4,7 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
 
 
 
-# TODO: add n_jobs
+# TODO: add n_jobs?
 # CONSIDER wintype 'rectangular' vs 'gaussian'
 # TODO: refactor (DRY: merge both loops into one?)
 # TODO: better handling of numpy vs numba implementation
