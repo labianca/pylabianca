@@ -175,7 +175,7 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
         Sampling frequency (in Hz) of the spike density representation. Default
         is ``500``.
     '''
-    from scipy.signal import correlate
+    from scipy.signal import correlate, oaconvolve
 
     if kernel is None:
         if fwhm is not None:
