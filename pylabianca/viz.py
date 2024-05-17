@@ -469,7 +469,8 @@ def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
 
 
 # TODO: add order=False for groupby?
-def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
+def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True,
+                legend=True, legend_kwargs=None, colors=None):
     '''Show spike rasterplot.
 
     Parameters
@@ -499,7 +500,7 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     spk_cell = spk.copy().pick_cells(picks=pick)
 
     tri_spikes = list()
-    colors = list()
+    colors_list = list() if colors is None else colors
 
     if groupby is not None:
         values = np.unique(spk_cell.metadata.loc[:, groupby])
@@ -507,8 +508,12 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     else:
         values = [None]
 
+    if colors is None:
+        colors = [f'C{idx}' for idx in len(values)]
+    colors_list = list()
+
     for idx, value in enumerate(values):
-        img_color = f'C{idx}'
+        img_color = colors[idx]
         if groupby is not None:
             query_str = (f'{groupby} == "{value}"' if string_levels
                          else f'{groupby} == {value}')
@@ -523,9 +528,10 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
         for trial in trials:
             msk = spk_cell.trial[0] == trial
             tri_spikes.append(spk_cell.time[0][msk])
-            colors.append(img_color)
 
-    ax.eventplot(tri_spikes, colors=colors)
+            colors_list.append(img_color)
+
+    ax.eventplot(tri_spikes, colors=colors_list)
 
     # set y limits
     n_trials = len(tri_spikes)
@@ -534,6 +540,18 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     # set x limits
     xlim = spk.time_limits + np.array([-0.05, 0.05])
     ax.set_xlim(xlim)
+
+    # legend
+    if legend:
+        from matplotlib.patches import Patch
+
+        patches = [Patch(facecolor=col, label=lab)
+                   for col, lab in zip(colors, values)]
+
+        legend_kwargs = (dict(loc='upper left')
+                         if legend_kwargs is None else legend_kwargs)
+        leg = ax.legend(handles=patches, **legend_kwargs)
+        leg.set_title(groupby)
 
     if labels:
         ax.set_xlabel('Time (s)', fontsize=14)
