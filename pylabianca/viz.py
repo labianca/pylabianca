@@ -469,8 +469,8 @@ def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
 
 
 # TODO: add order=False for groupby?
-def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True,
-                legend=True, legend_kwargs=None, colors=None):
+def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
+                legend=True, legend_kwargs=None):
     '''Show spike rasterplot.
 
     Parameters
@@ -484,8 +484,16 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True,
         ``.metadata`` field of the ``spk``).
     ax : matplotlib.Axes | None
         Matplotlib axis to plot to. If ``None`` a new figure is opened.
+    colors : list of str | None
+        List of colors to use for each group. If ``None`` uses the default
+        matplotlib color cycle.
     labels : bool
         Whether to add labels to the axes.
+    legend : bool
+        Whether to plot the legend.
+    legend_kwargs : dict | None
+        Additional keyword arguments for the legend. If ``None`` uses the
+        default legend location.
 
     Returns
     -------
