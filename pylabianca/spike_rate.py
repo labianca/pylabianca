@@ -175,8 +175,61 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
         Sampling frequency (in Hz) of the spike density representation. Default
         is ``500``.
     '''
-    from scipy.signal import correlate, oaconvolve
+    from scipy.signal import oaconvolve
 
+    kernel, trim = _setup_kernel(
+        winlen=winlen, gauss_sd=gauss_sd, fwhm=fwhm, kernel=kernel,
+        sfreq=sfreq
+    )
+    picks = _deal_with_picks(spk, picks)
+    times, bin_rep = spk.to_raw(picks=picks, sfreq=sfreq)
+    cnt_times = times[trim:-trim]
+
+    cnt = oaconvolve(bin_rep, kernel[None, None, :], mode='valid')
+
+    # FIX: for some reason in scipy.correlate we get a lot of close-to-zero
+    #      numerical errors, that do not seem to be present if we do one
+    #      cell-trial at a time, this needs to be investigated a bit more
+    #      but now we just set them to zero
+    noise_level = 1e-14
+
+    mask = np.abs(cnt) < noise_level
+    cnt[mask] = 0.
+
+    return cnt_times, cnt
+
+
+def _setup_kernel(winlen=0.3, gauss_sd=None, fwhm=None, kernel=None,
+                  sfreq=500.):
+    """
+    Set up the gaussian kernel for the spike density calculation.
+
+    Parameters
+    ----------
+    winlen : float
+        Length of the gaussian kernel in seconds. Default is ``0.3``.
+        If ``gauss_sd`` is ``None`` the standard deviation of the gaussian
+        kernel is set to ``winlen / 6``.
+    gauss_sd : float | None
+        Standard deviation of the gaussian kernel in seconds. If ``None``
+        the standard deviation is set to ``winlen / 6``.
+    fwhm : float | None
+        Full width at half maximum of the gaussian kernel in seconds.
+    kernel : array-like | None
+        Kernel to use for convolution. If ``None`` the gaussian kernel is
+        constructed from ``winlen`` and ``gauss_sd``.
+    sfreq : float
+        Sampling frequency (in Hz) of the spike density representation. Default
+        is ``500``.
+
+    Returns
+    -------
+    kernel : array-like
+        Gaussian kernel.
+    trim : int
+        Number of samples to trim from the beginning and end of the signal to
+        get the same length as the convolved signal.
+    """
     if kernel is None:
         if fwhm is not None:
             gauss_sd = _gauss_sd_from_FWHM(fwhm)
@@ -191,22 +244,7 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
         assert (len(kernel) % 2) == 1
         trim = int((len(kernel) - 1) / 2)
 
-    picks = _deal_with_picks(spk, picks)
-    times, bin_rep = spk.to_raw(picks=picks, sfreq=sfreq)
-    cnt_times = times[trim:-trim]
-
-    cnt = correlate(bin_rep, kernel[None, None, :], mode='valid')
-
-    # FIX: for some reason in scipy.correlate we get a lot of close-to-zero
-    #      numerical errors, that do not seem to be present if we do one
-    #      cell-trial at a time, this needs to be investigated a bit more
-    #      but now we just set them to zero
-    noise_level = 1e-14
-
-    mask = np.abs(cnt) < noise_level
-    cnt[mask] = 0.
-
-    return cnt_times, cnt
+    return kernel, trim
 
 
 def _gauss_sd_from_FWHM(FWHM):
