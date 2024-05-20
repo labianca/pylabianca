@@ -922,8 +922,15 @@ def _validate_cellinfo(spk, cellinfo):
 def xr_find_nested_dims(arr, dim_name):
     names = list()
     coords = list(arr.coords)
-    coords.remove(dim_name)
-    sub_dim = (dim_name,)
+
+    if isinstance(dim_name, tuple):
+        for dim in dim_name:
+            coords.remove(dim)
+        sub_dim = dim_name
+    else:
+        coords.remove(dim_name)
+        sub_dim = (dim_name,)
+
     for coord in coords:
         if arr.coords[coord].dims == sub_dim:
             names.append(coord)
