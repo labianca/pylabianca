@@ -175,6 +175,7 @@ def _symmetric_window_samples(winlen, sfreq):
 def _gauss_kernel_samples(window, gauss_sd):
     '''Returns a gaussian kernel given window and sd in samples.'''
     from scipy.stats.distributions import norm
+
     kernel = norm(loc=0, scale=gauss_sd)
     kernel = kernel.pdf(window)
     return kernel
@@ -1010,6 +1011,36 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
 
     arr = xr.concat(arr_list, dim=dim_name)
     return arr
+
+
+def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
+                   ensure_correct_reduction=True):
+    xarr_dct = dict()
+
+    for lab, arr in xarr.groupby(ses_name):
+        if reduce_coords:
+            new_coords = dict()
+            drop_coords = list()
+            nested_coords = xr_find_nested_dims(arr, ('cell', 'trial'))
+
+            for coord in nested_coords:
+                one_cell = arr.coords[coord].isel(cell=0)
+                if ensure_correct_reduction:
+                    cmp = one_cell == arr.coords[coord]
+                    if cmp.all():
+                        drop_coords.append(coord)
+                        new_coords[coord] = ('trial', one_cell.values)
+                else:
+                    drop_coords.append(coord)
+                    new_coords[coord] = ('trial', one_cell.values)
+
+            if len(drop_coords) > 0:
+                arr = arr.drop(drop_coords)
+                arr = arr.assign_coords(new_coords)
+
+        xarr_dct[lab] = arr
+
+    return xarr_dct
 
 
 def find_index(vec, vals):
