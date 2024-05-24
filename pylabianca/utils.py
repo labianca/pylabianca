@@ -575,10 +575,13 @@ def realign_waveforms(spk, picks=None, min_spikes=10, reject=True):
 
 def _get_trial_boundaries(spk, cell_idx):
     n_spikes = len(spk.trial[cell_idx])
-    trial_boundaries = np.where(np.diff(spk.trial[cell_idx]))[0] + 1
-    trial_boundaries = np.concatenate(
-        [[0], trial_boundaries, [n_spikes]])
-    tri_num = spk.trial[cell_idx][trial_boundaries[:-1]]
+    if n_spikes > 0:
+        trial_boundaries = np.where(np.diff(spk.trial[cell_idx]))[0] + 1
+        trial_boundaries = np.concatenate(
+            [[0], trial_boundaries, [n_spikes]])
+        tri_num = spk.trial[cell_idx][trial_boundaries[:-1]]
+    else:
+        trial_boundaries, tri_num = np.array([]), np.array([])
 
     return trial_boundaries, tri_num
 
@@ -831,9 +834,10 @@ def is_array(obj, dtype=None):
 
 def is_list_of_non_negative_integer_arrays(this_list, error_str):
     for cell_values in this_list:
-        if not (np.issubdtype(cell_values.dtype, np.integer)
-                and cell_values.min() >= 0):
-            raise ValueError(error_str)
+        if len(cell_values) > 0:
+            if not (np.issubdtype(cell_values.dtype, np.integer)
+                    and cell_values.min() >= 0):
+                raise ValueError(error_str)
 
 
 def is_iterable_of_strings(this_list):
