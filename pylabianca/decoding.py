@@ -642,7 +642,7 @@ def correlation(X1, X2):
 
 
 def corr_rows(A, B):
-    # Rowwise mean of input arrays & subtract from input arrays themeselves
+    # Row-wise mean of input arrays & subtract from input arrays
     A_mA = A - A.mean(axis=1)[:, None]
     B_mB = B - B.mean(axis=1)[:, None]
 
@@ -650,7 +650,7 @@ def corr_rows(A, B):
     ssA = (A_mA ** 2).sum(axis=1)
     ssB = (B_mB ** 2).sum(axis=1)
 
-    # Finally get corr coeff
+    # Finally get the corr coefficient
     return np.dot(A_mA, B_mB.T) / np.sqrt(np.dot(ssA[:, None], ssB[None]))
 
 
