@@ -1,5 +1,5 @@
 import numpy as np
-from numba import jit
+from numba import jit, njit
 from numba.extending import overload
 
 
@@ -287,3 +287,51 @@ def concat_times(times, n_in_trial):
         idx = idx_end
 
     return time
+
+
+@njit
+def corr_rows_numba(A, B):
+    # Rowwise mean of input arrays & subtract from input arrays themeselves
+    one_typed = np.int64(1)
+    A_mA = A - mean_over_axis_1(A)[:, None]
+    B_mB = B - mean_over_axis_1(B)[:, None]
+
+    # Sum of squares across rows
+    ssA = np.sum(A_mA ** 2, one_typed)
+    ssB = np.sum(B_mB ** 2, one_typed)
+
+    # Finally get corr coefficient
+    norm = np.sqrt(np.dot(ssA.reshape((ssA.shape[0], 1)),
+                          ssB.reshape((1, ssB.shape[0]))))
+    num = np.dot(A_mA, np.ascontiguousarray(B_mB.T))
+    return num / norm
+
+
+@njit
+def mean_over_axis_1(arr):
+    avg_arr = np.zeros(arr.shape[0], dtype=arr.dtype)
+    for ix in range(arr.shape[0]):
+        avg_arr[ix] = arr[ix, :].mean()
+    return avg_arr
+
+
+@njit
+def mean_over_axis_0(arr):
+    avg_arr = np.zeros(arr.shape[1], dtype=arr.dtype)
+    for ix in range(arr.shape[1]):
+        avg_arr[ix] = arr[:, ix].mean()
+    return avg_arr
+
+
+@njit
+def _fit_maxCorr_numba(X, y):
+    classes = np.unique(y)
+    n_classes = classes.shape[0]
+    n_features = X.shape[1]
+    class_avg = np.zeros((n_features, n_classes), dtype=X.dtype)
+
+    for cls_idx, cls in enumerate(classes):
+        msk = y == cls
+        class_avg[:, cls_idx] = mean_over_axis_0(X[msk, :])
+
+    return class_avg, classes, n_classes, n_features

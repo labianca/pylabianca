@@ -685,16 +685,16 @@ class maxCorrClassifier(BaseEstimator):
         from sklearn.utils.multiclass import unique_labels
 
         X, y = check_X_y(X, y)
-        self.classes_ = unique_labels(y)
-        self.class_averages_ = list()
-        self.n_classes_ = len(self.classes_)
-        self.n_features_in_ = X.shape[1]
-        for cls in self.classes_:
-            msk = y == cls
-            avg = X[msk, :].mean(axis=0)
-            self.class_averages_.append(avg)
+        # classes = unique_labels(y)
 
-        self.class_averages_ = np.stack(self.class_averages_, axis=0)
+        class_avg, classes, n_classes, n_features = _fit_maxCorr_numpy(
+            X, y)
+
+        self.classes_ = classes
+        self.class_averages_ = class_avg
+        self.n_classes_ = n_classes
+        self.n_features_in_ = n_features
+
         self.scoring = 'accuracy' if scoring is None else scoring
 
         return self
@@ -768,3 +768,18 @@ class maxCorrClassifier(BaseEstimator):
         scorer = get_scorer(self.scoring)
         score = scorer(self, X, Y)
         return score
+
+
+def _fit_maxCorr_numpy(X, y):
+    classes = np.unique(y)
+    class_avg = list()
+    n_classes = len(classes)
+    n_features = X.shape[1]
+
+    for cls in classes:
+        msk = y == cls
+        avg = X[msk, :].mean(axis=0)
+        class_avg.append(avg)
+
+    class_avg = np.stack(class_avg, axis=1)
+    return class_avg, classes, n_classes, n_features
