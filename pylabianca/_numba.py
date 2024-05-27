@@ -328,10 +328,10 @@ def _fit_maxCorr_numba(X, y):
     classes = np.unique(y)
     n_classes = classes.shape[0]
     n_features = X.shape[1]
-    class_avg = np.zeros((n_features, n_classes), dtype=X.dtype)
+    class_avg = np.zeros((n_classes, n_features), dtype=X.dtype)
 
     for cls_idx, cls in enumerate(classes):
         msk = y == cls
-        class_avg[:, cls_idx] = mean_over_axis_0(X[msk, :])
+        class_avg[cls_idx, :] = mean_over_axis_0(X[msk, :])
 
     return class_avg, classes, n_classes, n_features

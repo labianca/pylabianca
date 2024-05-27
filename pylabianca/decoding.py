@@ -683,12 +683,15 @@ class maxCorrClassifier(BaseEstimator):
         '''
         from sklearn.utils.validation import check_X_y
         from sklearn.utils.multiclass import unique_labels
+        from ._numba import _fit_maxCorr_numba
 
         X, y = check_X_y(X, y)
         # classes = unique_labels(y)
-
-        class_avg, classes, n_classes, n_features = _fit_maxCorr_numpy(
+        class_avg, classes, n_classes, n_features = _fit_maxCorr_numba(
             X, y)
+
+        # class_avg, classes, n_classes, n_features = _fit_maxCorr_numpy(
+        #     X, y)
 
         self.classes_ = classes
         self.class_averages_ = class_avg
@@ -714,6 +717,7 @@ class maxCorrClassifier(BaseEstimator):
         y_pred : numpy.array
             Vector of predicted classes.
         '''
+        from ._numba import corr_rows_numba
         from sklearn.utils.validation import check_array, check_is_fitted
 
         # Check if fit has been called
@@ -732,7 +736,7 @@ class maxCorrClassifier(BaseEstimator):
                     message='invalid value encountered in true_divide',
                     category=RuntimeWarning
                 )
-                r = corr_rows(self.class_averages_, X)
+                r = corr_rows_numba(self.class_averages_, X)
         else:
             distance = self.class_averages_[:, None, :] - X[None, :, :]
             r = np.linalg.norm(distance, axis=-1) * -1
@@ -781,5 +785,5 @@ def _fit_maxCorr_numpy(X, y):
         avg = X[msk, :].mean(axis=0)
         class_avg.append(avg)
 
-    class_avg = np.stack(class_avg, axis=1)
+    class_avg = np.stack(class_avg, axis=0)
     return class_avg, classes, n_classes, n_features
