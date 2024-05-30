@@ -55,6 +55,15 @@ def _monotonic_unique_counts(values):
     return uni, cnt
 
 
+@njit
+def _monotonic_find_first(values, find_val):
+    n_val = values.shape[0]
+    for idx in range(n_val):
+        if values[idx] == find_val:
+            return idx
+    return -1
+
+
 def numba_compare_times(spk, cell_idx1, cell_idx2, spk2=None):
     times1 = (spk.timestamps[cell_idx1] / spk.sfreq).astype('float64')
 
@@ -302,3 +311,27 @@ def _epoch_spikes_numba(spike_times, event_times, event_tmin, event_tmax,
         step_multiplier = max(1, spikes_in_event)
 
     return np.array(trial_ids), np.array(epoch_spike_times)
+
+
+@njit
+def _select_spikes_numba(spikes, trials, tri_sel):
+    '''Assumes both trials and tri_sel are sorted.'''
+    tri_sel_idx = 0
+    current_tri = tri_sel[tri_sel_idx]
+    msk = np.zeros(len(trials), dtype='bool')
+    for idx, tri in enumerate(trials):
+        if tri < current_tri:
+            continue
+
+        if tri == current_tri:
+            msk[idx] = True
+        elif tri > current_tri:
+            too_low = True
+            while too_low:
+                tri_sel_idx += 1
+                current_tri = tri_sel[tri_sel_idx]
+                too_low = tri > current_tri
+            if tri == current_tri:
+                msk[idx] = True
+
+    return spikes[msk]
