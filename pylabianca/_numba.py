@@ -55,14 +55,6 @@ def _monotonic_unique_counts(values):
     return uni, cnt
 
 
-@njit
-def _monotonic_find_first(values, find_val):
-    n_val = values.shape[0]
-    for idx in range(n_val):
-        if values[idx] == find_val:
-            return idx
-    return -1
-
 
 def numba_compare_times(spk, cell_idx1, cell_idx2, spk2=None):
     times1 = (spk.timestamps[cell_idx1] / spk.sfreq).astype('float64')
@@ -335,3 +327,61 @@ def _select_spikes_numba(spikes, trials, tri_sel):
                 msk[idx] = True
 
     return spikes[msk]
+
+
+@njit
+def _monotonic_find_first(values, find_val):
+    n_val = values.shape[0]
+    for idx in range(n_val):
+        if values[idx] == find_val:
+            return idx
+    return -1
+
+
+def _get_trial_boundaries(spk, cell_idx):
+    return _get_trial_boundaries_numba(spk.trial[cell_idx], spk.n_trials)
+
+
+@njit
+def _get_trial_boundaries_numba(trials, n_trials):
+    '''
+    Numba implementation of get_trial_boundaries.
+
+    Parameters
+    ----------
+    trials : np.ndarray
+        Trial indices for each spike.
+    n_trials : int
+        Number of trials (actual number of trials, not the number of trials
+        that spikes of given cell appear in).
+
+    Returns
+    -------
+    trial_boundaries : np.ndarray
+        Spike indices where trials start.
+    trial_ids : np.ndarray
+        Trial indices (useful in case spikes did not appear in some of the
+        trials for given cell).
+    '''
+    n_spikes = trials.shape[0]
+    trial_boundaries = np.zeros(n_trials + 1, dtype='int32')
+    trial_ids = np.zeros(n_trials + 1, dtype='int32')
+    idx = -1
+    boundaries_idx = -1
+    prev_trial = -1
+    while idx < (n_spikes - 1):
+        idx += 1
+        this_trial = trials[idx]
+        if this_trial > prev_trial:
+            boundaries_idx += 1
+            trial_ids[boundaries_idx] = this_trial
+            trial_boundaries[boundaries_idx] = idx
+            prev_trial = this_trial
+
+    boundaries_idx += 1
+    trial_ids = trial_ids[:boundaries_idx]
+    boundaries_idx += 1
+    trial_boundaries = trial_boundaries[:boundaries_idx]
+    trial_boundaries[-1] = n_spikes
+
+    return trial_boundaries, trial_ids
