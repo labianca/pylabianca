@@ -1,9 +1,9 @@
 import numpy as np
-from numba import jit
+from numba import jit, njit
 from numba.extending import overload
 
 
-@jit(nopython=True)
+@njit
 def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
                               n_trials, winlen=0.25, step=0.05):
     half_win = winlen / 2
@@ -26,7 +26,7 @@ def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
     return times, frate
 
 
-@jit(nopython=True)
+@njit
 def _monotonic_unique_counts(values):
     n_val = len(values)
     if n_val == 0:
@@ -67,7 +67,7 @@ def numba_compare_times(spk, cell_idx1, cell_idx2, spk2=None):
     return res
 
 
-@jit(nopython=True)
+@njit
 def _numba_compare_times(times1, times2, distances):
     n_times1 = times1.shape[0]
     n_times2 = times2.shape[0]
@@ -87,7 +87,7 @@ def _numba_compare_times(times1, times2, distances):
     return distances
 
 
-@jit(nopython=True)
+@njit
 def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
     '''Compute auto-correlation histogram for a single cell.
 
@@ -125,7 +125,7 @@ def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
     return counts
 
 
-@jit(nopython=True)
+@njit
 def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
     '''Compute cross-correlation histogram for a single cell.
 
@@ -179,7 +179,7 @@ def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
     return counts
 
 
-@jit(nopython=True)
+@njit
 def compute_bin(x, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
     # assuming uniform bins for now
@@ -199,7 +199,7 @@ def compute_bin(x, bin_edges):
         return bin
 
 
-@jit(nopython=True)
+@njit
 def numba_histogram(a, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
     n_bins = len(bin_edges) - 1
@@ -215,7 +215,7 @@ def numba_histogram(a, bin_edges):
 
 
 # FIXME: this function assumes non-overlapping epochs
-@jit(nopython=True)
+@njit
 def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
     trial_idx = [-1]
     n_in_trial = [0]
@@ -263,7 +263,7 @@ def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
     return trial, time
 
 
-@jit(nopython=True)
+@njit
 def create_trials_from_short(trial_idx, n_in_trial):
     n_all = sum(n_in_trial)
     trial = np.empty(n_all, dtype=np.int16)
@@ -276,7 +276,7 @@ def create_trials_from_short(trial_idx, n_in_trial):
     return trial
 
 
-@jit(nopython=True)
+@njit
 def concat_times(times, n_in_trial):
     n_all = sum(n_in_trial)
     time = np.empty(n_all, dtype=np.float64)
