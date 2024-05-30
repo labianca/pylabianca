@@ -833,9 +833,9 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
 # TODO - move this to separate submodule .waveform ?
 def calculate_perceptual_waveform_density(spk, cell_idx):
     # get waveform 2d histogram image
-    hist, _, ybins, _ = (
+    hist, _, ybins = (
         _calculate_waveform_density_image(
-            spk, cell_idx, False, 100)
+            spk.waveform[cell_idx], 100)
     )
 
     # correct y range
@@ -862,9 +862,9 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
 
     # create the 2d hist image with corrected y range
     y_range = [ybins[start_ix], ybins[end_ix]]
-    hist, _, ybins, _ = (
+    hist, _, ybins = (
         _calculate_waveform_density_image(
-            spk, cell_idx, False, 100, y_range=y_range)
+            spk.waveform[cell_idx], 100, y_range=y_range)
     )
 
     # calculate dns
