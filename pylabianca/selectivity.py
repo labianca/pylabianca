@@ -179,7 +179,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     # permutations
     # ------------
-    arrs = [arr for _, arr in frate.groupby(compare)]
+    arrs = [arr.values for _, arr in frate.groupby(compare)]
     stat_name = 't value' if len(arrs) == 2 else 'F value'
     stat_unit = stat_name[0]
     results = permutation_test(
