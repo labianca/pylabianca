@@ -1,12 +1,19 @@
 import numpy as np
-from numba import jit
+from numba import jit, njit
 from numba.extending import overload
 
 
-@jit(nopython=True, cache=True)
-def _compute_spike_rate_numba(spike_times, spike_trials, times, window_limits,
-                              win_len, n_trials):
-    n_steps = len(times)
+@njit
+def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
+                              n_trials, winlen=0.25, step=0.05):
+    half_win = winlen / 2
+    window_limits = np.array([-half_win, half_win])
+    epoch_len = time_limits[1] - time_limits[0]
+    n_steps = int(np.floor((epoch_len - winlen) / step + 1))
+
+    fr_t_start = time_limits[0] + half_win
+    fr_tend = time_limits[1] - half_win + step * 0.001
+    times = np.arange(fr_t_start, fr_tend, step=step)
     frate = np.zeros((n_trials, n_steps))
     for step_idx in range(n_steps):
         win_lims = times[step_idx] + window_limits
@@ -18,7 +25,7 @@ def _compute_spike_rate_numba(spike_times, spike_trials, times, window_limits,
     return frate
 
 
-@jit(nopython=True, cache=True)
+@njit
 def _monotonic_unique_counts(values):
     n_val = len(values)
     if n_val == 0:
@@ -59,7 +66,7 @@ def numba_compare_times(spk, cell_idx1, cell_idx2, spk2=None):
     return res
 
 
-@jit(nopython=True, cache=True)
+@njit
 def _numba_compare_times(times1, times2, distances):
     n_times1 = times1.shape[0]
     n_times2 = times2.shape[0]
@@ -79,7 +86,7 @@ def _numba_compare_times(times1, times2, distances):
     return distances
 
 
-@jit(nopython=True, cache=True)
+@njit
 def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
     '''Compute auto-correlation histogram for a single cell.
 
@@ -117,7 +124,7 @@ def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
     return counts
 
 
-@jit(nopython=True, cache=True)
+@njit
 def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
     '''Compute cross-correlation histogram for a single cell.
 
@@ -171,7 +178,7 @@ def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
     return counts
 
 
-@jit(nopython=True, cache=True)
+@njit
 def compute_bin(x, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
     # assuming uniform bins for now
@@ -191,8 +198,7 @@ def compute_bin(x, bin_edges):
         return bin
 
 
-# CONSIDER: speed up by precomputing n, a_min, a_max
-@jit(nopython=True, cache=True)
+@njit
 def numba_histogram(a, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
     n_bins = len(bin_edges) - 1
