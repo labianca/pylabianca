@@ -2,6 +2,8 @@ import numpy as np
 from scipy import stats
 
 
+from .utils import _deal_with_picks
+
 # top-level API
 # zeta_test
 
@@ -103,16 +105,23 @@ def get_condition_indices_and_unique(cnd_values):
 
 
 def _prepare_ZETA_numpy_and_numba(spk, compare, tmax):
-    n_trials_max = spk.n_trials
-    assert compare in spk.metadata.columns
-    cnd_values = spk.metadata[compare].values
-    # TODO: if cnd_values are string then we'll need to make sure the array is
-    #       not object type
+    from .spikes import SpikeEpochs
+    if not isinstance(spk, SpikeEpochs):
+        raise TypeError('Currently ``spk`` must be a SpikeEpochs instance.'
+                        ' One-sample ZETA test is not yet implemented. Got '
+                        '{} instead.'.format(type(spk)))
 
+    assert compare in spk.metadata.columns
+    condition_values = spk.metadata[compare].values
+
+    if condition_values.dtype == 'object':
+        condition_values = condition_values.astype('str')
+
+    n_trials_max = spk.n_trials
     if tmax is None:
         tmax = spk.time_limits[-1]
 
-    return cnd_values, n_trials_max, tmax
+    return condition_values, n_trials_max, tmax
 
 
 def _get_times_and_trials(spk, pick, tmin, tmax):
@@ -154,42 +163,69 @@ def ZETA_test(spk, pick, compare='load', tmin=0., tmax=None,
 
 # some of the things done here would be done one level up and passed to a
 # private function
-def ZETA_test_numba(spk, pick, compare='load', tmin=0., tmax=None,
-                    n_permutations=100):
+def ZETA_test_numba(spk, compare, picks=None, tmin=0., tmax=None,
+                    n_permutations=100, significance='gumbel',
+                    return_dist=False):
     from ._numba import (
         _get_trial_boundaries_numba, get_condition_indices_and_unique_numba)
-    from ._zeta_numba import _run_ZETA_numba
+    from ._zeta_numba import _run_ZETA_numba, permute_zeta_2cond_diff_numba
 
-    cnd_values, n_trials_max, tmax = _prepare_ZETA_numpy_and_numba(
+    condition_values, n_trials_max, tmax = _prepare_ZETA_numpy_and_numba(
         spk, compare, tmax)
     condition_idx, n_trials_per_cond, uni_cnd, n_cnd = (
-        get_condition_indices_and_unique_numba(cnd_values)
+        get_condition_indices_and_unique_numba(condition_values)
     )
+    picks = _deal_with_picks(spk, picks)
+    n_cells = len(picks)
 
-    times, trials, reference_time = _get_times_and_trials(
-        spk, pick, tmin, tmax)
+    cumulative_diffs = list()
+    permutation_diffs = list()
+    real_abs_max = np.zeros(n_cells)
+    perm_abs_max = np.zeros((n_cells, n_permutations))
 
-    # TRY: put everything below in jit-compiled function
-    trial_boundaries, trial_ids = _get_trial_boundaries_numba(
-        trials, n_trials_max)
-    n_spk_tri = np.diff(trial_boundaries)
-    n_trials_real = trial_ids.shape[0]
+    # TODO: add joblib parallelization if necessary
+    for pick_idx, pick in enumerate(picks):
+        times, trials, reference_time = _get_times_and_trials(
+            spk, pick, tmin, tmax)
+        n_samples = reference_time.shape[0]
 
-    fraction_diff = _run_ZETA_numba(
-        times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-        n_trials_per_cond, condition_idx, n_cnd,
-        reference_time, tmax)
+        # TRY: put everything below in a jit-compiled function
+        trial_boundaries, trial_ids = _get_trial_boundaries_numba(
+            trials, n_trials_max)
+        n_spk_tri = np.diff(trial_boundaries)
+        n_trials_real = trial_ids.shape[0]
 
-    permutations = np.zeros((n_permutations, len(fraction_diff)))
-    condition_idx_perm = condition_idx.copy()
-    for perm_idx in range(n_permutations):
-        np.random.shuffle(condition_idx_perm)
-        permutations[perm_idx] = _run_ZETA_numba(
+        fraction_diff = _run_ZETA_numba(
             times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-            n_trials_per_cond, condition_idx_perm, n_cnd,
-            reference_time, tmax)
+            n_trials_per_cond, condition_idx, n_cnd,
+            reference_time)
 
-    return fraction_diff, permutations
+        permutations = permute_zeta_2cond_diff_numba(
+            n_permutations, n_samples, times, trial_boundaries, trial_ids,
+            n_spk_tri, n_trials_real, n_trials_per_cond, condition_idx, n_cnd,
+            reference_time)
+
+        # center the cumulative diffs and find max(abs) values
+        # TODO: could be done earlier (so for numba - within the
+        #       compiled function)
+        fraction_diff -= fraction_diff.mean()
+        permutations -= permutations.mean(axis=-1, keepdims=True)
+        cumulative_diffs.append(fraction_diff)
+        permutation_diffs.append(permutations)
+
+        real_abs_max[pick_idx] = np.max(np.abs(fraction_diff))
+        perm_abs_max[pick_idx] = np.max(np.abs(permutations), axis=-1)
+
+    # asses significance through gumbel or by only comparing to permutations
+    if significance == 'gumbel':
+        perm_mean = np.mean(perm_abs_max, axis=-1)
+        perm_std = np.std(perm_abs_max, axis=-1)
+        z_scores, p_values = gumbel(perm_mean, perm_std, real_abs_max)
+
+    if not return_dist:
+        return z_scores, p_values
+    else:
+        return z_scores, p_values, cumulative_diffs, permutation_diffs
 
 
 def gumbel(mean, std, x):
