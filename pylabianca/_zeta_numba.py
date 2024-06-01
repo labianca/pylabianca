@@ -4,9 +4,10 @@ from numba import njit
 from ._numba import depth_of_selectivity_numba_low_level
 
 
+@njit
 def _run_ZETA_numba(times, trial_boundaries, trial_ids, n_spk_tri,
                    n_trials_real, n_trials_per_cond, condition_idx,
-                   n_cnd, reference_time, tmax):
+                   n_cnd, reference_time):
 
     times_per_cond = group_spikes_by_cond_numba(
         times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
@@ -129,3 +130,20 @@ def cumulative_sel_multi_conditions(spikes_list, n_trials, reference_time):
         cumulative_fraction, n_cond
     )
     return fraction_diff
+
+
+@njit
+def permute_zeta_2cond_diff_numba(
+        n_permutations, n_samples, times, trial_boundaries, trial_ids,
+        n_spk_tri, n_trials_real, n_trials_per_cond, condition_idx, n_cnd,
+        reference_time):
+    permutations = np.zeros((n_permutations, n_samples), dtype=times.dtype)
+    condition_idx_perm = condition_idx.copy()
+    for perm_idx in range(n_permutations):
+        np.random.shuffle(condition_idx_perm)
+        permutations[perm_idx] = _run_ZETA_numba(
+            times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
+            n_trials_per_cond, condition_idx_perm, n_cnd,
+            reference_time)
+
+    return permutations
