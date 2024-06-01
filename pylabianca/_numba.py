@@ -385,3 +385,71 @@ def _get_trial_boundaries_numba(trials, n_trials):
     trial_boundaries[-1] = n_spikes
 
     return trial_boundaries, trial_ids
+
+
+@njit
+def get_condition_indices_and_unique_numba(cnd_values):
+    n_trials = cnd_values.shape[0]
+    uni_cnd = np.unique(cnd_values)
+    n_cnd = uni_cnd.shape[0]
+    cnd_idx_per_tri = np.zeros(n_trials, dtype='int32')
+    n_trials_per_cond = np.zeros(n_cnd, dtype='int32')
+
+    for idx in range(n_trials):
+        cnd_val = cnd_values[idx]
+        cnd_idx = _monotonic_find_first(uni_cnd, cnd_val)
+        cnd_idx_per_tri[idx] = cnd_idx
+        n_trials_per_cond[cnd_idx] += 1
+
+    return cnd_idx_per_tri, n_trials_per_cond, uni_cnd, n_cnd
+
+
+@njit
+def depth_of_selectivity_numba(arr, groupby):
+    avg_by_cond = groupby_mean(arr, groupby)
+    n_categories = avg_by_cond.shape[0]
+    selectivity = depth_of_selectivity_numba_low_level(
+        avg_by_cond, n_categories
+    )
+
+    return selectivity, avg_by_cond
+
+
+@njit
+def depth_of_selectivity_numba_low_level(avg_by_cond, n_categories):
+    r_max = max_2d_axis_0(avg_by_cond)
+    numerator = n_categories - (avg_by_cond / r_max).sum(axis=0)
+    return numerator / (n_categories - 1)
+
+
+@njit
+def groupby_mean(arr, groupby):
+    cnd_idx_per_tri, n_trials_per_cond, _, n_cnd = (
+        get_condition_indices_and_unique_numba(groupby)
+    )
+    avg_by_cnd = _groupby_mean_low_level(
+        arr, cnd_idx_per_tri, n_trials_per_cond, n_cnd)
+    return avg_by_cnd
+
+
+@njit
+def max_2d_axis_0(arr):
+    out = np.zeros(arr.shape[1], dtype=arr.dtype)
+    for idx in range(arr.shape[1]):
+        out[idx] = arr[:, idx].max()
+    return out
+
+
+@njit
+def _groupby_mean_low_level(arr, cnd_idx_per_tri, n_trials_per_cond, n_cnd):
+    n_trials = arr.shape[0]
+    nd2 = arr.shape[1]
+    avg_by_cnd = np.zeros((n_cnd, nd2), dtype=arr.dtype)
+    for idx in range(n_trials):
+        cnd_idx = cnd_idx_per_tri[idx]
+        avg_by_cnd[cnd_idx] += arr[idx]
+
+    for cnd_idx in range(n_cnd):
+        avg_by_cnd[cnd_idx] /= n_trials_per_cond[cnd_idx]
+
+    return avg_by_cnd
