@@ -264,3 +264,22 @@ def gumbel(mean, std, x):
 
     # return
     return z_stat, gumbel_p
+
+
+def compute_pvalues(real_abs_max, perm_abs_max, significance='gumbel'):
+    if significance in ['gumbel', 'both']:
+        perm_mean = np.mean(perm_abs_max, axis=-1)
+        perm_std = np.std(perm_abs_max, axis=-1)
+        z_scores, p_values_gumbel = gumbel(perm_mean, perm_std, real_abs_max)
+    if significance in ['empirical', 'both']:
+        p_values_empirical = (perm_abs_max >= real_abs_max[:, None]).mean()
+
+    if significance == 'gumbel':
+        p_values = p_values_gumbel
+    elif significance == 'empirical':
+        p_values = p_values_empirical
+        z_scores = None
+    elif significance == 'both':
+        p_values = {'gumbel': p_values_gumbel, 'empirical': p_values_empirical}
+
+    return z_scores, p_values
