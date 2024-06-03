@@ -190,57 +190,54 @@ def ZETA_test_numba(spk, compare, picks=None, tmin=0., tmax=None,
         n_samples = reference_time.shape[0]
 
         # TRY: put everything below in a jit-compiled function
-        trial_boundaries, trial_ids = _get_trial_boundaries_numba(
-            trials, n_trials_max)
-        n_spk_tri = np.diff(trial_boundaries)
-        n_trials_real = trial_ids.shape[0]
-
-        fraction_diff = _run_ZETA_numba(
-            times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-            n_trials_per_cond, condition_idx, n_cnd,
-            reference_time)
-
-        permutations = permute_zeta_2cond_diff_numba(
-            n_permutations, n_samples, times, trial_boundaries, trial_ids,
-            n_spk_tri, n_trials_real, n_trials_per_cond, condition_idx, n_cnd,
-            reference_time)
+        ZETA_numba_2cond(times, trials, reference_time, n_trials_max,
+                         n_trials_per_cond, condition_idx, n_cnd,
+                         n_permutations, n_samples)
 
         # center the cumulative diffs and find max(abs) values
         # TODO: could be done earlier (so for numba - within the
         #       compiled function)
         fraction_diff -= fraction_diff.mean()
         permutations -= permutations.mean(axis=-1, keepdims=True)
-        cumulative_diffs.append(fraction_diff)
-        permutation_diffs.append(permutations)
 
         real_abs_max[pick_idx] = np.max(np.abs(fraction_diff))
         perm_abs_max[pick_idx] = np.max(np.abs(permutations), axis=-1)
 
+        if return_dist:
+            cumulative_diffs.append(fraction_diff)
+            permutation_diffs.append(permutations)
+
     # asses significance through gumbel or by only comparing to permutations
-    if significance == 'gumbel':
-        perm_mean = np.mean(perm_abs_max, axis=-1)
-        perm_std = np.std(perm_abs_max, axis=-1)
-        z_scores, p_values = gumbel(perm_mean, perm_std, real_abs_max)
+    z_scores, p_values = compute_pvalues(
+        real_abs_max, perm_abs_max, significance=significance)
 
     if not return_dist:
         return z_scores, p_values
     else:
-        return z_scores, p_values, cumulative_diffs, permutation_diffs
+        other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
+                     max=real_abs_max, perm_max=perm_abs_max)
+        return z_scores, p_values, other
 
 
 def gumbel(mean, std, x):
-    """"Calculate p-value and z-score for maximum value of N samples drawn from Gaussian
-           dblP,dblZ = getGumbel(mean,std,x)
+    """"Calculate p-value and z-score for maximum value of N samples drawn from
+    a Gaussian
 
-                input:
-                - mean: mean of distribution of maximum values
-                - std: standard deviation of distribution of maximum values
-                - x: maximum value to express in quantiles of Gumbel
+    Parameters
+    ----------
+    mean : float
+        Mean of the maxima distribution.
+    std : float
+        Standard deviation of the maxima distribution.
+    x : np.ndarray
+        Maximum values to calculate p-values for.
 
-                output:
-                - arrP; p-value for dblX (chance that sample originates from distribution given by mean/std)
-                - arrZ; z-score corresponding to P
-
+    Returns
+    -------
+    z_stat : np.ndarray
+        Z-scores for the maximum values.
+    gumbel_p : np.ndarray
+        P-values for the maximum values.
     """
 
     # %% define Gumbel parameters from mean and std
