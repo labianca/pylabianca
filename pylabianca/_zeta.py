@@ -161,14 +161,12 @@ def ZETA_test(spk, pick, compare='load', tmin=0., tmax=None,
     return fraction_diff, permutations
 
 
-# some of the things done here would be done one level up and passed to a
-# private function
-def ZETA_test_numba(spk, compare, picks=None, tmin=0., tmax=None,
-                    n_permutations=100, significance='gumbel',
-                    return_dist=False):
-    from ._numba import (
-        _get_trial_boundaries_numba, get_condition_indices_and_unique_numba)
-    from ._zeta_numba import _run_ZETA_numba, permute_zeta_2cond_diff_numba
+def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
+         n_permutations=100, significance='gumbel', return_dist=False):
+
+    if backend == 'numba':
+        from ._numba import get_condition_indices_and_unique_numba
+        from ._zeta_numba import ZETA_numba_2cond
 
     condition_values, n_trials_max, tmax = _prepare_ZETA_numpy_and_numba(
         spk, compare, tmax)
@@ -178,8 +176,9 @@ def ZETA_test_numba(spk, compare, picks=None, tmin=0., tmax=None,
     picks = _deal_with_picks(spk, picks)
     n_cells = len(picks)
 
-    cumulative_diffs = list()
-    permutation_diffs = list()
+    if return_dist:
+        cumulative_diffs = list()
+        permutation_diffs = list()
     real_abs_max = np.zeros(n_cells)
     perm_abs_max = np.zeros((n_cells, n_permutations))
 
