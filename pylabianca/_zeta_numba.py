@@ -1,7 +1,33 @@
 import numpy as np
 from numba import njit
 
-from ._numba import depth_of_selectivity_numba_low_level
+from ._numba import (depth_of_selectivity_numba_low_level,
+                     _get_trial_boundaries_numba)
+
+
+# _run_ZETA_numba could:
+# - [ ] return mean-normalized cumulative distribution difference
+# - [ ] return max abs value too
+# - [ ] this would translate into what permute_zeta_... returns
+def ZETA_numba_2cond(times, trials, reference_time,  n_trials_max,
+                     n_trials_per_cond, condition_idx, n_cnd,
+                     n_permutations, n_samples):
+    trial_boundaries, trial_ids = _get_trial_boundaries_numba(
+        trials, n_trials_max)
+    n_spk_tri = np.diff(trial_boundaries)
+    n_trials_real = trial_ids.shape[0]
+
+    fraction_diff = _run_ZETA_numba(
+        times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
+        n_trials_per_cond, condition_idx, n_cnd,
+        reference_time)
+
+    permutations = permute_zeta_2cond_diff_numba(
+        n_permutations, n_samples, times, trial_boundaries, trial_ids,
+        n_spk_tri, n_trials_real, n_trials_per_cond, condition_idx, n_cnd,
+        reference_time)
+
+    return fraction_diff, permutations
 
 
 @njit
