@@ -96,7 +96,7 @@ def depth_of_selectivity(frate, groupby):
     '''
 
     avg_by_probe = frate.groupby(groupby).mean(dim='trial')
-    n_categories = len(avg_by_probe.coords[groupby])
+    n_categories = avg_by_probe.coords[groupby].shape[0]
     r_max = avg_by_probe.max(dim=groupby)
 
     singleton = r_max.shape == ()
