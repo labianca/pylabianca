@@ -10,7 +10,7 @@ except ImportError:
 
 def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
                        n_jobs=1, time_generalization=False, random_state=None,
-                       clf=None, n_pca=0, feature_selection=None):
+                       clf=None, n_pca=0):
     '''Perform decoding analysis.
 
     Parameters
@@ -40,11 +40,6 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
     n_pca : int
         Number of principal components to use for dimensionality reduction. If
         0 (default), no dimensionality reduction is performed.
-    feature_selection : function | None
-        Function that takes ``X`` and ``y`` array from training set and
-        returns a boolean array of shape (n_features,) that indicates which
-        features to use for training. If None (default), no feature selection
-        is performed.
 
     Returns
     -------
@@ -102,14 +97,9 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
     # do the k-fold
     scores = list()
     for train_index, test_index in spl.split(X, y):
-        if feature_selection is not None:
-            sel = feature_selection(X[train_index, :], y[train_index])
-        else:
-            sel = slice(None)
-
-        estimator.fit(X=X[train_index][:, sel],
+        estimator.fit(X=X[train_index],
                       y=y[train_index])
-        score = estimator.score(X=X[test_index][:, sel],
+        score = estimator.score(X=X[test_index],
                                 y=y[test_index])
         scores.append(score)
 
@@ -122,7 +112,7 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
 #           dictionary of xarrays is passed, so multiple subjects)
 def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
                  scoring='accuracy', n_jobs=1, time_generalization=False,
-                 random_state=None, clf=None, n_pca=0, feature_selection=None):
+                 random_state=None, clf=None, n_pca=0):
     '''Perform decoding analysis using xarray as input.
 
     Parameters
@@ -159,11 +149,6 @@ def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
     n_pca : int
         Number of principal components to use for dimensionality reduction. If
         0 (default), no dimensionality reduction is performed.
-    feature_selection : function | None
-        Function that takes ``X`` and ``y`` array from training set and
-        returns a boolean array of shape (n_features,) that indicates which
-        features to use for training. If None (default), no feature selection
-        is performed.
 
     Returns
     -------
@@ -182,7 +167,7 @@ def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
     scores = run_decoding_array(
         X, y, n_splits=n_splits, C=C, scoring=scoring, n_jobs=n_jobs,
         time_generalization=time_generalization, random_state=random_state,
-        clf=clf, n_pca=n_pca, feature_selection=feature_selection
+        clf=clf, n_pca=n_pca
     )
 
     # combine into xarray output
@@ -528,18 +513,17 @@ def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
         Xs, ys, time = frates_dict_to_sklearn(
             frates, target=target, select=select_trials, decim=decim)
 
-    n_trials = _count_trials(Xs)
+    # n_trials = _count_trials(Xs)
 
     if isinstance(permute, bool) and permute:
-        permute = np.arange(n_trials)
-        np.random.shuffle(permute)
+        ys = [np.random.permutation(y) for y in ys]
 
     # split into n_jobs = 1 or n_resamples = 1
     # and n_jobs > 1 (joblib)
     if n_jobs == 1 or n_resamples == 1:
         score_resamples = [
             _do_resample(Xs, ys, decoding_fun, arguments,
-                         permute=permute, time=time)
+                         time=time)
             for resample_idx in range(n_resamples)
         ]
     else:
@@ -547,7 +531,7 @@ def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
 
         score_resamples = Parallel(n_jobs=n_jobs)(
             delayed(_do_resample)(
-                Xs, ys, decoding_fun, arguments, permute=permute, time=time)
+                Xs, ys, decoding_fun, arguments, time=time)
             for resample_idx in range(n_resamples)
         )
 
@@ -561,15 +545,8 @@ def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
     return score_resamples
 
 
-def _do_resample(Xs, ys, decoding_fun, arguments, permute=False, time=None):
+def _do_resample(Xs, ys, decoding_fun, arguments, time=None):
     X, y = join_subjects(Xs, ys)
-
-    if isinstance(permute, bool):
-        if permute:
-            np.random.shuffle(y)
-    else:
-        # assume permutation array
-        y = y[permute]
 
     # do the actual decoding
     return decoding_fun(X, y, time=time, **arguments)
