@@ -39,15 +39,14 @@ def cumulative_spikes_norm(spikes, reference_time, n_trials):
         [[0.], spikes_fraction, [endpoint]], axis=0)
 
     spikes_fraction_interpolated = np.interp(
-        x=reference_time, xp=spikes, fp=spikes_fraction #,
-        # left=step, right=endpoint
+        x=reference_time, xp=spikes, fp=spikes_fraction
     )
 
     return spikes_fraction_interpolated
 
 
 def cumulative_diff_two_conditions(spikes1, spikes2, n_trials1, n_trials2,
-                                   reference_time, tmax):
+                                   reference_time):
     # introduce minimum jitter to identical spikes
     spikes1_all = np.sort(spikes1)
     spikes2_all = np.sort(spikes2)
@@ -56,6 +55,8 @@ def cumulative_diff_two_conditions(spikes1, spikes2, n_trials1, n_trials2,
     fraction2 = cumulative_spikes_norm(spikes2_all, reference_time, n_trials2)
 
     fraction_diff = fraction1 - fraction2
+    fraction_diff -= fraction_diff.mean()
+
     return fraction_diff
 
 
@@ -81,10 +82,10 @@ def group_spikes_by_cond(times, trials, cnd_values, uni_cnd):
     return times_per_cond, n_trials
 
 
-def group_spikes_by_cond_no_numba(times, trials, cnd_values, uni_cnd):
+def group_spikes_by_cond_no_numba(times, trials, cnd_values, n_cnd):
     n_trials = list()
     times_per_cond = list()
-    for cnd in uni_cnd:
+    for cnd in range(n_cnd):
         sel_cnd = np.where(cnd_values == cnd)[0]
         n_trials.append(len(sel_cnd))
         this_mask = np.in1d(trials, sel_cnd)
@@ -95,13 +96,18 @@ def group_spikes_by_cond_no_numba(times, trials, cnd_values, uni_cnd):
 
 def get_condition_indices_and_unique(cnd_values):
     uni_cnd = np.unique(cnd_values)
-    cnd_idx_per_tri = np.zeros(cnd_values.shape[0], dtype='int32')
+    n_cnd = uni_cnd.shape[0]
+    n_trials = cnd_values.shape[0]
+
+    n_trials_per_cond = np.zeros(n_cnd, dtype='int32')
+    cnd_idx_per_tri = np.zeros(n_trials, dtype='int32')
 
     for cnd_idx, cnd in enumerate(uni_cnd):
         msk = cnd_values == cnd
+        n_trials_per_cond[cnd_idx] = msk.sum()
         cnd_idx_per_tri[msk] = cnd_idx
 
-    return cnd_idx_per_tri, uni_cnd
+    return cnd_idx_per_tri, n_trials_per_cond, uni_cnd, n_cnd
 
 
 def _prepare_ZETA_numpy_and_numba(spk, compare, tmax):
@@ -196,9 +202,6 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         # center the cumulative diffs and find max(abs) values
         # TODO: could be done earlier (so for numba - within the
         #       compiled function)
-        fraction_diff -= fraction_diff.mean()
-        permutations -= permutations.mean(axis=-1, keepdims=True)
-
         real_abs_max[pick_idx] = np.max(np.abs(fraction_diff))
         perm_abs_max[pick_idx] = np.max(np.abs(permutations), axis=-1)
 
@@ -239,21 +242,20 @@ def gumbel(mean, std, x):
         P-values for the maximum values.
     """
 
-    # %% define Gumbel parameters from mean and std
     # derive beta parameter from std dev
     beta = np.sqrt(6) * std / np.pi
 
     # derive mode from mean, beta and E-M constant
     mode = mean - beta * np.euler_gamma
 
-    # calculate cum dens at X
+    # calculate cumulative density at X (or multiple Xs)
     gumbel_cdf = np.exp(-np.exp(-((x - mode) / beta)))
 
     # define p-value
     gumbel_p = 1 - gumbel_cdf
 
     # transform to output z-score
-    z_stat = -stats.norm.ppf(np.divide(gumbel_p, 2))
+    z_stat = -stats.norm.ppf(gumbel_p / 2)
 
     # approximation for large X
     inf_msk = np.isinf(z_stat)
