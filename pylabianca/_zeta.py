@@ -1,8 +1,8 @@
 import numpy as np
 from scipy import stats
 
+from .utils import _deal_with_picks, _get_trial_boundaries
 
-from .utils import _deal_with_picks
 
 # top-level API
 # zeta_test
@@ -90,26 +90,26 @@ def cumulative_n_conditions(spikes, n_trials, reference_time,
     return reduced_fraction
 
 
-def ZETA_2cond(times, trials, reference_time, condition_idx, n_cnd,
+def ZETA_2cond(times, reference_time, condition_idx, n_cnd,
                n_permutations, n_samples, reduction=diff_func):
     # CONSIDER turning to list of arrays - one array per trial
     fraction_diff = run_ZETA_2cond(
-        times, trials, reference_time, condition_idx, n_cnd,
+        times, reference_time, condition_idx, n_cnd,
         reduction=reduction
     )
 
     permutations = permute_zeta_2cond(
-        n_permutations, n_samples, times, trials, condition_idx, n_cnd,
+        n_permutations, n_samples, times, condition_idx, n_cnd,
         reference_time, reduction=reduction
     )
 
     return fraction_diff, permutations
 
 
-def run_ZETA_2cond(times, trials, reference_time, cnd_values, n_cnd,
+def run_ZETA_2cond(times, reference_time, cnd_values, n_cnd,
                    reduction=diff_func):
     times_per_cond, n_trials = group_spikes_by_cond_no_numba(
-        times, trials, cnd_values, n_cnd)
+        times, cnd_values, n_cnd)
 
     fraction_diff = cumulative_n_conditions(
         times_per_cond, n_trials, reference_time, reduction=reduction)
@@ -117,14 +117,14 @@ def run_ZETA_2cond(times, trials, reference_time, cnd_values, n_cnd,
 
 
 def permute_zeta_2cond(
-        n_permutations, n_samples, times, trials, condition_idx, n_cnd,
+        n_permutations, n_samples, times, condition_idx, n_cnd,
         reference_time, reduction=diff_func):
     permutations = np.zeros((n_permutations, n_samples), dtype=times.dtype)
     condition_idx_perm = condition_idx.copy()
     for perm_idx in range(n_permutations):
         np.random.shuffle(condition_idx_perm)
         permutations[perm_idx] = run_ZETA_2cond(
-            times, trials, reference_time, condition_idx_perm, n_cnd,
+            times, reference_time, condition_idx_perm, n_cnd,
             reduction=reduction)
 
     return permutations
@@ -142,7 +142,7 @@ def group_spikes_by_cond(times, trials, cnd_values, uni_cnd):
     return times_per_cond, n_trials
 
 
-def group_spikes_by_cond_no_numba(times, trials, cnd_values, n_cnd):
+def group_spikes_by_cond_no_numba_prev(times, trials, cnd_values, n_cnd):
     n_trials = list()
     times_per_cond = list()
     for cnd in range(n_cnd):
@@ -150,6 +150,17 @@ def group_spikes_by_cond_no_numba(times, trials, cnd_values, n_cnd):
         n_trials.append(len(sel_cnd))
         this_mask = np.in1d(trials, sel_cnd)
         times_per_cond.append(times[this_mask])
+
+    return times_per_cond, n_trials
+
+
+def group_spikes_by_cond_no_numba(times, cnd_values, n_cnd):
+    n_trials = list()
+    times_per_cond = list()
+    for cnd in range(n_cnd):
+        sel_cnd = np.where(cnd_values == cnd)[0]
+        n_trials.append(len(sel_cnd))
+        times_per_cond.append(np.concatenate(times[sel_cnd]))
 
     return times_per_cond, n_trials
 
@@ -190,15 +201,48 @@ def _prepare_ZETA_numpy_and_numba(spk, compare, tmax):
     return condition_values, n_trials_max, tmax
 
 
-def _get_times_and_trials(spk, pick, tmin, tmax):
-    times = spk.time[pick]
-    sel_time = (times >= tmin) & (times < tmax)
-    times = times[sel_time]
-    trials = spk.trial[pick][sel_time]
+def _to_array_of_arrays(spk_epochs, pick, tmin=None, tmax=None):
+    limit_time = tmin is not None and tmax is not None
+    max_trials = spk_epochs.n_trials
+    trial_list = np.empty(max_trials, dtype='object')
+    tri_limits, tri_ids = _get_trial_boundaries(spk_epochs, pick)
+    tri_enum = 0
+    for tri in range(max_trials):
+        if tri in tri_ids:
+            lim1, lim2 = tri_limits[tri_enum:tri_enum + 2]
+            tri_spikes = spk_epochs.time[pick][lim1:lim2]
 
-    reference_time = np.sort(
-        np.concatenate([[0.], times, [tmax]], axis=0)
-    )
+            if limit_time:
+                sel_time = (tri_spikes >= tmin) & (tri_spikes < tmax)
+                tri_spikes = tri_spikes[sel_time]
+
+            trial_list[tri] = tri_spikes
+            tri_enum += 1
+        else:
+            trial_list[tri] = np.array([])
+
+    return trial_list
+
+
+def _get_times_and_trials(spk, pick, tmin, tmax, backend):
+
+    if backend == 'numba':
+        times = spk.time[pick]
+        sel_time = (times >= tmin) & (times < tmax)
+        times = times[sel_time]
+        trials = spk.trial[pick][sel_time]
+
+        reference_time = np.sort(
+            np.concatenate([[0.], times, [tmax]], axis=0)
+        )
+    else:
+        trials = None
+        times = _to_array_of_arrays(spk, pick, tmin=tmin, tmax=tmax)
+
+        reference_time = np.sort(
+            np.concatenate([[0.], *times, [tmax]], axis=0)
+        )
+
 
     return times, trials, reference_time
 
@@ -237,7 +281,7 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     # TODO: add joblib parallelization if necessary
     for pick_idx, pick in enumerate(picks):
         times, trials, reference_time = _get_times_and_trials(
-            spk, pick, tmin, tmax)
+            spk, pick, tmin, tmax, backend)
         n_samples = reference_time.shape[0]
 
         # TRY: put everything below in a jit-compiled function
@@ -256,7 +300,7 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
                     n_samples)
         elif backend == 'numpy':
             fraction_diff, permutations = ZETA_2cond(
-                times, trials, reference_time, condition_idx, n_cnd,
+                times, reference_time, condition_idx, n_cnd,
                 n_permutations, n_samples, reduction=reduction)
 
         # center the cumulative diffs and find max(abs) values
