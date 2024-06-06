@@ -224,7 +224,7 @@ def _to_array_of_arrays(spk_epochs, pick, tmin=None, tmax=None):
     return trial_list
 
 
-def _get_times_and_trials(spk, pick, tmin, tmax, backend):
+def _get_times_and_trials(spk, pick, tmin, tmax, subsample, backend):
 
     if backend == 'numba':
         times = spk.time[pick]
@@ -243,6 +243,8 @@ def _get_times_and_trials(spk, pick, tmin, tmax, backend):
             np.concatenate([[0.], *times, [tmax]], axis=0)
         )
 
+    if subsample > 1:
+        reference_time = reference_time[::subsample]
 
     return times, trials, reference_time
 
@@ -254,20 +256,23 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     if backend == 'numba':
         from ._numba import (get_condition_indices_and_unique_numba
                              as _unique_func)
-        from ._zeta_numba import ZETA_numba_2cond, ZETA_numba_ncond
     else:
         _unique_func = get_condition_indices_and_unique
 
     condition_values, n_trials_max, tmax = _prepare_ZETA_numpy_and_numba(
         spk, compare, tmax)
-    condition_idx, n_trials_per_cond, _, n_cnd = (
-        _unique_func(condition_values)
-    )
+    condition_idx, n_trials_per_cond, _, n_cnd = _unique_func(condition_values)
+
     if backend == 'numpy' and reduction is None:
         if n_cnd == 2:
             reduction = diff_func
         elif n_cnd > 2:
             reduction = var_func
+    elif backend == 'numba':
+        if n_cnd == 2:
+            from ._zeta_numba import ZETA_numba_2cond as numba_func
+        elif n_cnd > 2:
+            from ._zeta_numba import ZETA_numba_ncond as numba_func
 
     picks = _deal_with_picks(spk, picks)
     n_cells = len(picks)
@@ -275,29 +280,22 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     if return_dist:
         cumulative_diffs = list()
         permutation_diffs = list()
+        reference_times = list()
+
     real_abs_max = np.zeros(n_cells)
     perm_abs_max = np.zeros((n_cells, n_permutations))
 
     # TODO: add joblib parallelization if necessary
     for pick_idx, pick in enumerate(picks):
         times, trials, reference_time = _get_times_and_trials(
-            spk, pick, tmin, tmax, backend)
+            spk, pick, tmin, tmax, subsample, backend)
         n_samples = reference_time.shape[0]
 
-        # TRY: put everything below in a jit-compiled function
-        # TODO: be a bit smarter by selecting the relevant function
-        #       beforehand, not checking it every iteration
         if backend == 'numba':
-            if n_cnd == 2:
-                fraction_diff, permutations = ZETA_numba_2cond(
-                    times, trials, reference_time, n_trials_max,
-                    n_trials_per_cond, condition_idx, n_cnd, n_permutations,
-                    n_samples)
-            elif n_cnd > 2:
-                fraction_diff, permutations = ZETA_numba_ncond(
-                    times, trials, reference_time, n_trials_max,
-                    n_trials_per_cond, condition_idx, n_cnd, n_permutations,
-                    n_samples)
+            fraction_diff, permutations = numba_func(
+                times, trials, reference_time, n_trials_max,
+                n_trials_per_cond, condition_idx, n_cnd, n_permutations,
+                n_samples)
         elif backend == 'numpy':
             fraction_diff, permutations = ZETA_2cond(
                 times, reference_time, condition_idx, n_cnd,
@@ -312,6 +310,7 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         if return_dist:
             cumulative_diffs.append(fraction_diff)
             permutation_diffs.append(permutations)
+            reference_times.append(reference_time)
 
     # asses significance through gumbel or by only comparing to permutations
     z_scores, p_values = compute_pvalues(
@@ -321,7 +320,8 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         return z_scores, p_values
     else:
         other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
-                     max=real_abs_max, perm_max=perm_abs_max)
+                     max=real_abs_max, perm_max=perm_abs_max,
+                     ref_time=reference_times)
         return z_scores, p_values, other
 
 
