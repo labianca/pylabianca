@@ -4,9 +4,6 @@ from scipy import stats
 from .utils import _deal_with_picks, _get_trial_boundaries
 
 
-# top-level API
-# zeta_test
-
 def cumulative_spikes_norm(spikes, reference_time, n_trials):
     '''
     Calculate cumulative spike distribution against trial time.
@@ -250,6 +247,7 @@ def _get_times_and_trials(spk, pick, tmin, tmax, subsample, backend):
 
 
 # TODO: CONSIDER renaming return_dist to return_traces / return_dict, etc.
+# MOVE to pylabianca.selectivity
 def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
          n_permutations=100, significance='gumbel', return_dist=False,
          subsample=10, reduction=None):
