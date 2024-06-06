@@ -249,9 +249,66 @@ def _get_times_and_trials(spk, pick, tmin, tmax, subsample, backend):
     return times, trials, reference_time
 
 
+# TODO: CONSIDER renaming return_dist to return_traces / return_dict, etc.
 def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
          n_permutations=100, significance='gumbel', return_dist=False,
-         reduction=None):
+         subsample=10, reduction=None):
+    """ZETA test for comparing cumulative spike distributions between
+    conditions.
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        Spike data.
+    compare : str
+        Metadata column name containing condition labels to compare.
+    picks : int | str | list of int | list of str,  optional
+        Cell indices or names to test. If None, all cells are tested.
+    tmin : float, optional
+        Minimum time to consider. Default is ``0.``.
+    tmax : float, optional
+        Maximum time to consider. Default is ``None``, which uses the maximum
+        time in the data.
+    backend : {'numpy', 'numba'}, optional
+        Backend to use. Default is 'numpy'.
+    n_permutations : int, optional
+        Number of permutations to perform. Default is ``100``.
+    significance : {'gumbel', 'empirical', 'both'}, optional
+        Method to assess significance. ``'gumbel'`` estimates p-values using
+        the Gumbel distribution. ``'empirical'`` compares the real maximum
+        value to the permutation distribution. ``'both'`` returns both
+        estimates. Default is ``'gumbel'``
+    return_dist : bool, optional
+        Whether to return the cumulative traces and permutation traces.
+        Default is ``False``.
+    subsample : int, optional
+        Subsample factor for the reference time. Default is ``10``.
+    reduction : callable, optional
+        Reduction function to apply to the cumulative traces. Default is
+        ``None``, which uses the difference function for two conditions and
+        variance for more than two conditions.
+
+    Returns
+    -------
+    z_scores : np.ndarray
+        Z-scores - one per cell. Used only if ``significance`` is
+        ``'gumbel'``, otherwise ``None``.
+    p_values : np.ndarray
+        P-values - one per cell.
+    other : dict
+        Dictionary containing additional output if ``return_dist`` is
+        ``True``. Contains the following keys:
+        - trace : list of np.ndarray
+            Cumulative traces for each cell.
+        - perm_trace : list of np.ndarray
+            Permutation traces for each cell.
+        - max : np.ndarray
+            Maximum values for each cell.
+        - perm_max : np.ndarray
+            Maximum values for each permutation.
+        - ref_time : list of np.ndarray
+            Reference times for each cell.
+    """
 
     if backend == 'numba':
         from ._numba import (get_condition_indices_and_unique_numba
