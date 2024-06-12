@@ -7,6 +7,7 @@
 
 * API: `per_trial=False` option was removed from `.apply()` method of `SpikeEpochs` - it didn't seem to be useful and its behavior was not well defined. If you need to apply a function to each trial separately, you can still use `.apply()`.
 * API: remove unnecessary `spk` argument from `pylabianca.selectivity.cluster_based_selectivity()`. It was used to calculate spike rate and various selectivity indices from cluster-test defined window. Now the function calculates this measures from the provided firing rate xarray.
+* API: removed `feature_selection` argument from `pylabianca.decoding.run_decoding()` and `pylabianca.decoding.run_decoding_array()` functions. It was not very useful and it is better to place feature selection as part of the sklearn pipeline passed to these functions.
 
 <br/>
 
@@ -14,14 +15,20 @@
 * ENH: further speed up to `Spikes.epoch()` (around 5 - 13-fold) is now also possible by using `backend='numba'` (if numba is installed)
 * ENH: added an experimental datashader backend to `.plot_waveform()` method of `Spikes` and `SpikeEpochs` (`backend='datashader'`).
 * ENH: added `n_jobs` argument to `pylabianca.selectivity.cluster_based_selectivity()` to allow for parallel processing of cells
+
 * ENH: `.plot_waveform()` method of `Spikes` and `SpikeEpochs` now allows to control the colormap to plot the waveform density with (`cmap` argument) and the number of y axis bins (`y_bins` argument)
+* ENH: added `colors` argument for explicit color control in `pylabianca.viz.plot_raster`
+* ENH: `pylabianca.viz.plot_raster` now creates legend for condition colors. This is the default behavior, but `legend` argument allows to control this, and `legend_kwargs` allows for  passing additional arguments to the legend
+
 * ENH: added `pylabianca.utils.cellinfo_from_xarray()` function to extract/reconstruct cellinfo dataframe from xarray DataArray coordinates.
 * ENH: added `copy_cellinfo` argument to `pylabianca.selectivity.cluster_based_selectivity()`. It allows to select which cellinfo columns are copied to the selectivity dataframe.
 * ENH: expose `.to_spiketools()` as `SpikeEpochs` method (previously it was only available as a function in `pylabianca.io` module)
 * ENH: added `pylabianca.utils.dict_to_xarray()` function to convert dictionary of xarrays (multiple sessions / subjects) to one concatenated xarray DataArray
 * ENH: added `pylabianca.utils.assign_session_coord()` function to assign session / subject coordinate to xarray DataArray (useful when concatenating multiple sessions / subjects)
+
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
 * ENH: `Spikes` `.sort()` method now exposes `inplace` argument to allow for sorting on a copy of the object (this can be also easily done by using `spk.copy().sort()`)
+
 * ENH: better error message when the format passed to `pylabianca.io.read_osort()` does not match the data
 * ENH: added better input validation to `SpikeEpochs` to avoid silly errors
 * ENH: added better input validation to `Spikes` to avoid silly errors
@@ -36,6 +43,7 @@
 
 <br/>
 
+* FIX: numerical errors in `.spike_density()` method of `SpikeEpochs`. The scipy's convolution used in this function automatically picks FFT-based convolution for larger arrays, which leads to close-to-zero noise (around 1e-15) where it should be zero. We now use overlap-add convolution (`scipy.signal.oaconvolve`) which has very similar speed and less severe close-to-zero numerical errors. Additionally, values below `1e-14` are now set to zero after convolution.
 * FIX: allow to `.drop_cells()` using cell names, not only indices
 * FIX: `Spikes` `.sort()` method now raises error when using `Spikes` with empty `.cellinfo` attribute or when the attribute does not contain a pandas DataFrame.
 * FIX: make sure `.n_trials` `SpikeEpochs` attribute is int
