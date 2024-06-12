@@ -21,10 +21,11 @@
 * ENH: `pylabianca.viz.plot_raster` now creates legend for condition colors. This is the default behavior, but `legend` argument allows to control this, and `legend_kwargs` allows for  passing additional arguments to the legend
 
 * ENH: added `pylabianca.utils.cellinfo_from_xarray()` function to extract/reconstruct cellinfo dataframe from xarray DataArray coordinates.
+* ENH: `pylabianca.utils.xr_find_nested_dims()` now returns "nested" xarray coordinates also for coordinate tuplples (for example `('cell', 'trial')` - which happens often after concatenating multiple xarray sessions)
 * ENH: added `copy_cellinfo` argument to `pylabianca.selectivity.cluster_based_selectivity()`. It allows to select which cellinfo columns are copied to the selectivity dataframe.
 * ENH: expose `.to_spiketools()` as `SpikeEpochs` method (previously it was only available as a function in `pylabianca.io` module)
 * ENH: added `pylabianca.utils.dict_to_xarray()` function to convert dictionary of xarrays (multiple sessions / subjects) to one concatenated xarray DataArray
-* ENH: added `pylabianca.utils.assign_session_coord()` function to assign session / subject coordinate to xarray DataArray (useful when concatenating multiple sessions / subjects)
+* ENH: added `pylabianca.utils.assign_session_coord()` function to assign session / subject coordinate to xarray DataArray (useful when concatenating multiple sessions / subjects- using `pylabianca.utils.dict_to_xarray()`)
 
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
 * ENH: `Spikes` `.sort()` method now exposes `inplace` argument to allow for sorting on a copy of the object (this can be also easily done by using `spk.copy().sort()`)
@@ -43,7 +44,9 @@
 
 <br/>
 
+* FIX: correct how permutations are handled in `pylabianca.decoding.resample_decoding()`. Previously each resample (random trial matching between sessions to create a pseudo-population) within one permutation step used different trial-target matchings (although the same permutation vector was passed to each resample). Because all resamples are averaged, to get a better estimate of the true effect, this lead to overly optimistic p-values (different trial-target matchings averaged in each permutation, but the same matching averaged in non-permuted data). Now the permutation of the target vector is done per-session, before pseudo-population creation / resampling, which fixes the issue.
 * FIX: numerical errors in `.spike_density()` method of `SpikeEpochs`. The scipy's convolution used in this function automatically picks FFT-based convolution for larger arrays, which leads to close-to-zero noise (around 1e-15) where it should be zero. We now use overlap-add convolution (`scipy.signal.oaconvolve`) which has very similar speed and less severe close-to-zero numerical errors. Additionally, values below `1e-14` are now set to zero after convolution.
+* FIX: better handle cases where some cells have 0 spikes after epoching. Previously, this lead to errors when constructing epochs or calculating firing rate, now it is handled gracefully (changes to `pylabianca.utils._get_trial_boundaries()` and `pylabianca.utils.is_list_of_non_negative_integer_arrays()` ).
 * FIX: allow to `.drop_cells()` using cell names, not only indices
 * FIX: `Spikes` `.sort()` method now raises error when using `Spikes` with empty `.cellinfo` attribute or when the attribute does not contain a pandas DataFrame.
 * FIX: make sure `.n_trials` `SpikeEpochs` attribute is int
