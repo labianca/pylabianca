@@ -161,7 +161,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 # ENH: move to sarna/borsar sometime
 # ENH: allow for standard arrays (and perm_index)
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
-                                         adjacency=None):
+                                         adjacency=None, percentile=5):
     '''Performs a cluster-based test from precalculated permutations.
 
     This function should get data ready for cluster-based permutation test
@@ -202,20 +202,20 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     assert isinstance(perm_data, xr.DataArray)
     assert tail in ['both', 'pos', 'neg']
     dim_names = ['perm', 'permutation']
-    has_dim = [dimname in perm_data.dims for dimname in dim_names]
+    has_dim = [dim_name in perm_data.dims for dim_name in dim_names]
     assert any(has_dim)
     perm_dim_name = dim_names[np.where(has_dim)[0][0]]
-
-    percentiles = [97.5, 2.5] if tail == 'both' else [95, 5]
     perm_dim = perm_data.dims.index(perm_dim_name)
-    n_perms = perm_data.shape[perm_dim]
-    thresholds = np.percentile(perm_data, percentiles, axis=perm_dim)
 
     if tail == 'both':
+        percentiles = [100 - (percentile / 2), (percentile / 2)]
+        thresholds = np.percentile(perm_data, percentiles, axis=perm_dim)
         thresholds = [thresholds[0], thresholds[1]]
     elif tail == 'pos':
-        thresholds = [thresholds[0], None]
+        thresholds = np.percentile(perm_data, 100 - percentile, axis=perm_dim)
+        thresholds = [thresholds, None]
     elif tail == 'neg':
+        thresholds = np.percentile(perm_data, percentile, axis=perm_dim)
         thresholds = [None, thresholds[1]]
 
     # clusters on actual data
