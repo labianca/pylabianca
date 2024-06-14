@@ -40,6 +40,10 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
     stat_fun = borsar.stats._find_stat_fun(n_groups=n_groups, paired=paired,
                                             tail=tail)
 
+    has_xarr = all(['DataArray' in str(type(x)) for x in arrays])
+    if has_xarr:
+        arrays = [x.values for x in arrays]
+
     thresh, dist = borsar.stats._compute_threshold_via_permutations(
         arrays, paired=paired, tail=tail, stat_fun=stat_fun,
         return_distribution=True, n_permutations=n_perm, progress=progress,
