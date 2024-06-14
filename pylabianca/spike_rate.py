@@ -98,6 +98,10 @@ def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
     window_limits = np.array([-half_win, half_win])
     used_range = time_limits[1] - time_limits[0]
     n_steps = (used_range - winlen) / step + 1
+    if n_steps <= 0:
+        raise ValueError(f'The requested window length (``winlen={winlen}``)'
+                         f' is longer than available data ({used_range}).')
+
     n_steps_int = int(n_steps)
 
     if n_steps - n_steps_int > 0.9:
@@ -184,6 +188,11 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
     picks = _deal_with_picks(spk, picks)
     times, bin_rep = spk.to_raw(picks=picks, sfreq=sfreq)
     cnt_times = times[trim:-trim]
+
+    if len(cnt_times) == 0:
+        raise ValueError('Convolution kernel length ({len(kernel)} samples)'
+                         ' exceeds the length of the data '
+                         f'({bin_rep.shape[-1]} samples).')
 
     cnt = oaconvolve(bin_rep, kernel[None, None, :], mode='valid')
 

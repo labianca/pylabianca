@@ -175,7 +175,8 @@ def _xcorr_hist_trials(spk, cell_idx1, cell_idx2, sfreq=500., max_lag=0.2,
     from .utils import _get_trial_boundaries
 
     bins = _construct_bins(sfreq, max_lag, bins=bins)
-    max_tri = max([tri.max() for tri in spk.trial])
+    max_tri = (spk.n_trials if spk.n_trials is not None
+               else max([tri.max() for tri in spk.trial]))
     xcorr = np.zeros((max_tri + 1, len(bins) - 1), dtype=int)
 
     # TODO: this could be done once at the beginning
