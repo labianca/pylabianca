@@ -470,7 +470,7 @@ def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
 
 # TODO: add order=False for groupby?
 def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
-                legend=True, legend_kwargs=None):
+                legend=True, legend_kwargs=None, eventplot_kwargs=None):
     '''Show spike rasterplot.
 
     Parameters
@@ -494,6 +494,8 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
     legend_kwargs : dict | None
         Additional keyword arguments for the legend. If ``None`` uses the
         default legend location.
+    eventplot_kwargs : dict | None
+        Additional keyword arguments for the eventplot.
 
     Returns
     -------
@@ -539,7 +541,10 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
 
             colors_list.append(img_color)
 
-    ax.eventplot(tri_spikes, colors=colors_list)
+    if eventplot_kwargs is None:
+        eventplot_kwargs = dict()
+
+    ax.eventplot(tri_spikes, colors=colors_list, **eventplot_kwargs)
 
     # set y limits
     n_trials = len(tri_spikes)
@@ -569,7 +574,8 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
 
 
 def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
-                pvals=None, pick=0, p_threshold=0.05, min_pval=0.001, ax=None):
+                pvals=None, pick=0, p_threshold=0.05, min_pval=0.001, ax=None,
+                eventplot_kwargs=None):
     '''Plot average spike rate and spike raster.
 
     spk : pylabianca.spikes.SpikeEpochs
@@ -602,6 +608,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
     ax: matplotlib.Axes | None
         Two axes to plot on: first is used for average firing rate the second
         is used for raster plot. If None, a new figure is created.
+    eventplot_kwargs : dict | None
+        Additional keyword arguments for the eventplot.
 
     Returns
     -------
@@ -640,7 +648,7 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
                        p_threshold=p_threshold, min_pval=min_pval)
 
     plot_raster(spk.copy().pick_cells(cell_name), pick=0,
-                groupby=groupby, ax=ax[1])
+                groupby=groupby, ax=ax[1], eventplot_kwargs=eventplot_kwargs)
     ylim = ax[1].get_xlim()
     ax[0].set_xlim(ylim)
 
