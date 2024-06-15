@@ -1084,7 +1084,6 @@ def parse_sub_ses(sub_ses, remove_sub_prefix=True, remove_ses_prefix=True):
 
     if '_' in sub_ses:
         sub, ses = sub_ses.split('_')
-        ses = ses.replace('ses-', '')
     else:
         sub, ses = sub_ses, None
 
