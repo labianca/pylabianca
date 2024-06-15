@@ -519,7 +519,8 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
         values = [None]
 
     if colors is None:
-        colors = [f'C{idx}' for idx in len(values)]
+        n_values = len(values)
+        colors = [f'C{idx}' for idx in range(n_values)]
     colors_list = list()
 
     for idx, value in enumerate(values):
