@@ -13,12 +13,13 @@
 
 * ENH: around 10-fold speed up to `Spikes.epoch()` (20-fold for thousands of spikes and epoching events)
 * ENH: further speed up to `Spikes.epoch()` (around 5 - 13-fold) is now also possible by using `backend='numba'` (if numba is installed)
-* ENH: added an experimental datashader backend to `.plot_waveform()` method of `Spikes` and `SpikeEpochs` (`backend='datashader'`).
 * ENH: added `n_jobs` argument to `pylabianca.selectivity.cluster_based_selectivity()` to allow for parallel processing of cells
+ENH: allow for different percentile level in `pylabianca.stats.cluster_based_test_from_permutations()` using `percentile` argument.
 
 * ENH: `.plot_waveform()` method of `Spikes` and `SpikeEpochs` now allows to control the colormap to plot the waveform density with (`cmap` argument) and the number of y axis bins (`y_bins` argument)
 * ENH: added `colors` argument for explicit color control in `pylabianca.viz.plot_raster`
 * ENH: `pylabianca.viz.plot_raster` now creates legend for condition colors. This is the default behavior, but `legend` argument allows to control this, and `legend_kwargs` allows for  passing additional arguments to the legend
+* ENH: added an experimental datashader backend to `.plot_waveform()` method of `Spikes` and `SpikeEpochs` (`backend='datashader'`).
 
 * ENH: added `pylabianca.utils.cellinfo_from_xarray()` function to extract/reconstruct cellinfo dataframe from xarray DataArray coordinates.
 * ENH: `pylabianca.utils.xr_find_nested_dims()` now returns "nested" xarray coordinates also for coordinate tuplples (for example `('cell', 'trial')` - which happens often after concatenating multiple xarray sessions)
