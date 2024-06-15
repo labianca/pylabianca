@@ -189,6 +189,16 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     adjacency : numpy.ndarray
         Adjacency matrix for clustering. If ``None`` then lattice adjacency is
         used.
+    percentile : int or float
+        Percentile of the permutation distribution to use for thresholding.
+        The percentile threshold is calculated for every data point (time point
+        for example) separately. The percentile conforms to the tail selected
+        using the ``tail`` parameter. When ``tail`` is ``'both'`` then two
+        percentiles are calculated (one for positive and one for negative tail
+        ). For example, if ``percentile`` is 5, and the tail is ``'both'`` then
+        the 2.5th (``percentile / 2``) and 97.5th (``100 - (percentile / 2)``)
+        percentiles are used as thresholds. The percentile should be between
+        0 and 100.
 
     Returns
     -------
