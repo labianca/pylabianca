@@ -963,10 +963,10 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
         This dimension is also enriched with subject / session information from
         the dictionary keys.
     query : dict | None
-        If not None, the query is passed to .query() method of the xarray. This
-        can be useful to select only specific data from the xarray, which can
-        be difficult to do after concatenation (some coordinates may become
-        multi-dimensional and querying would raise an error "Unlabeled
+        If not None, the query is passed to .query() method of the xarray.
+        This can be useful to select only specific data from the xarray, which
+        can be difficult to do after concatenation (some coordinates may
+        become multi-dimensional and querying would raise an error "Unlabeled
         multi-dimensional array cannot be used for indexing").
     ses_name : str
         Name of the subject / session coordinate that will be automatically
@@ -985,12 +985,19 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
     all_xarr = [isinstance(data[sb], xr.DataArray) for sb in keys]
     assert all(all_xarr)
 
+    if (query is not None) and (not isinstance(query, dict)):
+        query = {'trial': query}
+
     use_coords = None
     arr_list = list()
     different_coords = False
     for key, arr in data.items():
         if query is not None:
             arr = arr.query(query)
+
+            # if trial was in query dict, then we should reset trial indices
+            if 'trial' in query:
+                arr = arr.reset_index('trial', drop=True)
 
         # add subject / session information to the concatenated dimension
         arr = assign_session_coord(
