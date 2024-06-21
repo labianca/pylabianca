@@ -1060,7 +1060,7 @@ def find_index(vec, vals):
         vals = [vals]
 
     vals = np.asarray(vals)
-    ngb = np.array([-1, 0, 1])
+    ngb = np.array([-1, 0])
     idxs = np.searchsorted(vec, vals)
 
     test_idx = idxs[None, :] + ngb[:, None]
