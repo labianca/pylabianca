@@ -20,6 +20,7 @@ ENH: allow for different percentile level in `pylabianca.stats.cluster_based_tes
 * ENH: added `colors` argument for explicit color control in `pylabianca.viz.plot_raster`
 * ENH: `pylabianca.viz.plot_raster` now creates legend for condition colors. This is the default behavior, but `legend` argument allows to control this, and `legend_kwargs` allows for  passing additional arguments to the legend
 * ENH: added an experimental datashader backend to `.plot_waveform()` method of `Spikes` and `SpikeEpochs` (`backend='datashader'`).
+* ENH: allow to pass arguments to eventplot via `eventplot_kwargs` from `pylabianca.viz.plot_raster()` and `pylabianca.viz.plot_spikes()`
 
 * ENH: added `pylabianca.utils.cellinfo_from_xarray()` function to extract/reconstruct cellinfo dataframe from xarray DataArray coordinates.
 * ENH: `pylabianca.utils.xr_find_nested_dims()` now returns "nested" xarray coordinates also for coordinate tuplples (for example `('cell', 'trial')` - which happens often after concatenating multiple xarray sessions)
@@ -47,7 +48,8 @@ ENH: allow for different percentile level in `pylabianca.stats.cluster_based_tes
 
 * FIX: correct how permutations are handled in `pylabianca.decoding.resample_decoding()`. Previously each resample (random trial matching between sessions to create a pseudo-population) within one permutation step used different trial-target matchings (although the same permutation vector was passed to each resample). Because all resamples are averaged, to get a better estimate of the true effect, this lead to overly optimistic p-values (different trial-target matchings averaged in each permutation, but the same matching averaged in non-permuted data). Now the permutation of the target vector is done per-session, before pseudo-population creation / resampling, which fixes the issue.
 * FIX: numerical errors in `.spike_density()` method of `SpikeEpochs`. The scipy's convolution used in this function automatically picks FFT-based convolution for larger arrays, which leads to close-to-zero noise (around 1e-15) where it should be zero. We now use overlap-add convolution (`scipy.signal.oaconvolve`) which has very similar speed and less severe close-to-zero numerical errors. Additionally, values below `1e-14` are now set to zero after convolution.
-* FIX: better handle cases where some cells have 0 spikes after epoching. Previously, this lead to errors when constructing epochs or calculating firing rate, now it is handled gracefully (changes to `pylabianca.utils._get_trial_boundaries()` and `pylabianca.utils.is_list_of_non_negative_integer_arrays()` ).
+* FIX: better handle cases where some cells have 0 spikes after epoching. Previously, this lead to errors when constructing epochs or calculating firing rate, now it is handled gracefully (changes to `pylabianca.utils._get_trial_boundaries()`, `pylabianca.utils.is_list_of_non_negative_integer_arrays()` and `pylabianca.spike_distance._xcorr_hist_trials` accessed through `SpikeEpochs.xcorr()`).
+* FIX: better handle cases when there is not enough data (time range) for spike rate window length (`SpikeEpochs.spike_rate()`) or convolution kernel length (`SpikeEpochs.spike_density()`)
 * FIX: allow to `.drop_cells()` using cell names, not only indices
 * FIX: `Spikes` `.sort()` method now raises error when using `Spikes` with empty `.cellinfo` attribute or when the attribute does not contain a pandas DataFrame.
 * FIX: make sure `.n_trials` `SpikeEpochs` attribute is int
@@ -55,8 +57,8 @@ ENH: allow for different percentile level in `pylabianca.stats.cluster_based_tes
 * FIX: avoid error when one-tail test (ANOVA) is used in `pylabianca.selectivity.compute_selectivity_continuous()` - previously the function assumed that always two-tail thresholds are returned
 * FIX: make sure cellinfo columns inherited by firing rate xarray survive through `pylabianca.selectivity.compute_selectivity_continuous()`
 * FIX: fix error when no spikes were present in fixed time window in `pylabianca.spike_rate._compute_spike_rate_fixed()` used when `step=False` in `.spike_rate()` method of `SpikeEpochs`
-* FIX: fix bug in `pylabianca.io.read_events_neuralynx()`: if no reference file for first timestamp was given an error was thrown - now we fill the start column (time in seconds from recording start) with NaN
-* FIX: when plotting only one line passing one color to `pylabianca.viz.plot_shaded()` or `pylabianca.viz.plot_xarray_shaded()` now works correctly (previously it resulted in an error)
+* FIX: fix bug in `pylabianca.io.read_events_neuralynx()`: if no reference file was given to get the first timestamp from - an error was thrown. Now we fill the start column (time in seconds from recording start) with NaN
+* FIX: plotting only one line passing one color to `pylabianca.viz.plot_shaded()` or `pylabianca.viz.plot_xarray_shaded()` now works correctly (previously it resulted in an error)
 <br/><br/>
 
 ## Version 0.2
