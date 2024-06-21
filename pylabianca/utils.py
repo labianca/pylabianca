@@ -199,6 +199,7 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
         Cell providing spikes centering windows.
     time : None | str | np.ndarray
         Time information for ``arr`` input:
+
         * if ``arr`` is an ``np.ndarray`` then ``time`` should be an array
           of time points for each sample of the time dimension.
         * if ``arr`` is an ``xarray.DataArray`` then ``time`` can be either
@@ -249,9 +250,9 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
 
     elif isinstance(arr, np.ndarray):
         if time is None:
-            raise ValueError('When ``arr`` is an ndarray ``time`` input '
-                                'argument has to be an array of time points '
-                                'for each sample of the time dimension.')
+            raise ValueError('When ``arr`` is an ndarray, ``time`` input '
+                             'argument has to be an array of time points '
+                             'for each sample of the time dimension.')
     else:
         import mne
         if isinstance(arr, mne.Epochs):
@@ -318,8 +319,15 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
 
 
 # TODO: differentiate between shuffling spike-trials vs just metadata
+#       -> an argument for that?
+#       -> or just name this shuffle_spikes
 def shuffle_trials(spk, drop_timestamps=True, drop_waveforms=True):
     '''Create a copy of the SpikeEpochs object with shuffled trials.
+
+    Here the spike-trial relationship is shuffled, not trial metadata.
+    Shuffling spikes is more costly than simply shuffling metadata, but it is
+    necessary when the spike-trial relationship is important (for example in
+    spike-triggered averaging).
 
     Parameters
     ----------
