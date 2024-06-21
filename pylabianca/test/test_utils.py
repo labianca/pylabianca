@@ -20,6 +20,28 @@ def test_trial_boundaries():
     assert (tri_bnd == np.array([0, 6, 16, 19, 27])).all()
 
 
+def test_find_index():
+    vec = np.array([0.1, 0.5, 0.54, 0.8, 0.95, 1.])
+
+    idx = pln.utils.find_index(vec, 0.5)
+    assert idx[0] == 1
+
+    idx = pln.utils.find_index(vec, 0.53)
+    assert idx[0] == 2
+
+    idx = pln.utils.find_index(vec, 0.81)
+    assert idx[0] == 3
+
+    idx = pln.utils.find_index(vec, 0.99)
+    assert idx[0] == 5
+
+    idx = pln.utils.find_index(vec, 0.1)
+    assert idx[0] == 0
+
+    idx = pln.utils.find_index(vec, [0.5, 0.55, 0.91])
+    assert (idx == np.array([1, 2, 4])).all()
+
+
 def test_inherit_metadata():
     """Test inheritance of metadata."""
     import pandas as pd
