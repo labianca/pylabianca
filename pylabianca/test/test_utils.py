@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import xarray as xr
 import pytest
 
 import pylabianca as pln
@@ -76,6 +77,49 @@ def test_find_cells_by_cluster_id():
     cluster = cluster_id.max() + 1
     with pytest.raises(ValueError, match='Found 0 or > 1 cluster IDs.'):
         find_cells_by_cluster_id(spk, [cluster])
+
+
+def test_spike_centered_windows():
+    # simple case - one spike per trial
+    n_trials, n_channels, n_times = 10, 5, 150
+    data = np.random.rand(n_trials, n_channels, n_times)
+    time = np.linspace(-0.5, 1., num=n_times)
+
+    spike_indices = np.random.randint(0, n_times, size=n_trials)
+    spike_times = time[spike_indices]
+    spike_trials = np.arange(n_trials)
+
+    spk = pln.SpikeEpochs([spike_times], [spike_trials])
+
+    # raises ValueError
+    msg = 'has to be an array of time points'
+    with pytest.raises(ValueError, match=msg):
+        pln.utils.spike_centered_windows(spk, data)
+
+    # works with time array
+    spk_cent = pln.utils.spike_centered_windows(
+        spk, data, time=time, winlen=0.01)
+
+    correct = data[np.arange(n_trials), :, spike_indices]
+    assert spk_cent.shape == (10, 5, 1)
+    assert (spk_cent.data[:, :, 0] == correct).all()
+
+    # should get the same with xarray
+    xarr = xr.DataArray(
+        data, dims=['trial', 'channel', 'time'],
+        coords={'time': time}
+    )
+
+    spk_cent2 = pln.utils.spike_centered_windows(
+        spk, xarr, winlen=0.01)
+
+    assert (spk_cent == spk_cent2).all().item()
+
+    # but not when we specify incorrect time dim
+    msg = 'Coordinate named "emit" not found'
+    with pytest.raises(ValueError, match=msg):
+        pln.utils.spike_centered_windows(
+            spk, xarr, time='emit', winlen=0.01)
 
 
 def test_sub_ses_parsing():
