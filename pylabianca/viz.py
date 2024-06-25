@@ -469,7 +469,8 @@ def _draw_waveform_datashader(waveform, waveform_time, ax, cmap='viridis',
 
 
 # TODO: add order=False for groupby?
-def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
+def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
+                legend=True, legend_kwargs=None, eventplot_kwargs=None):
     '''Show spike rasterplot.
 
     Parameters
@@ -483,8 +484,18 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
         ``.metadata`` field of the ``spk``).
     ax : matplotlib.Axes | None
         Matplotlib axis to plot to. If ``None`` a new figure is opened.
+    colors : list of str | None
+        List of colors to use for each group. If ``None`` uses the default
+        matplotlib color cycle.
     labels : bool
         Whether to add labels to the axes.
+    legend : bool
+        Whether to plot the legend.
+    legend_kwargs : dict | None
+        Additional keyword arguments for the legend. If ``None`` uses the
+        default legend location.
+    eventplot_kwargs : dict | None
+        Additional keyword arguments for the eventplot.
 
     Returns
     -------
@@ -499,7 +510,7 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     spk_cell = spk.copy().pick_cells(picks=pick)
 
     tri_spikes = list()
-    colors = list()
+    colors_list = list() if colors is None else colors
 
     if groupby is not None:
         values = np.unique(spk_cell.metadata.loc[:, groupby])
@@ -507,8 +518,13 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     else:
         values = [None]
 
+    if colors is None:
+        n_values = len(values)
+        colors = [f'C{idx}' for idx in range(n_values)]
+    colors_list = list()
+
     for idx, value in enumerate(values):
-        img_color = f'C{idx}'
+        img_color = colors[idx]
         if groupby is not None:
             query_str = (f'{groupby} == "{value}"' if string_levels
                          else f'{groupby} == {value}')
@@ -523,9 +539,13 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
         for trial in trials:
             msk = spk_cell.trial[0] == trial
             tri_spikes.append(spk_cell.time[0][msk])
-            colors.append(img_color)
 
-    ax.eventplot(tri_spikes, colors=colors)
+            colors_list.append(img_color)
+
+    if eventplot_kwargs is None:
+        eventplot_kwargs = dict()
+
+    ax.eventplot(tri_spikes, colors=colors_list, **eventplot_kwargs)
 
     # set y limits
     n_trials = len(tri_spikes)
@@ -535,6 +555,18 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
     xlim = spk.time_limits + np.array([-0.05, 0.05])
     ax.set_xlim(xlim)
 
+    # legend
+    if legend:
+        from matplotlib.patches import Patch
+
+        patches = [Patch(facecolor=col, label=lab)
+                   for col, lab in zip(colors, values)]
+
+        legend_kwargs = (dict(loc='upper left')
+                         if legend_kwargs is None else legend_kwargs)
+        leg = ax.legend(handles=patches, **legend_kwargs)
+        leg.set_title(groupby)
+
     if labels:
         ax.set_xlabel('Time (s)', fontsize=14)
         ax.set_ylabel('Trial', fontsize=14)
@@ -543,7 +575,8 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, labels=True):
 
 
 def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
-                pvals=None, pick=0, p_threshold=0.05, min_pval=0.001, ax=None):
+                pvals=None, pick=0, p_threshold=0.05, min_pval=0.001, ax=None,
+                eventplot_kwargs=None):
     '''Plot average spike rate and spike raster.
 
     spk : pylabianca.spikes.SpikeEpochs
@@ -576,6 +609,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
     ax: matplotlib.Axes | None
         Two axes to plot on: first is used for average firing rate the second
         is used for raster plot. If None, a new figure is created.
+    eventplot_kwargs : dict | None
+        Additional keyword arguments for the eventplot.
 
     Returns
     -------
@@ -614,7 +649,7 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
                        p_threshold=p_threshold, min_pval=min_pval)
 
     plot_raster(spk.copy().pick_cells(cell_name), pick=0,
-                groupby=groupby, ax=ax[1])
+                groupby=groupby, ax=ax[1], eventplot_kwargs=eventplot_kwargs)
     ylim = ax[1].get_xlim()
     ax[0].set_xlim(ylim)
 
@@ -807,9 +842,9 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
 # TODO - move this to separate submodule .waveform ?
 def calculate_perceptual_waveform_density(spk, cell_idx):
     # get waveform 2d histogram image
-    hist, _, ybins, _ = (
+    hist, _, ybins = (
         _calculate_waveform_density_image(
-            spk, cell_idx, False, 100)
+            spk.waveform[cell_idx], 100)
     )
 
     # correct y range
@@ -836,9 +871,9 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
 
     # create the 2d hist image with corrected y range
     y_range = [ybins[start_ix], ybins[end_ix]]
-    hist, _, ybins, _ = (
+    hist, _, ybins = (
         _calculate_waveform_density_image(
-            spk, cell_idx, False, 100, y_range=y_range)
+            spk.waveform[cell_idx], 100, y_range=y_range)
     )
 
     # calculate dns

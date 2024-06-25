@@ -62,8 +62,8 @@ class SpikeEpochs():
         self.trial = trial
 
         if time_limits is None:
-            tmin = min([min(x) for x in time])
-            tmax = max([max(x) for x in time]) + 1e-6
+            tmin = min([min(x) for x in time if len(x) > 0])
+            tmax = max([max(x) for x in time if len(x) > 0]) + 1e-6
             time_limits = np.array([tmin, tmax])
         self.time_limits = time_limits
 

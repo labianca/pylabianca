@@ -175,6 +175,7 @@ def _symmetric_window_samples(winlen, sfreq):
 def _gauss_kernel_samples(window, gauss_sd):
     '''Returns a gaussian kernel given window and sd in samples.'''
     from scipy.stats.distributions import norm
+
     kernel = norm(loc=0, scale=gauss_sd)
     kernel = kernel.pdf(window)
     return kernel
@@ -198,6 +199,7 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
         Cell providing spikes centering windows.
     time : None | str | np.ndarray
         Time information for ``arr`` input:
+
         * if ``arr`` is an ``np.ndarray`` then ``time`` should be an array
           of time points for each sample of the time dimension.
         * if ``arr`` is an ``xarray.DataArray`` then ``time`` can be either
@@ -248,9 +250,9 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
 
     elif isinstance(arr, np.ndarray):
         if time is None:
-            raise ValueError('When ``arr`` is an ndarray ``time`` input '
-                                'argument has to be an array of time points '
-                                'for each sample of the time dimension.')
+            raise ValueError('When ``arr`` is an ndarray, ``time`` input '
+                             'argument has to be an array of time points '
+                             'for each sample of the time dimension.')
     else:
         import mne
         if isinstance(arr, mne.Epochs):
@@ -317,8 +319,15 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
 
 
 # TODO: differentiate between shuffling spike-trials vs just metadata
+#       -> an argument for that?
+#       -> or just name this shuffle_spikes
 def shuffle_trials(spk, drop_timestamps=True, drop_waveforms=True):
     '''Create a copy of the SpikeEpochs object with shuffled trials.
+
+    Here the spike-trial relationship is shuffled, not trial metadata.
+    Shuffling spikes is more costly than simply shuffling metadata, but it is
+    necessary when the spike-trial relationship is important (for example in
+    spike-triggered averaging).
 
     Parameters
     ----------
@@ -574,10 +583,13 @@ def realign_waveforms(spk, picks=None, min_spikes=10, reject=True):
 
 def _get_trial_boundaries(spk, cell_idx):
     n_spikes = len(spk.trial[cell_idx])
-    trial_boundaries = np.where(np.diff(spk.trial[cell_idx]))[0] + 1
-    trial_boundaries = np.concatenate(
-        [[0], trial_boundaries, [n_spikes]])
-    tri_num = spk.trial[cell_idx][trial_boundaries[:-1]]
+    if n_spikes > 0:
+        trial_boundaries = np.where(np.diff(spk.trial[cell_idx]))[0] + 1
+        trial_boundaries = np.concatenate(
+            [[0], trial_boundaries, [n_spikes]])
+        tri_num = spk.trial[cell_idx][trial_boundaries[:-1]]
+    else:
+        trial_boundaries, tri_num = np.array([]), np.array([])
 
     return trial_boundaries, tri_num
 
@@ -830,9 +842,10 @@ def is_array(obj, dtype=None):
 
 def is_list_of_non_negative_integer_arrays(this_list, error_str):
     for cell_values in this_list:
-        if not (np.issubdtype(cell_values.dtype, np.integer)
-                and cell_values.min() >= 0):
-            raise ValueError(error_str)
+        if len(cell_values) > 0:
+            if not (np.issubdtype(cell_values.dtype, np.integer)
+                    and cell_values.min() >= 0):
+                raise ValueError(error_str)
 
 
 def is_iterable_of_strings(this_list):
@@ -922,8 +935,15 @@ def _validate_cellinfo(spk, cellinfo):
 def xr_find_nested_dims(arr, dim_name):
     names = list()
     coords = list(arr.coords)
-    coords.remove(dim_name)
-    sub_dim = (dim_name,)
+
+    if isinstance(dim_name, tuple):
+        for dim in dim_name:
+            coords.remove(dim)
+        sub_dim = dim_name
+    else:
+        coords.remove(dim_name)
+        sub_dim = (dim_name,)
+
     for coord in coords:
         if arr.coords[coord].dims == sub_dim:
             names.append(coord)
@@ -938,7 +958,7 @@ def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
     return arr
 
 
-def dict_to_xarray(data, dim_name='cell', query=None):
+def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
     '''Convert dictionary to xarray.DataArray.
 
     Parameters
@@ -951,11 +971,15 @@ def dict_to_xarray(data, dim_name='cell', query=None):
         This dimension is also enriched with subject / session information from
         the dictionary keys.
     query : dict | None
-        If not None, the query is passed to .query() method of the xarray. This
-        can be useful to select only specific data from the xarray, which can
-        be difficult to do after concatenation (some coordinates may become
-        multi-dimensional and querying would raise an error "Unlabeled
+        If not None, the query is passed to .query() method of the xarray.
+        This can be useful to select only specific data from the xarray, which
+        can be difficult to do after concatenation (some coordinates may
+        become multi-dimensional and querying would raise an error "Unlabeled
         multi-dimensional array cannot be used for indexing").
+    ses_name : str
+        Name of the subject / session coordinate that will be automatically
+        added to the concatenated dimension from the dictionary keys. Defaults
+        to ``'sub'``.
 
     Returns
     -------
@@ -969,6 +993,9 @@ def dict_to_xarray(data, dim_name='cell', query=None):
     all_xarr = [isinstance(data[sb], xr.DataArray) for sb in keys]
     assert all(all_xarr)
 
+    if (query is not None) and (not isinstance(query, dict)):
+        query = {'trial': query}
+
     use_coords = None
     arr_list = list()
     different_coords = False
@@ -976,8 +1003,13 @@ def dict_to_xarray(data, dim_name='cell', query=None):
         if query is not None:
             arr = arr.query(query)
 
+            # if trial was in query dict, then we should reset trial indices
+            if 'trial' in query:
+                arr = arr.reset_index('trial', drop=True)
+
         # add subject / session information to the concatenated dimension
-        arr = assign_session_coord(arr, key, dim_name=dim_name, ses_name='sub')
+        arr = assign_session_coord(
+            arr, key, dim_name=dim_name, ses_name=ses_name)
 
         # check if coordinates are shared
         if use_coords is None:
@@ -1000,12 +1032,42 @@ def dict_to_xarray(data, dim_name='cell', query=None):
     return arr
 
 
+def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
+                   ensure_correct_reduction=True):
+    xarr_dct = dict()
+
+    for lab, arr in xarr.groupby(ses_name):
+        if reduce_coords:
+            new_coords = dict()
+            drop_coords = list()
+            nested_coords = xr_find_nested_dims(arr, ('cell', 'trial'))
+
+            for coord in nested_coords:
+                one_cell = arr.coords[coord].isel(cell=0)
+                if ensure_correct_reduction:
+                    cmp = one_cell == arr.coords[coord]
+                    if cmp.all():
+                        drop_coords.append(coord)
+                        new_coords[coord] = ('trial', one_cell.values)
+                else:
+                    drop_coords.append(coord)
+                    new_coords[coord] = ('trial', one_cell.values)
+
+            if len(drop_coords) > 0:
+                arr = arr.drop(drop_coords)
+                arr = arr.assign_coords(new_coords)
+
+        xarr_dct[lab] = arr
+
+    return xarr_dct
+
+
 def find_index(vec, vals):
     if not isinstance(vals, (list, tuple, np.ndarray)):
         vals = [vals]
 
     vals = np.asarray(vals)
-    ngb = np.array([-1, 0, 1])
+    ngb = np.array([-1, 0])
     idxs = np.searchsorted(vec, vals)
 
     test_idx = idxs[None, :] + ngb[:, None]
@@ -1027,3 +1089,94 @@ def cellinfo_from_xarray(xarr):
         cellinfo = None
 
     return cellinfo
+
+
+def parse_sub_ses(sub_ses, remove_sub_prefix=True, remove_ses_prefix=True):
+    if remove_sub_prefix:
+        sub_ses = sub_ses.replace('sub-', '')
+    if remove_ses_prefix:
+        sub_ses = sub_ses.replace('ses-', '')
+
+    if '_' in sub_ses:
+        sub, ses = sub_ses.split('_')
+    else:
+        sub, ses = sub_ses, None
+
+    return sub, ses
+
+
+def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
+    '''Extract data from xarray dictionary using a dataframe.
+
+    Parameters
+    ----------
+    xarr_dict : dict
+        Dictionary with xarrays.
+    df : pandas.DataFrame
+        DataFrame with selection properties.
+    sub_col : str
+        Name of the column in the DataFrame that contains subject / session
+        information.
+    ses_col : str | None
+        Name of the column in the DataFrame that contains session information.
+    df2xarr : dict | None
+        Dictionary that maps DataFrame columns to xarray coordinates. If None,
+        the default is ``{'label': 'region'}``.
+
+    Returns
+    -------
+    xarr_dict_out : dict of xarray.DataArray
+        Dictionary with selected xarray cells.
+    row_indices : np.ndarray
+        Array with indices of rows.
+    '''
+    assert isinstance(xarr_dict, dict)
+
+    if df2xarr is None:
+        df2xarr = {'label': 'region'}
+
+    row_indices = list()
+    keys = list(xarr_dict.keys())
+    xarr_dict_out = dict()
+
+    remove_sub_prefix = 'sub-' in df[sub_col].values[0]
+    if ses_col is not None:
+        remove_ses_prefix = 'ses-' in df[ses_col].values[0]
+    else:
+        remove_ses_prefix = False
+
+    if remove_sub_prefix or remove_ses_prefix:
+        df = df.copy()
+        if remove_sub_prefix:
+            df[sub_col] = df[sub_col].str.replace('sub-', '')
+        if remove_ses_prefix:
+            df[ses_col] = df[ses_col].str.replace('ses-', '')
+
+    for key in keys:
+        sub, ses = parse_sub_ses(key, remove_sub_prefix=remove_sub_prefix,
+                                 remove_ses_prefix=remove_ses_prefix)
+        df_sel = df.query(f'{sub_col} == "{sub}"')
+        if ses is not None and ses_col is not None:
+            df_sel = df_sel.query(f'{ses_col} == "{ses}"')
+
+        xarr = xarr_dict[key]
+        n_cells = len(xarr.coords['cell'])
+        mask_all = np.zeros(n_cells, dtype=bool)
+        row_per_unit = np.zeros(n_cells, dtype=int)
+
+        for row_idx in df_sel.index:
+            mask_this = np.ones(n_cells, dtype=bool)
+            for df_col, xarr_col in df2xarr.items():
+                mask = (xarr.coords[xarr_col].values
+                        == df_sel.loc[row_idx, df_col])
+                mask_this &= mask
+
+            row_per_unit[mask_this] = row_idx
+            mask_all |= mask_this
+
+        xarr_dict_out[key] = xarr.sel(cell=mask_all)
+        row_per_unit = row_per_unit[mask_all]
+        row_indices.append(row_per_unit)
+
+    row_indices = np.concatenate(row_indices)
+    return xarr_dict_out, row_indices

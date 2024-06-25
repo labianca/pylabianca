@@ -405,6 +405,33 @@ def test_merge():
             == spk_m2.waveform[1].shape[0])
 
 
+def test_degenerate():
+    '''Test degenerate cases like no spikes, too short time segment etc.'''
+    has_no_spike_units = False
+    while not has_no_spike_units:
+        spk = create_random_spikes(n_cells=25, n_trials=2, n_spikes=(0, 2))
+        n_spk = spk.n_spikes()
+        has_no_spike_units = (n_spk == 0).any()
+
+    # make sure some common operations are possible
+    fr = spk.spike_rate()
+    fr = spk.spike_density()
+    xcr = spk.xcorr(0, 1)
+
+    spk.crop(tmin=0., tmax=0.0001)
+    assert spk.n_units() == 25
+    assert (spk.n_spikes() == 0).mean() > 0.9
+
+    msg = ('window length \(``winlen=0.25``\) is longer than '
+           'available data \(0.0001\)')
+    with pytest.raises(ValueError, match=msg):
+        fr = spk.spike_rate()
+
+    msg = 'exceeds the length of the data'
+    with pytest.raises(ValueError, match=msg):
+        fr = spk.spike_density()
+
+
 # TODO: MOVE to viz tests
 def test_plot_waveform():
     spk = create_random_spikes(n_cells=2, n_trials=0, n_spikes=(50, 120))
