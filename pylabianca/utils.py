@@ -1005,7 +1005,7 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
 
             # if trial was in query dict, then we should reset trial indices
             if 'trial' in query:
-                arr = arr.reset_index('trial', drop=True)
+                arr = arr.reset_index('trial', drop=False)
 
         # add subject / session information to the concatenated dimension
         arr = assign_session_coord(
