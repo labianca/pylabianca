@@ -258,7 +258,7 @@ def _get_times_and_trials(spk, pick, tmin, tmax, subsample, backend):
 # MOVE to pylabianca.selectivity
 def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
          n_permutations=100, significance='gumbel', return_dist=False,
-         subsample=10, reduction=None):
+         subsample=1, reduction=None):
     """ZETA test for comparing cumulative spike distributions between
     conditions.
 
