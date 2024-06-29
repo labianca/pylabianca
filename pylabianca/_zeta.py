@@ -183,7 +183,29 @@ def _prepare_ZETA_numpy_and_numba(spk, compare, tmax):
     return condition_values, n_trials_max, tmax
 
 
+# TEST: if tmin, tmax selection before trial boundaries is faster
+#       this would require changing _get_trial_boundaries to work on
+#       trial id vector
 def _to_array_of_arrays(spk_epochs, pick, tmin=None, tmax=None):
+    """Convert spike times + trials to array of arrays (one per trial).
+
+    Parameters
+    ----------
+    spk_epochs : SpikeEpochs
+        Spike data.
+    pick : int
+        Cell index.
+    tmin : float, optional
+        Minimum time to consider. Default is ``None``.
+    tmax : float, optional
+        Maximum time to consider. Default is ``None``.
+
+    Returns
+    -------
+    trial_list : np.ndarray
+        Array of arrays with spike times for each trial. ``trial_list[idx]``
+        gives array of spike times for trial ``idx``.
+    """
     limit_time = tmin is not None and tmax is not None
     max_trials = spk_epochs.n_trials
     trial_list = np.empty(max_trials, dtype='object')
@@ -207,7 +229,8 @@ def _to_array_of_arrays(spk_epochs, pick, tmin=None, tmax=None):
 
 
 def _get_times_and_trials(spk, pick, tmin, tmax, subsample, backend):
-
+    """Convert spike data to adequate format for ZETA test with given backend.
+    """
     if backend == 'numba':
         times = spk.time[pick]
         sel_time = (times >= tmin) & (times < tmax)
@@ -412,6 +435,30 @@ def gumbel(mean, std, x):
 
 
 def compute_pvalues(real_abs_max, perm_abs_max, significance='gumbel'):
+    """Compute p-values for the maximum values of the real data compared to
+    permutations.
+
+    Parameters
+    ----------
+    real_abs_max : np.ndarray
+        Maximum values of the real data.
+    perm_abs_max : np.ndarray
+        Maximum values of the permutations.
+    significance : {'gumbel', 'empirical', 'both'}, optional
+        Method to assess significance. ``'gumbel'`` estimates p-values using
+        the Gumbel distribution. ``'empirical'`` compares the real maximum
+        value to the permutation distribution. ``'both'`` returns both
+        estimates. Default is ``'gumbel'``.
+
+    Returns
+    -------
+    z_scores : np.ndarray | None
+        Z-scores - one per cell. Used only if ``significance`` is
+        ``'gumbel'`` or ``'both'``, otherwise ``None``.
+    p_values : np.ndarray | dict
+        P-values - one per cell. If ``significance`` is ``'both'``, returns
+        a dictionary with keys ``'gumbel'`` and ``'empirical'``.
+    """
     if significance in ['gumbel', 'both']:
         perm_mean = np.mean(perm_abs_max, axis=-1)
         perm_std = np.std(perm_abs_max, axis=-1)
