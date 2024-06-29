@@ -42,21 +42,6 @@ def cumulative_spikes_norm(spikes, reference_time, n_trials):
     return spikes_fraction_interpolated
 
 
-def cumulative_diff_two_conditions(spikes1, spikes2, n_trials1, n_trials2,
-                                   reference_time):
-    # introduce minimum jitter to identical spikes
-    spikes1_all = np.sort(spikes1)
-    spikes2_all = np.sort(spikes2)
-
-    fraction1 = cumulative_spikes_norm(spikes1_all, reference_time, n_trials1)
-    fraction2 = cumulative_spikes_norm(spikes2_all, reference_time, n_trials2)
-
-    fraction_diff = fraction1 - fraction2
-    fraction_diff -= fraction_diff.mean()
-
-    return fraction_diff
-
-
 def diff_func(x):
     return x[0] - x[1]
 
@@ -87,15 +72,15 @@ def cumulative_n_conditions(spikes, n_trials, reference_time,
     return reduced_fraction
 
 
-def ZETA_2cond(times, reference_time, condition_idx, n_cnd,
+def ZETA_numpy(times, reference_time, condition_idx, n_cnd,
                n_permutations, n_samples, reduction=diff_func):
     # CONSIDER turning to list of arrays - one array per trial
-    fraction_diff = run_ZETA_2cond(
+    fraction_diff = _zeta_numpy(
         times, reference_time, condition_idx, n_cnd,
         reduction=reduction
     )
 
-    permutations = permute_zeta_2cond(
+    permutations = _permute_zeta_numpy(
         n_permutations, n_samples, times, condition_idx, n_cnd,
         reference_time, reduction=reduction
     )
@@ -103,8 +88,8 @@ def ZETA_2cond(times, reference_time, condition_idx, n_cnd,
     return fraction_diff, permutations
 
 
-def run_ZETA_2cond(times, reference_time, cnd_values, n_cnd,
-                   reduction=diff_func):
+def _zeta_numpy(times, reference_time, cnd_values, n_cnd,
+                reduction=diff_func):
     times_per_cond, n_trials = group_spikes_by_cond_no_numba(
         times, cnd_values, n_cnd)
 
@@ -113,14 +98,14 @@ def run_ZETA_2cond(times, reference_time, cnd_values, n_cnd,
     return fraction_diff
 
 
-def permute_zeta_2cond(
+def _permute_zeta_numpy(
         n_permutations, n_samples, times, condition_idx, n_cnd,
         reference_time, reduction=diff_func):
     permutations = np.zeros((n_permutations, n_samples), dtype=times.dtype)
     condition_idx_perm = condition_idx.copy()
     for perm_idx in range(n_permutations):
         np.random.shuffle(condition_idx_perm)
-        permutations[perm_idx] = run_ZETA_2cond(
+        permutations[perm_idx] = _zeta_numpy(
             times, reference_time, condition_idx_perm, n_cnd,
             reduction=reduction)
 
@@ -352,7 +337,7 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
                 n_trials_per_cond, condition_idx, n_cnd, n_permutations,
                 n_samples)
         elif backend == 'numpy':
-            fraction_diff, permutations = ZETA_2cond(
+            fraction_diff, permutations = ZETA_numpy(
                 times, reference_time, condition_idx, n_cnd,
                 n_permutations, n_samples, reduction=reduction)
 
