@@ -70,8 +70,8 @@ def _zeta_numba_2cond(times, trial_boundaries, trial_ids, n_spikes_per_trial,
 
 @njit(cache=True)
 def _zeta_numba_Ncond(times, trial_boundaries, trial_ids, n_spikes_per_trial,
-                          n_trials_nonempty, n_trials_per_cond, condition_idx,
-                          n_conditions, reference_time):
+                      n_trials_nonempty, n_trials_per_cond, condition_idx,
+                      n_conditions, reference_time):
 
     times_per_cond = group_spikes_by_cond_numba(
         times, trial_boundaries, trial_ids, n_spikes_per_trial,
