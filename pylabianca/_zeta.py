@@ -112,30 +112,6 @@ def _permute_zeta_numpy(
     return permutations
 
 
-def group_spikes_by_cond(times, trials, cnd_values, uni_cnd):
-    n_trials = list()
-    times_per_cond = list()
-    for cnd in uni_cnd:
-        sel_cnd = np.where(cnd_values == cnd)[0]
-        n_trials.append(len(sel_cnd))
-        times_per_cond.append(
-            _select_spikes_numba(times, trials, sel_cnd))
-
-    return times_per_cond, n_trials
-
-
-def group_spikes_by_cond_no_numba_prev(times, trials, cnd_values, n_cnd):
-    n_trials = list()
-    times_per_cond = list()
-    for cnd in range(n_cnd):
-        sel_cnd = np.where(cnd_values == cnd)[0]
-        n_trials.append(len(sel_cnd))
-        this_mask = np.in1d(trials, sel_cnd)
-        times_per_cond.append(times[this_mask])
-
-    return times_per_cond, n_trials
-
-
 def group_spikes_by_cond_no_numba(times, cnd_values, n_cnd):
     n_trials = list()
     times_per_cond = list()
@@ -302,8 +278,9 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     p_values : np.ndarray
         P-values - one per cell.
     other : dict
-        Dictionary containing additional output if ``return_dist`` is
-        ``True``. Contains the following keys:
+        Dictionary containing additional output if ``return_dist`` is ``True``.
+        Contains the following keys:
+
         - trace : list of np.ndarray
             Cumulative traces for each cell.
         - perm_trace : list of np.ndarray
