@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from .utils import xr_find_nested_dims, cellinfo_from_xarray
+from .utils import (xr_find_nested_dims, cellinfo_from_xarray,
+                    _inherit_metadata_from_xarray)
 
 
 # TODO: ! adapt for multiple cells
@@ -122,6 +123,7 @@ def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
 
 # CONSIDER: could add an attribute informing about condition order
 #           (important for t test interpretation for example)
+# TODO: change tail order to neg, pos?
 def compute_selectivity_continuous(frate, compare='image', n_perm=500,
                                    n_jobs=1, min_Hz=False):
     '''
@@ -233,9 +235,8 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     copy_coords = xr_find_nested_dims(frate, 'cell')
     if len(copy_coords) > 0:
         for key in results.keys():
-            coords = {coord: ('cell', frate.coords[coord].values)
-                      for coord in copy_coords}
-            results[key] = results[key].assign_coords(coords)
+            results[key] = _inherit_metadata_from_xarray(
+                frate, results[key], 'cell', copy_coords=copy_coords)
 
     return results
 
