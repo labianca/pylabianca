@@ -165,6 +165,17 @@ def _inherit_metadata(coords, metadata, dimname, tri=None):
     return coords
 
 
+def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
+                                  copy_coords=None):
+    if copy_coords is None:
+        copy_coords = xr_find_nested_dims(xarr_from, dimname)
+    if len(copy_coords) > 0:
+        coords = {coord: (dimname, xarr_from.coords[coord].values)
+                  for coord in copy_coords}
+        xarr_to = xarr_to.assign_coords(coords)
+    return xarr_to
+
+
 def _symmetric_window_samples(winlen, sfreq):
     '''Returns a symmetric window of given length.'''
     half_len_smp = int(np.round(winlen / 2 * sfreq))
@@ -919,6 +930,7 @@ def _handle_cell_names(cell_names, time):
     return cell_names
 
 
+# - [ ] does not have to be SpikeEpochs object, can be Spikes
 def _validate_cellinfo(spk, cellinfo):
     '''Validate cellinfo input for SpikeEpochs object.'''
     if cellinfo is not None:
