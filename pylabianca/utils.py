@@ -1055,7 +1055,10 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
         if reduce_coords:
             new_coords = dict()
             drop_coords = list()
-            nested_coords = xr_find_nested_dims(arr, ('cell', 'trial'))
+            if 'cell' in arr.coords and 'trial' in arr.coords:
+                nested_coords = xr_find_nested_dims(arr, ('cell', 'trial'))
+            else:
+                nested_coords = list()
 
             for coord in nested_coords:
                 one_cell = arr.coords[coord].isel(cell=0)
