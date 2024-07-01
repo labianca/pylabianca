@@ -101,7 +101,7 @@ def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
         frate.values[msk] = 0.
 
     avg_by_probe = frate.groupby(groupby).mean(dim='trial')
-    n_categories = len(avg_by_probe.coords[groupby])
+    n_categories = avg_by_probe.coords[groupby].shape[0]
     r_max = avg_by_probe.max(dim=groupby)
 
     singleton = r_max.shape == ()
@@ -179,7 +179,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     # permutations
     # ------------
-    arrs = [arr for _, arr in frate.groupby(compare)]
+    arrs = [arr.values for _, arr in frate.groupby(compare)]
     stat_name = 't value' if len(arrs) == 2 else 'F value'
     stat_unit = stat_name[0]
     results = permutation_test(
