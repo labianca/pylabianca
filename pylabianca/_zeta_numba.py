@@ -1,66 +1,64 @@
 import numpy as np
 from numba import njit
 
-from ._numba import (w_depth_of_selectivity_numba_low_level,
-                     _get_trial_boundaries_numba)
+from ._numba import _get_trial_boundaries_numba
 
 
 # try compiling this too
-def ZETA_numba_2cond(times, trials, reference_time,  n_trials_max,
-                     n_trials_per_cond, condition_idx, n_cnd,
+def ZETA_numba_2cond(times, trials, reference_time,  n_trials,
+                     n_trials_per_cond, condition_idx, n_conditions,
                      n_permutations, n_samples):
     trial_boundaries, trial_ids = _get_trial_boundaries_numba(
-        trials, n_trials_max)
-    n_spk_tri = np.diff(trial_boundaries)
-    n_trials_real = trial_ids.shape[0]
+        trials, n_trials)
+    n_spikes_per_trial = np.diff(trial_boundaries)
+    n_trials_nonempty = trial_ids.shape[0]
 
-    fraction_diff = _run_ZETA_numba_2cond(
-        times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-        n_trials_per_cond, condition_idx, n_cnd,
+    fraction_diff = _zeta_numba_2cond(
+        times, trial_boundaries, trial_ids, n_spikes_per_trial,
+        n_trials_nonempty, n_trials_per_cond, condition_idx, n_conditions,
         reference_time)
 
-    permutations = permute_zeta_numba_2cond(
+    permutations = _permute_zeta_numba_2cond(
         n_permutations, n_samples, times, trial_boundaries, trial_ids,
-        n_spk_tri, n_trials_real, n_trials_per_cond, condition_idx, n_cnd,
-        reference_time)
+        n_spikes_per_trial, n_trials_nonempty, n_trials_per_cond,
+        condition_idx, n_conditions, reference_time)
 
     return fraction_diff, permutations
 
 
-@njit
-def ZETA_numba_ncond(times, trials, reference_time,  n_trials_max,
-                     n_trials_per_cond, condition_idx, n_cnd,
+@njit(cache=True)
+def ZETA_numba_Ncond(times, trials, reference_time,  n_trials,
+                     n_trials_per_cond, condition_idx, n_conditions,
                      n_permutations, n_samples):
     trial_boundaries, trial_ids = _get_trial_boundaries_numba(
-        trials, n_trials_max)
-    n_spk_tri = np.diff(trial_boundaries)
-    n_trials_real = trial_ids.shape[0]
+        trials, n_trials)
+    n_spikes_per_trial = np.diff(trial_boundaries)
+    n_trials_nonempty = trial_ids.shape[0]
 
-    fraction_diff = _run_ZETA_numba_ncond(
-        times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-        n_trials_per_cond, condition_idx, n_cnd,
+    fraction_diff = _zeta_numba_Ncond(
+        times, trial_boundaries, trial_ids, n_spikes_per_trial,
+        n_trials_nonempty, n_trials_per_cond, condition_idx, n_conditions,
         reference_time)
 
-    permutations = permute_zeta_numba_ncond(
+    permutations = _permute_zeta_numba_Ncond(
         n_permutations, n_samples, times, trial_boundaries, trial_ids,
-        n_spk_tri, n_trials_real, n_trials_per_cond, condition_idx, n_cnd,
-        reference_time)
+        n_spikes_per_trial, n_trials_nonempty, n_trials_per_cond,
+        condition_idx, n_conditions, reference_time)
 
     return fraction_diff, permutations
 
 
 # _run_ZETA_numba could:
-# - [x] return mean-normalized cumulative distribution difference
 # - [ ] return max abs value too
 # - [ ] this would translate into what permute_zeta_... returns
-@njit
-def _run_ZETA_numba_2cond(times, trial_boundaries, trial_ids, n_spk_tri,
-                          n_trials_real, n_trials_per_cond, condition_idx,
-                          n_cnd, reference_time):
+@njit(cache=True)
+def _zeta_numba_2cond(times, trial_boundaries, trial_ids, n_spikes_per_trial,
+                      n_trials_nonempty, n_trials_per_cond, condition_idx,
+                      n_conditions, reference_time):
 
     times_per_cond = group_spikes_by_cond_numba(
-        times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-        condition_idx, n_cnd)
+        times, trial_boundaries, trial_ids, n_spikes_per_trial,
+        n_trials_nonempty, condition_idx, n_conditions)
 
     fraction_diff = cumulative_diff_two_conditions_numba(
         times_per_cond[0], times_per_cond[1],
@@ -70,17 +68,17 @@ def _run_ZETA_numba_2cond(times, trial_boundaries, trial_ids, n_spk_tri,
     return fraction_diff
 
 
-@njit
-def _run_ZETA_numba_ncond(times, trial_boundaries, trial_ids, n_spk_tri,
-                          n_trials_real, n_trials_per_cond, condition_idx,
-                          n_cnd, reference_time):
+@njit(cache=True)
+def _zeta_numba_Ncond(times, trial_boundaries, trial_ids, n_spikes_per_trial,
+                          n_trials_nonempty, n_trials_per_cond, condition_idx,
+                          n_conditions, reference_time):
 
     times_per_cond = group_spikes_by_cond_numba(
-        times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-        condition_idx, n_cnd
+        times, trial_boundaries, trial_ids, n_spikes_per_trial,
+        n_trials_nonempty, condition_idx, n_conditions
     )
 
-    fraction_diff = cumulative_sel_multi_conditions(
+    fraction_diff = cumulative_sel_multi_conditions_numba(
         times_per_cond, n_trials_per_cond, reference_time
     )
 
@@ -89,39 +87,38 @@ def _run_ZETA_numba_ncond(times, trial_boundaries, trial_ids, n_spk_tri,
 
 @njit(cache=True)
 def group_spikes_by_cond_numba(times, trial_boundaries, trial_ids,
-                               n_spk_tri, n_trials, condition_idx,
-                               n_cnd):
-    spikes_per_cnd = np.zeros(n_cnd, dtype='int32')
+                               n_spikes_per_trial, n_trials, condition_idx,
+                               n_conditions):
+    spikes_per_cnd = np.zeros(n_conditions, dtype='int32')
     tri_cnd = np.zeros(n_trials, dtype='int32')
     for idx in range(n_trials):
         tri = trial_ids[idx]
         cnd_idx = condition_idx[tri]
         tri_cnd[idx] = cnd_idx
-        this_n = n_spk_tri[idx]
+        this_n = n_spikes_per_trial[idx]
         spikes_per_cnd[cnd_idx] += this_n
 
     temp_arr = np.array([0.], dtype=times.dtype)
     out_list = [temp_arr]
-    for idx in range(n_cnd):
+    for idx in range(n_conditions):
         out_list.append(np.zeros(spikes_per_cnd[idx], dtype=times.dtype))
     out_list = out_list[1:]
 
-    c_idx = np.zeros(n_cnd, dtype='int32')
+    c_idx = np.zeros(n_conditions, dtype='int32')
     for idx in range(n_trials):
         cnd_idx = tri_cnd[idx]
         bnd1 = trial_boundaries[idx]
         bnd2 = trial_boundaries[idx + 1]
 
-        out_list[cnd_idx][c_idx[cnd_idx]:c_idx[cnd_idx] + n_spk_tri[idx]] = (
-            times[bnd1:bnd2]
-        )
-        c_idx[cnd_idx] += n_spk_tri[idx]
+        out_list[cnd_idx][c_idx[cnd_idx]:c_idx[cnd_idx]
+                          + n_spikes_per_trial[idx]] = times[bnd1:bnd2]
+        c_idx[cnd_idx] += n_spikes_per_trial[idx]
 
     return out_list
 
 
 # FURTHER improve - omit concatenate?
-@njit
+@njit(cache=True)
 def cumulative_spikes_norm_numba(spikes, reference_time, n_trials):
     '''
     Calculate cumulative spike distribution against trial time (numba version).
@@ -163,7 +160,7 @@ def cumulative_spikes_norm_numba(spikes, reference_time, n_trials):
 
 
 # cumulative_spikes_norm_numba
-@njit
+@njit(cache=True)
 def cumulative_diff_two_conditions_numba(
         spikes1, spikes2, n_trials1, n_trials2, reference_time):
     spikes1_all = np.sort(spikes1)
@@ -180,8 +177,9 @@ def cumulative_diff_two_conditions_numba(
     return fraction_diff
 
 
-@njit
-def cumulative_sel_multi_conditions(spikes_list, n_trials, reference_time):
+@njit(cache=True)
+def cumulative_sel_multi_conditions_numba(spikes_list, n_trials,
+                                          reference_time):
     n_cond = n_trials.shape[0]
     len_ref = reference_time.shape[0]
     spikes_all = [np.sort(spk) for spk in spikes_list]
@@ -194,45 +192,41 @@ def cumulative_sel_multi_conditions(spikes_list, n_trials, reference_time):
                 spikes_all[idx], reference_time, n_trials[idx]
         )
 
-    # fraction_sel = w_depth_of_selectivity_numba_low_level(
-    #     cumulative_fraction, n_cond)
-    # TEMP FIX: first element will always be zero, we could be smarter about
-    #           this
-    # fraction_sel[0] = 0.
-
     fraction_sel = np.var(cumulative_fraction, axis=0)
     fraction_sel -= fraction_sel.mean()
 
     return fraction_sel
 
 
-@njit
-def permute_zeta_numba_2cond(
+@njit(cache=True)
+def _permute_zeta_numba_2cond(
         n_permutations, n_samples, times, trial_boundaries, trial_ids,
-        n_spk_tri, n_trials_real, n_trials_per_cond, condition_idx, n_cnd,
-        reference_time):
+        n_spikes_per_trial, n_trials_nonempty, n_trials_per_cond,
+        condition_idx, n_conditions, reference_time):
     permutations = np.zeros((n_permutations, n_samples), dtype=times.dtype)
     condition_idx_perm = condition_idx.copy()
     for perm_idx in range(n_permutations):
         np.random.shuffle(condition_idx_perm)
-        permutations[perm_idx] = _run_ZETA_numba_2cond(
-            times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-            n_trials_per_cond, condition_idx_perm, n_cnd, reference_time)
+        permutations[perm_idx] = _zeta_numba_2cond(
+            times, trial_boundaries, trial_ids, n_spikes_per_trial,
+            n_trials_nonempty, n_trials_per_cond, condition_idx_perm,
+            n_conditions, reference_time)
 
     return permutations
 
 
-@njit
-def permute_zeta_numba_ncond(
+@njit(cache=True)
+def _permute_zeta_numba_Ncond(
         n_permutations, n_samples, times, trial_boundaries, trial_ids,
-        n_spk_tri, n_trials_real, n_trials_per_cond, condition_idx, n_cnd,
-        reference_time):
+        n_spikes_per_trial, n_trials_nonempty, n_trials_per_cond,
+        condition_idx, n_conditions, reference_time):
     permutations = np.zeros((n_permutations, n_samples), dtype=times.dtype)
     condition_idx_perm = condition_idx.copy()
     for perm_idx in range(n_permutations):
         np.random.shuffle(condition_idx_perm)
-        permutations[perm_idx] = _run_ZETA_numba_ncond(
-            times, trial_boundaries, trial_ids, n_spk_tri, n_trials_real,
-            n_trials_per_cond, condition_idx_perm, n_cnd, reference_time)
+        permutations[perm_idx] = _zeta_numba_Ncond(
+            times, trial_boundaries, trial_ids, n_spikes_per_trial,
+            n_trials_nonempty, n_trials_per_cond, condition_idx_perm,
+            n_conditions, reference_time)
 
     return permutations
