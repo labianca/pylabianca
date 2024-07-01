@@ -481,7 +481,7 @@ class SpikeEpochs():
                            waveform=waveform, timestamps=timestamps)
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
-                      y_bins=100, cmap='viridis', backend='numpy'):
+                      n_bins_y=100, cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -496,7 +496,7 @@ class SpikeEpochs():
             Axis to plot to. By default opens a new figure.
         labels : bool
             Whether to add labels to the axes.
-        y_bins : int
+        n_bins_y : int
             How many bins to use for the y axis. Defaults to 100. Used only in
             the 'numpy' backend.
         cmap : str
@@ -508,7 +508,7 @@ class SpikeEpochs():
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, y_bins=y_bins,
+                             labels=labels, n_bins_y=n_bins_y,
                              times=self.waveform_time, cmap=cmap,
                              backend=backend)
 
@@ -903,7 +903,7 @@ class Spikes(object):
         return self
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
-                      y_bins=100, cmap='viridis', backend='numpy'):
+                      n_bins_y=100, cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -918,7 +918,7 @@ class Spikes(object):
             Axis to plot to. By default opens a new figure.
         labels : bool
             Whether to add labels to the axes.
-        y_bins : int
+        n_bins_y : int
             How many bins to use for the y axis. Defaults to 100. Used only in
             the 'numpy' backend.
         cmap : str
@@ -935,7 +935,7 @@ class Spikes(object):
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, y_bins=y_bins,
+                             labels=labels, n_bins_y=n_bins_y,
                              times=self.waveform_time, cmap=cmap,
                              backend=backend)
 
@@ -1195,6 +1195,9 @@ def _pick_cells(spk, picks=None, query=None):
 
         if spk.timestamps is not None:
             spk.timestamps = [spk.timestamps[ix] for ix in picks]
+    else:
+        raise TypeError('spk has to be Spikes or SpikeEpochs, got '
+                        f'{type(spk)}')
 
     if spk.cellinfo is not None:
         spk.cellinfo = spk.cellinfo.loc[picks, :].reset_index(drop=True)
