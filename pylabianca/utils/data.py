@@ -30,6 +30,22 @@ def get_fieldtrip_data():
     return fname
 
 
+def get_zeta_example_data():
+    import pooch
+
+    data_path = get_data_path()
+    github_url = 'https://github.com/JorritMontijn/zetapy/raw/master/zetapy/ExampleDataZetaTest.mat'
+
+
+    known_hash = ('af93a1887e8afcdfe9a6d212dc6c928fede46d31b184d91288f4f862'
+                  'dfddc59f')
+    fname = pooch.retrieve(
+        url=github_url, known_hash=known_hash,
+        fname='zeta_example_data.mat', path=data_path
+    )
+    return fname
+
+
 def get_test_data_link():
     dropbox_lnk = ('https://www.dropbox.com/scl/fo/757tf3ujqga3sa2qocm4l/h?'
                    'rlkey=mlz44bcqtg4ds3gsc29b2k62x&dl=1')
