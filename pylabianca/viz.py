@@ -291,9 +291,8 @@ class EmptyProgressbar(object):
 # - [ ] kind='line' ?
 # - [x] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
-# - [ ] allow `y_bins` to be specific bins? or rename to `n_bins_y`?
 def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
-                  y_bins=100, times=None, cmap='viridis', backend='numpy'):
+                  n_bins_y=100, times=None, cmap='viridis', backend='numpy'):
     '''Plot waveform heatmap for one cell.
 
     Parameters
@@ -310,7 +309,7 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
         Axis to plot to. By default opens a new figure.
     labels : bool
         Whether to add labels to the axes.
-    y_bins : int
+    n_bins_y : int
         How many bins to use for the y axis. Defaults to 100. Used only in
         the 'numpy' backend.
     times : None | array-like
@@ -329,6 +328,9 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
         Axis with the waveform plot.
     '''
     from .utils import _deal_with_picks
+
+    if spk.waveform is None:
+        raise RuntimeError('No waveforms are stored in the spike object.')
 
     picks = _deal_with_picks(spk, picks)
     n_picks = len(picks)
@@ -359,14 +361,14 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
             this_waveform = _upsample_waveform(this_waveform, upsample)
 
         if backend == 'numpy':
-            hist, _, y_bins = _calculate_waveform_density_image(
-                this_waveform, y_bins
+            hist, _, ybins = _calculate_waveform_density_image(
+                this_waveform, n_bins_y
             )
             alpha_map, vmax = _calculate_alpha_map(hist)
 
             use_ax[idx].imshow(
                 hist.T, alpha=alpha_map, vmax=vmax, origin='lower',
-                extent=(time_edges[0], time_edges[-1], y_bins[0], y_bins[-1]),
+                extent=(time_edges[0], time_edges[-1], ybins[0], ybins[-1]),
                 aspect='auto', cmap=cmap
             )
         elif backend == 'datashader':
@@ -382,7 +384,7 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
     return ax
 
 
-def _calculate_waveform_density_image(waveform, y_bins, density=True,
+def _calculate_waveform_density_image(waveform, n_bins_y, density=True,
                                       y_range=None):
     '''Helps in calculating 2d density histogram of the waveforms.
 
@@ -390,7 +392,7 @@ def _calculate_waveform_density_image(waveform, y_bins, density=True,
     ----------
     waveform : np.array
         Waveform to plot.
-    y_bins : int
+    n_bins_y : int
         How many bins to use for the y axis. Defaults to 100.
     '''
 
@@ -415,7 +417,7 @@ def _calculate_waveform_density_image(waveform, y_bins, density=True,
             range = [[np.min(xs), np.max(xs)], y_range]
 
     hist, xbins, ybins = np.histogram2d(
-        xs, ys, bins=[n_samples, y_bins], range=range, density=density
+        xs, ys, bins=[n_samples, n_bins_y], range=range, density=density
     )
 
     return hist, xbins, ybins
