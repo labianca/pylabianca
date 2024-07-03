@@ -240,6 +240,9 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
             results[key] = _inherit_metadata_from_xarray(
                 frate, results[key], 'cell', copy_coords=copy_coords)
 
+    # transform to dataset:
+    results = xr.Dataset(results)
+
     return results
 
 
@@ -661,6 +664,9 @@ def compute_time_in_window(df_cluster, window_of_interest):
 
 
 # CONSIDER: selectivity as list of names / dict of lists of names ?
+# RENAME: select_cells, as it can be used with various other cell-selection
+#         criteria
+# CONSIDER dataset case ...
 def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
     # one xarray and session_coord is None: assumes one subject
     #    - if same order of cells -> simple bool selection
