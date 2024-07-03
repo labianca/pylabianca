@@ -743,32 +743,57 @@ def threshold_selectivity(selectivity, threshold):
         return selected
 
 
+# ! TODO - np.percentile removes xarray "clothing", put it back
 def compute_percent_selective(selectivity, threshold=None, dist=None,
-                              percentile=None, tail='both', groupby='anat'):
+                              percentile=None, tail='both', groupby=None):
+    '''
+    Selectivity can be:
+    * boolean array / xarray (already thresholded)
+    * xarray with the selectivity statistic (requires thresholding)
+    * xarray.Dataset containing the selectivity statistic, the threshold and
+        the null distribution (requires thresholding)
+
+    if percentiles is not defined (default None) and selectivity is not already
+    a boolean array, threshold must be defined. Either in the threshold keyword
+    argument or in the selectivity xarray.Dataset as 'thresh' variable.
+    '''
     import xarray as xr
 
     has_perc = percentile is not None
+    has_dist = dist is not None
     if isinstance(selectivity, xr.Dataset):
         if 'thresh' in selectivity and threshold is None and not has_perc:
             threshold = selectivity['thresh']
-        if 'dist' in selectivity and dist is None and has_perc:
+        if 'dist' in selectivity and dist is None:
+            has_dist = True
             dist = selectivity['dist']
 
         selectivity = selectivity['stat']
 
     if has_perc:
-        # TODO: obtain thresholds ...
-        pass
+        assert has_dist, ('percentile threshold requires passing a null '
+                          'distribution in the "dist" argument or dist '
+                          'variable being present in the selectivity '
+                          'xarray.Dataset.')
+        from .stats import find_percentile_threshold
+        threshold = find_percentile_threshold(dist, percentile, tail=tail)
 
     # if no threshold at this point - assume selectivity is already bool
-    # TODO - test it
-
-    sel = threshold_selectivity(selectivity, threshold)
+    if threshold is None:
+        assert selectivity.dtype == bool, ('If no threshold or percentile is '
+                                           'passed, the selectivity must be a '
+                                           'boolean array.')
+        sel = selectivity
+        perm_sel = None
+    else:
+        sel = threshold_selectivity(selectivity, threshold)
+        if has_dist:
+            # if we have a reference distribution (null), we can do the same
+            # for the permuted data
+            perm_sel = threshold_selectivity(dist, threshold)
+        else:
+            perm_sel = None
     n_cells = len(selectivity.cell)
-
-    # if we have a reference distribution (null), we can do the same
-    # for the permuted data
-    perm_sel = threshold_selectivity(dist, threshold)
 
     n_total = sel.copy()
     n_total.values = np.ones(n_cells)
@@ -776,21 +801,23 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     if groupby is not None:
         n_tot = n_total.groupby(groupby).sum(dim='cell')
         n_sig = sel.groupby(groupby).sum(dim='cell')
-        n_sig_perm = perm_sel.groupby(groupby).sum(dim='cell')
+        if has_dist and threshold is not None:
+            n_sig_perm = perm_sel.groupby(groupby).sum(dim='cell')
     else:
         n_tot = n_total.sum(dim='cell')
         n_sig = sel.sum(dim='cell')
-        n_sig_perm = perm_sel.sum(dim='cell')
+        if has_dist and threshold is not None:
+            n_sig_perm = perm_sel.sum(dim='cell')
 
     perc_sel = (n_sig / n_tot) * 100.
 
-    perc_sel_perm = (n_sig_perm / n_tot) * 100.
-    perm_thresh = np.percentile(perc_sel_perm, 95, axis=0)
+    if has_dist and threshold is not None:
+        perc_sel_perm = (n_sig_perm / n_tot) * 100.
+        perm_thresh = np.percentile(perc_sel_perm, 95, axis=0)
 
-    # TODO - np.percentile removes xarray "clothing", put it back
-
-
-    return perc_sel, perm_thresh, perc_sel_perm
+        return perc_sel, perm_thresh, perc_sel_perm
+    else:
+        return perc_sel
 
 
 # TODO: compare with time resolved selectivity
