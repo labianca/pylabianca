@@ -1,3 +1,5 @@
+from numbers import Real
+
 import numpy as np
 import pandas as pd
 
@@ -672,6 +674,9 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
 
     frate_xarr = isinstance(frate, xr.DataArray)
 
+    if threshold is not None:
+        selectivity = threshold_selectivity(selectivity, threshold)
+
     if frate_xarr:
         has_session_coord = session_coord in frate.coords
         same_cells = (frate.cell.values == selectivity.cell.values).all()
@@ -682,9 +687,6 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
             same_sessions = (frate[session_coord].values
                              == selectivity[session_coord].values).all()
 
-        if threshold is not None:
-            selectivity = np.abs(selectivity) > threshold
-
         # if same_cells and same_sessions:
         if same_cells and same_sessions:
             fr_sel = frate.isel(cell=np.where(selectivity)[0])
@@ -694,13 +696,95 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
             # if has_session_coord but not same_sessions / cells:
             fr_list = list()
             for ses, fr in frate.groupby(session_coord):
-                stat_ses = s.query({'cell': f'{session_coord} == "{ses}"'})
-                sel_cell = stat_ses.cell.values[stat_ses.values > threshold]
+                stat_ses = selectivity.query({'cell': f'{session_coord} == "{ses}"'})
+                sel_cell = stat_ses.cell.values[stat_ses.values]
                 fr_sel = fr.sel(cell=sel_cell)
                 fr_list.append(fr_sel)
             fr_sel = xr.concat(fr_list, dim='cell')
+    elif isinstance(frate, dict):
+        assert isinstance(selectivity, xr.DataArray)
+        assert session_coord is not None
+
+        # iterate over sessions
+        fr_sel = dict()
+        for ses, sel in selectivity.groupby(session_coord):
+            if not sel.any():
+                continue
+
+            fr_ses = frate[ses].copy()
+            same_cells = (fr_ses.cell.values == sel.cell.values).all()
+            # raise warning when not same_cells ?
+            # use what is below or fr_ses.sel(cell=sel) ?
+            if same_cells:
+                fr_sel[ses] = fr_ses.isel(cell=np.where(sel)[0])
+            else:
+                sel_cell = sel.cell.values[sel.values]
+                fr_sel[ses] = fr_ses.sel(cell=sel_cell)
+
+        return fr_sel
+
+
+def threshold_selectivity(selectivity, threshold):
+    import xarray as xr
+
+    if isinstance(threshold, Real):
+        return np.abs(selectivity) > threshold
+    elif isinstance(threshold, xr.DataArray):
+        selected = (
+            (selectivity > threshold.sel(tail='pos'))
+            | (selectivity < threshold.sel(tail='neg'))
+        )
+        return selected
+
+
+def compute_percent_selective(selectivity, threshold=None, dist=None,
+                              percentile=None, tail='both', groupby='anat'):
+    import xarray as xr
+
+    has_perc = percentile is not None
+    if isinstance(selectivity, xr.Dataset):
+        if 'thresh' in selectivity and threshold is None and not has_perc:
+            threshold = selectivity['thresh']
+        if 'dist' in selectivity and dist is None and has_perc:
+            dist = selectivity['dist']
+
+        selectivity = selectivity['stat']
+
+    if has_perc:
+        # TODO: obtain thresholds ...
+        pass
+
+    # if no threshold at this point - assume selectivity is already bool
+    # TODO - test it
+
+    sel = threshold_selectivity(selectivity, threshold)
+    n_cells = len(selectivity.cell)
+
+    # if we have a reference distribution (null), we can do the same
+    # for the permuted data
+    perm_sel = threshold_selectivity(dist, threshold)
+
+    n_total = sel.copy()
+    n_total.values = np.ones(n_cells)
+
+    if groupby is not None:
+        n_tot = n_total.groupby(groupby).sum(dim='cell')
+        n_sig = sel.groupby(groupby).sum(dim='cell')
+        n_sig_perm = perm_sel.groupby(groupby).sum(dim='cell')
     else:
-        raise NotImplementedError('Only xarray is supported for now')
+        n_tot = n_total.sum(dim='cell')
+        n_sig = sel.sum(dim='cell')
+        n_sig_perm = perm_sel.sum(dim='cell')
+
+    perc_sel = (n_sig / n_tot) * 100.
+
+    perc_sel_perm = (n_sig_perm / n_tot) * 100.
+    perm_thresh = np.percentile(perc_sel_perm, 95, axis=0)
+
+    # TODO - np.percentile removes xarray "clothing", put it back
+
+
+    return perc_sel, perm_thresh, perc_sel_perm
 
 
 # TODO: compare with time resolved selectivity
