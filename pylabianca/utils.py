@@ -1010,7 +1010,8 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
 
     assert isinstance(data, dict)
     keys = list(data.keys())
-    all_xarr = [isinstance(data[sb], xr.DataArray) for sb in keys]
+    all_xarr = [isinstance(data[sb], (xr.DataArray, xr.Dataset))
+                for sb in keys]
     assert all(all_xarr)
 
     if (query is not None) and (not isinstance(query, dict)):
