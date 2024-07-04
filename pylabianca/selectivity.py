@@ -736,9 +736,20 @@ def threshold_selectivity(selectivity, threshold):
     if isinstance(threshold, Real):
         return np.abs(selectivity) > threshold
     elif isinstance(threshold, xr.DataArray):
+        has_pos, has_neg = False, False
+        if 'pos' in threshold.coords['tail']:
+            has_pos = True
+            above = selectivity > threshold.sel(tail='pos')
+
+        if 'neg' in threshold.coords['tail']:
+            has_neg = True
+            below = selectivity < threshold.sel(tail='neg')
+
+        has_both = has_pos and has_neg
         selected = (
-            (selectivity > threshold.sel(tail='pos'))
-            | (selectivity < threshold.sel(tail='neg'))
+            (above | below) if has_both else
+            above if has_pos else
+            below
         )
         return selected
 
