@@ -291,13 +291,13 @@ def find_percentile_threshold(perm_data, percentile=None, tail='both',
 
     elif tail == 'pos':
         thresholds = np.percentile(
-            perm_data, 100 - percentile, axis=perm_dim_idx)
+            perm_data, [100 - percentile], axis=perm_dim_idx)
         if not as_xarray:
-            thresholds = [thresholds, None]
+            thresholds = [thresholds[0], None]
     elif tail == 'neg':
-        thresholds = np.percentile(perm_data, percentile, axis=perm_dim_idx)
+        thresholds = np.percentile(perm_data, [percentile], axis=perm_dim_idx)
         if not as_xarray:
-            thresholds = [None, thresholds[1]]
+            thresholds = [None, thresholds[0]]
 
     if as_xarray:
         tail_coords = ['pos', 'neg'] if tail == 'both' else [tail]
