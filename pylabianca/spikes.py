@@ -1,4 +1,6 @@
 from typing import Type
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -733,8 +735,8 @@ class Spikes(object):
         '''Return the number of units in Spikes.'''
         return len(self.timestamps)
 
-    # TODO: potential speedup: epoch on timestamps directly, only then convert
-    #       to spike times in seconds (this would have been easier if
+    # CONSIDER: potential speedup: epoch on timestamps directly, only then
+    #       convert to spike times in seconds (this would have been easier if
     #       timestamps were always int, but for osort they can be floating
     #       point)
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.,
@@ -772,7 +774,21 @@ class Spikes(object):
         # event_id support
         if event_id is not None:
             use_events = np.in1d(events[:, -1], event_id)
+            if not np.any(use_events):
+                raise ValueError(
+                    'No events of any of the types ({}) found.'.format(
+                        event_id)
+                )
             events = events[use_events, :]
+
+            # test if some events are missing
+            unique_events = np.unique(events[:, -1])
+            if len(event_id) != len(unique_events):
+                missing = np.setdiff1d(event_id, unique_events)
+                warnings.warn(
+                    'Some event ids are missing in the events array: '
+                    '{}'.format(missing)
+                )
 
         n_neurons = len(self.timestamps)
         trial, time = list(), list()
@@ -786,8 +802,10 @@ class Spikes(object):
         if backend == 'numba':
             from borsar.utils import has_numba
             assert has_numba(), 'Numba is required for the "numba" backend.'
-            assert not has_waveform, ('Waveforms are not supported with the '
-                                      '"numba" backend.')
+            assert not has_waveform, (
+                'Waveforms are not supported with the "numba" backend. You '
+                'can drop waveforms by setting them to None ('
+                '``spk.waveform = None``) or use the "numpy" backend.')
             assert not keep_timestamps, ('Keeping timestamps is not supported '
                                          'with the "numba" backend.')
             from ._numba import _epoch_spikes_numba
