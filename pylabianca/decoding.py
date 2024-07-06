@@ -241,6 +241,7 @@ def frate_to_sklearn(frate, target=None, select=None,
         fr = fr.query({'trial': select})
 
     if time_idx is not None:
+        has_time = False
         fr = fr.isel(time=time_idx)
 
     if has_time:
