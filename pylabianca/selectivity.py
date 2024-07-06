@@ -390,8 +390,10 @@ def _cluster_sel_process_cell(fr_cell, compare, cluster_entry_pval,
     return df_part
 
 
+# TODO: the df could have correct types from the start
 def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
                      baseline_window, cellinfo=None):
+    '''Initialize dataframe for storing cluster information.'''
     add_cols = ['pval', 'window', 'preferred', 'n_preferred', 'FR_preferred']
     cols = ['cell']
 
@@ -413,6 +415,7 @@ def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
 
 
 def _which_copy_cellinfo(frate, copy_cellinfo):
+    '''Determine which cell information to copy to the results dataframe.'''
     do_copy_cellinfo = (
         (isinstance(copy_cellinfo, bool) and copy_cellinfo)
         or (isinstance(copy_cellinfo, list) and len(copy_cellinfo) > 0)
@@ -444,6 +447,7 @@ def _characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
                           correct_window, ord_idx, cellinfo_row, compare,
                           calculate_dos, calculate_pev, calculate_peak_pev,
                           baseline_window):
+    '''Characterize a single cluster.'''
     import xarray as xr
 
     # get cluster time window
@@ -527,6 +531,7 @@ def _characterize_clusters(fr_cell, clusters, pvals, min_cluster_pval,
                           df_cluster, correct_window, cellinfo_row,
                           compare, calculate_dos, calculate_pev,
                           calculate_peak_pev, baseline_window):
+    '''Characterize all clusters.'''
     df_clst = list()
     n_clusters = len(pvals)
     if n_clusters > 0:
@@ -564,31 +569,33 @@ def assess_selectivity(df_cluster, min_cluster_p=0.05,
     df_cluster : pandas.DataFrame
         Dataframe with cluster information.
     min_cluster_p : float
-        Minimum p value for a cluster to be considered selective.
+        Minimum p value for a cluster to be considered selective. The default
+        is ``0.05``.
     window_of_interest : tuple of float
-        Time window of interest.
+        Time window of interest. The default is ``(0.1, 1)``.
     min_time_in_window : float
-        Minimum time in the window of interest for a cluster to be considered
-        selective.
+        Minimum time spent in the window of interest for a cluster to be
+        considered selective. The default is ``0.2``.
     min_depth_of_selectivity : float
         Minimum depth of selectivity for a cluster to be considered selective.
     min_pev : float
-        Minimum percentage of explained variance for a cluster to be considered
-        selective.
-    min_peak_pev : float
-        Minimum peak percentage of explained variance for a cluster to be
+        Minimum percentage of explained variance (PEV) for a cluster to be
         considered selective.
+    min_peak_pev : float
+        Minimum peak PEV for a cluster to be considered selective.
     min_FR_vs_baseline : float
         Minimum firing rate vs baseline for a cluster to be considered
         selective.
     min_FR_preferred : float
-        Minimum firing rate of the preferred category for a cluster to be
+        Minimum firing rate for the preferred category for a cluster to be
         considered selective.
 
     Returns
     -------
     df_cluster : pandas.DataFrame
-        Dataframe with cluster information, including selectivity information.
+        Dataframe with cluster information, including a column ``'selective'``
+        that indicates whether the cluster is selective based on the specified
+        criteria.
     '''
     # skip if no clusters, adding empty columns
     n_rows = df_cluster.shape[0]
@@ -626,6 +633,7 @@ def assess_selectivity(df_cluster, min_cluster_p=0.05,
 
 
 def _compute_time_in_window(clst_window, window_of_interest):
+    '''Compute time spent in the window of interest for a cluster.'''
     # clst_limits = times[cluster_mask].values[[0, -1]]
     twin = [0., 0.]
     clst_limits = _parse_window(clst_window)
@@ -731,6 +739,23 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
 
 
 def threshold_selectivity(selectivity, threshold):
+    '''Threshold selectivity based on a given threshold.
+
+    Parameters
+    ----------
+    selectivity : xarray.DataArray
+        Selectivity statistic.
+    threshold : float | xarray.DataArray
+        Threshold value. If a float, selectivity values above the threshold are
+        considered significant. If an xarray.DataArray, the threshold can be
+        different for positive and negative values.
+
+    Returns
+    -------
+    selected : xarray.DataArray
+        Boolean array indicating whether the selectivity is above the
+        threshold.
+    '''
     import xarray as xr
 
     if isinstance(threshold, Real):
