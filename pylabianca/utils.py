@@ -1210,3 +1210,227 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
 
     row_indices = np.concatenate(row_indices)
     return xarr_dict_out, row_indices
+
+
+# TODO: stimulus selectivity should be added to the xarray !
+# CONSIDER - select_query could be just done with spk[query]
+# option to zscore only wrt the baseline period (zscore='baseline'?)
+# option to pass the baseline calculated from a different period
+# frate_cell = frate.sel(trial=frate.ifcorrect).isel(cell=0)
+def aggregate_spikes(frate, groupby='load',
+                     select_query=None, per_cell_query=None,
+                     zscore=False, baseline=False, per_cell=False):
+    """
+    Prepare spikes object for firing rate analysis.
+
+    Parameters
+    ----------
+    frate : xarray.DataArray
+        Firing rate data. Output of ``.spike_rate()`` or ``.spike_density()``
+        methods.
+    groupby : str | False
+        Condition by which trials are grouped and averaged.
+    select_query : str | None
+        A query to perform on the SpikeEpochs object to select trials
+        fulfilling the query. For example ``'ifcorrect == True'`` will select
+        those trials where ifcorrect column (whether response was correct) is
+        True.
+    per_cell_query : str | None
+        A query to perform on the SpikeEpochs object separately for each cell.
+        These are mostly properties related to cell selectivity, like whether
+        the preferred stimulus is in memory etc.
+    zscore : bool | str
+        Whether to zscore firing rate of each cell. If ``zscore=True`` then
+        zscoring is performed (separately for each cell) after selecting trials
+        with ``select_query``. If you want the z scoring to happen before
+        selecting trials specify ``zscore='before query'``. Defaults to
+        ``False``, which does not zscore cell firing rate timecourses.
+    baseline : tuple | False
+        If not ``False`` (default) - ``(tmin, tmax)`` tuple specifying time
+        limits of baseline correction. The baseline correction is performed
+        after zscoring.
+    per_cell : bool
+        Whether to perform selection and groupby operations on each cell
+        separately. This is much slower, but necessary when the selection is
+        cell-specific, e.g. when selecting only cells that are
+        stimulus-selective (then the preferred stimulus is cell-specific).
+
+    Returns
+    -------
+    frates : xarray.DataArray
+        Aggregated firing rate data.
+    """
+    import xarray as xr
+
+    cell_names = frate.coords['cell'].values
+    if 'cell' not in frate.dims:
+        cell_names = [cell_names.item()]
+
+    n_cells = len(cell_names)
+
+    if not per_cell:
+        # integrate with per_cell approach
+        frates = _aggregate_xarray(
+                frate, groupby, zscore,
+                select_query, baseline
+            )
+        return frates
+    else:
+        # TODO: clean up
+        frates = list()
+        for cell_idx in range(n_cells):
+            frate_cell = frate[cell_idx]
+
+            # option to select by is_preferred or in_memory
+            # use_sel is used to not overwrite original query sel variable
+            if per_cell_query is not None:
+                frate_sel = frate_cell.query({'trial': per_cell_query})
+                sel2 = frate_sel.trial.values
+
+                if select_query is not None:
+                    use_sel = np.intersect1d(sel, sel2)
+                else:
+                    use_sel = sel2
+                    select_query = per_cell_query
+            elif select_query is not None:
+                use_sel = sel.copy()
+
+            frate_cell = _aggregate_xarray(
+                frate_cell, groupby, zscore,
+                      select_query, baseline, use_sel
+            )
+            frates.append(frate_cell)
+
+        if len(frates) > 0:
+            frates = xr.concat(frates, dim='cell')
+            return frates
+        else:
+            return None
+
+
+def _aggregate_xarray(frate, groupby, zscore,
+                      select_query, baseline):
+    """Aggregate xarray.DataArray with firing rate data."""
+    zscore_before_query = isinstance(zscore, str) and 'before query' in zscore
+
+    if zscore and zscore_before_query:
+        frate = zscore_xarray(frate)
+
+    if select_query is not None:
+        frate = frate.query(trial=select_query)
+
+    if groupby:
+        if isinstance(groupby, list):
+            frate = nested_groupby_apply(frate, groupby)
+        else:
+            frate = frate.groupby(groupby).mean()
+    else:
+        # average all trials
+        frate = frate.mean(dim='trial')
+
+    if zscore and not zscore_before_query:
+        frate = zscore_xarray(frate)
+
+    if baseline:
+        time_range = slice(baseline[0], baseline[1])
+        bsln = frate.sel(time=time_range).mean(dim='time')
+        frate -= bsln
+
+    return frate
+
+
+def nested_groupby_apply(array, groupby, apply_fn=None):
+    """Apply function to nested groupby.
+
+    A hack from xarray github, posted by user https://github.com/hottwaj:
+    https://github.com/pydata/xarray/issues/324#issuecomment-265462343
+
+    Parameters
+    ----------
+    array : xarray.DataArray
+        DataArray to groupby and apply function to.
+    groupby : list
+        List of dimensions/variables to apply groupby operations to.
+    apply_fn : function
+        Function to apply to grouped DataArray. If ``None``, the mean along
+        'trial' dimension is used.
+
+    Returns
+    -------
+    array : xarray.DataArray
+        DataArray after groupby operations.
+    """
+
+    if apply_fn is None:
+        # average over trial by default
+        apply_fn = lambda arr: arr.mean(dim='trial')
+
+    if len(groupby) == 1:
+        return array.groupby(groupby[0]).apply(apply_fn)
+    else:
+        return array.groupby(groupby[0]).apply(
+            nested_groupby_apply, groupby=groupby[1:], apply_fn=apply_fn)
+
+# switchorder had also:
+#
+# (a function that gets the preferred sim idx from df for given cell)
+# def get_preferred(df, cell_name=None):
+#
+# def add_preferred_in_memory(spk=None, frate=None, preferred=None,
+#                             memory_cols=None):
+#
+# def add_preferred_current(spk=None, frate=None, preferred=None, current=None):
+#
+# TODO: seems to be old and not used anymore
+# def add_prefinfo(frate, pref, current_selectivity=None):
+#
+
+# this could be changed and used with apply_dict / dict_apply
+def aggregate_all_spikes(frates, groupby=None, select=None,
+                         zscore='before query'):
+    import xarray as xr
+
+    if isinstance(frates, dict):
+        frates = list(frates.values())
+
+    aggregated = list()
+    for frate in frates:
+        frate_agg = aggregate_spikes(
+            frate=frate, groupby=groupby, select_query=select,
+            zscore=zscore)
+        if frate_agg is not None:
+            aggregated.append(frate_agg)
+    aggregated = xr.concat(aggregated, dim='cell')
+    return aggregated
+
+
+# TODO: add baseline? or even a separate array to calculate mean, std on?
+def zscore_xarray(arr, groupby='cell'):
+    '''
+    Z-score an xarray.DataArray.
+
+    If the array contains `groupby` dimension (by default 'cell'), z-score
+    each element of this dimension (each cell) separately.
+
+    Parameters
+    ----------
+    arr : xarray.DataArray
+        Data to z-score.
+    groupby : str
+        Dimension name to z-score separately.
+
+    Returns
+    -------
+    arr : xarray.DataArray
+        Z-scored data.
+    '''
+    has_cell_dim = groupby in arr.dims and len(arr.coords[groupby]) > 1
+
+    if not has_cell_dim:
+        avg, std = arr.mean(), arr.std()
+    else:
+        dims = tuple(dim for dim in arr.dims if dim != groupby)
+        avg, std = arr.mean(dim=dims), arr.std(dim=dims)
+
+    arr = (arr - avg) / std
+    return arr
