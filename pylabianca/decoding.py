@@ -514,8 +514,6 @@ def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
         Xs, ys, time = frates_dict_to_sklearn(
             frates, target=target, select=select_trials, decim=decim)
 
-    # n_trials = _count_trials(Xs)
-
     if isinstance(permute, bool) and permute:
         ys = [np.random.permutation(y) for y in ys]
 
@@ -553,6 +551,7 @@ def _do_resample(Xs, ys, decoding_fun, arguments, time=None):
     return decoding_fun(X, y, time=time, **arguments)
 
 
+## a variant of this will be needed later in join_sessions
 def _count_trials(Xs):
     '''Check trials foe each array in the list.'''
     # check n trials (across subjects)
