@@ -1235,20 +1235,18 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
     return xarr_dict_out, row_indices
 
 
-# TODO: stimulus selectivity should be added to the xarray !
-# CONSIDER - select_query could be just done with spk[query]
-# option to zscore only wrt the baseline period (zscore='baseline'?)
-# option to pass the baseline calculated from a different period
-# frate_cell = frate.sel(trial=frate.ifcorrect).isel(cell=0)
-def aggregate_spikes(frate, groupby='load',
-                     select_query=None, per_cell_query=None,
-                     zscore=False, baseline=False, per_cell=False):
+# TODO: stimulus selectivity should be added to the xarray -
+#       it can be done as cell x trial coordinate
+# - [ ] option to zscore only wrt the baseline period (zscore='baseline'?)
+# ? option to pass the baseline calculated from a different period
+def aggregate(frate, groupby=None, select_query=None, per_cell_query=None,
+              zscore=False, baseline=False, per_cell=False):
     """
     Prepare spikes object for firing rate analysis.
 
     Parameters
     ----------
-    frate : xarray.DataArray
+    frate : xarray.DataArray | dict
         Firing rate data. Output of ``.spike_rate()`` or ``.spike_density()``
         methods.
     groupby : str | False
@@ -1285,42 +1283,36 @@ def aggregate_spikes(frate, groupby='load',
     """
     import xarray as xr
 
-    cell_names = frate.coords['cell'].values
-    if 'cell' not in frate.dims:
-        cell_names = [cell_names.item()]
+    if isinstance(frate, dict):
+        return _aggregate_dict(
+            frate, groupby=groupby, select_query=select_query,
+            per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
+            per_cell=per_cell
+        )
+    else:
+        msg = 'frate has to be an xarray.DataArray.'
+        assert isinstance(frate, xr.DataArray), msg
 
-    n_cells = len(cell_names)
+    if per_cell_query is not None:
+        per_cell = True
 
     if not per_cell:
         # integrate with per_cell approach
         frates = _aggregate_xarray(
-                frate, groupby, zscore,
-                select_query, baseline
+                frate, groupby, zscore, select_query, baseline
             )
         return frates
     else:
-        # TODO: clean up
         frates = list()
+        n_cells = len(frate.cell)
         for cell_idx in range(n_cells):
             frate_cell = frate[cell_idx]
 
-            # option to select by is_preferred or in_memory
-            # use_sel is used to not overwrite original query sel variable
             if per_cell_query is not None:
-                frate_sel = frate_cell.query({'trial': per_cell_query})
-                sel2 = frate_sel.trial.values
-
-                if select_query is not None:
-                    use_sel = np.intersect1d(sel, sel2)
-                else:
-                    use_sel = sel2
-                    select_query = per_cell_query
-            elif select_query is not None:
-                use_sel = sel.copy()
+                frate_cell = frate_cell.query({'trial': per_cell_query})
 
             frate_cell = _aggregate_xarray(
-                frate_cell, groupby, zscore,
-                      select_query, baseline, use_sel
+                frate_cell, groupby, zscore, select_query, baseline
             )
             frates.append(frate_cell)
 
@@ -1421,35 +1413,25 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
         return array.groupby(groupby[0]).apply(
             nested_groupby_apply, groupby=groupby[1:], apply_fn=apply_fn)
 
-# switchorder had also:
-#
-# (a function that gets the preferred sim idx from df for given cell)
-# def get_preferred(df, cell_name=None):
-#
-# def add_preferred_in_memory(spk=None, frate=None, preferred=None,
-#                             memory_cols=None):
-#
-# def add_preferred_current(spk=None, frate=None, preferred=None, current=None):
-#
-# TODO: seems to be old and not used anymore
-# def add_prefinfo(frate, pref, current_selectivity=None):
-#
 
-# this could be changed and used with apply_dict / dict_apply
-def aggregate_all_spikes(frates, groupby=None, select=None,
-                         zscore='before query'):
+# TODO: this could be changed and used with apply_dict / dict_apply
+#       the dict apply function could have output='xarray' option
+def _aggregate_dict(frates, groupby=None, select_query=None,
+                    per_cell_query=None, zscore=False, baseline=False,
+                    per_cell=False):
     import xarray as xr
 
-    if isinstance(frates, dict):
-        frates = list(frates.values())
-
     aggregated = list()
-    for frate in frates:
-        frate_agg = aggregate_spikes(
-            frate=frate, groupby=groupby, select_query=select,
-            zscore=zscore)
+    keys = list(frates.keys())
+
+    for key in keys:
+        frate = frates[key]
+        frate_agg = aggregate(
+            frate, groupby=groupby, select_query=select, zscore=zscore)
         if frate_agg is not None:
             aggregated.append(frate_agg)
+            # TODO: assign subject / session information coordinate
+
     aggregated = xr.concat(aggregated, dim='cell')
     return aggregated
 
