@@ -1050,6 +1050,35 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
 
 def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                    ensure_correct_reduction=True):
+    '''Convert multi-session xarray to dictionary of session -> xarray pairs.
+
+    Parameters
+    ----------
+    xarr : xarray.DataArray
+        Multi-session DataArray.
+    ses_name : str
+        Name of the session coordinate. Defaults to ``'sub'``.
+    reduce_coords : bool
+        If True, reduce coordinates were turned to cell x trial coordinates
+        when concatenating different session xarrays. This happens when
+        the order of the trial metadata (additional trial coordinates like
+        condition or response correctness) is different across concatenated
+        sessions. To keep these original trial metadata they have to be turned
+        to cell x trial format. When splitting back to dictionary of session
+        xarrays, this reduction can be undone. Defaults to True.
+    ensure_correct_reduction : bool
+        If True, ensure that the coord reduction is correct: check that,
+        indeed, all within-session trial metadata that is cell x trial is
+        the same across cells. See ``reduce_coords`` argument for more
+        information. Defaults to True, but can be slow, so set to False if
+        you are sure that all within-session trial metadata can be reduced
+        from ``cell x trial`` to just trial.
+
+    Returns
+    -------
+    xarr_dct : dict
+        Dictionary with session names as keys and xarrays as values.
+    '''
     xarr_dct = dict()
 
     for lab, arr in xarr.groupby(ses_name):
@@ -1297,9 +1326,35 @@ def aggregate_spikes(frate, groupby='load',
             return None
 
 
-def _aggregate_xarray(frate, groupby, zscore,
-                      select_query, baseline):
-    """Aggregate xarray.DataArray with firing rate data."""
+def _aggregate_xarray(frate, groupby, zscore, select_query, baseline):
+    """Aggregate xarray.DataArray with firing rate data.
+
+    Parameters
+    ----------
+    frate : xarray.DataArray
+        Firing rate data.
+    groupby : str | list | None
+        Dimension to groupby and average along.
+    zscore : bool | str
+        Whether to zscore firing rate of each cell. If ``zscore=True`` then
+        zscoring is performed (separately for each cell) after selecting trials
+        with ``select_query``. If you want the z scoring to happen before
+        selecting trials specify ``zscore='before query'``. Defaults to
+        ``False``, which does not zscore cell firing rate time courses.
+    select_query : str | None
+        A query to perform on the DataArray to select trials fulfilling the
+        query. For example ``'ifcorrect == True'`` will select those trials
+        where ifcorrect trial coord (whether response was correct) is True.
+    baseline : tuple | False
+        If not ``False`` - ``(tmin, tmax)`` tuple specifying time limits of
+        baseline correction. The baseline correction is performed after
+        zscoring.
+
+    Returns
+    -------
+    frate : xarray.DataArray
+        Aggregated firing rate data.
+    """
     zscore_before_query = isinstance(zscore, str) and 'before query' in zscore
 
     if zscore and zscore_before_query:
@@ -1328,6 +1383,7 @@ def _aggregate_xarray(frate, groupby, zscore,
     return frate
 
 
+# CONSIDER: use flox instead?
 def nested_groupby_apply(array, groupby, apply_fn=None):
     """Apply function to nested groupby.
 
