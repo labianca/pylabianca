@@ -44,10 +44,14 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
     if has_xarr:
         arrays = [x.values for x in arrays]
 
-    thresh, dist = borsar.stats._compute_threshold_via_permutations(
-        arrays, paired=paired, tail=tail, stat_fun=stat_fun,
-        return_distribution=True, n_permutations=n_perm, progress=progress,
-        n_jobs=n_jobs)
+    if n_perm > 0:
+        thresh, dist = borsar.stats._compute_threshold_via_permutations(
+            arrays, paired=paired, tail=tail, stat_fun=stat_fun,
+            return_distribution=True, n_permutations=n_perm, progress=progress,
+            n_jobs=n_jobs)
+    else:
+        return_pvalue = False
+        return_distribution = False
 
     stat = stat_fun(*arrays)
 
@@ -61,6 +65,7 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
     #     except IndexError:
     #         stat = stat.item()
 
+    # TODO: use borsar functions for this or just put into separate function
     if return_pvalue:
         multiply_p = 2 if tail == 'both' else 1
 
