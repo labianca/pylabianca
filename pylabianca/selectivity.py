@@ -171,6 +171,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     has_time = 'time' in frate.dims
 
     # select cells
+    # TODO: put in a separate function for cell selection
     if min_Hz:
         reduce_dims = 'trial' if not has_time else ('trial', 'time')
         msk = frate.mean(dim=reduce_dims) >= min_Hz
@@ -194,11 +195,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     # --------------
     cells = frate.cell.values
 
-    # TODO: this is not documented and not very clear, could be moved outside
-    if 'subject' in frate.attrs:
-        subj = frate.attrs['subject']
-        cells = ['_'.join([subj, x]) for x in cells]
-
     # perm
     dims = ['perm', 'cell']
     coords = {'perm': np.arange(n_perm) + 1,
@@ -207,27 +203,31 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         dims.append('time')
         coords['time'] = frate.time.values
 
-    results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
-                                   coords=coords, name=stat_name)
+    if n_perm > 0:
+        results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
+                                    coords=coords, name=stat_name)
 
     # stat
     coords = {k: coords[k] for k in dims[1:]}
+    use_data = results['stat'] if n_perm > 0 else results
     results['stat'] = xr.DataArray(
-        data=results['stat'], dims=dims[1:], coords=coords, name=stat_name)
+        data=use_data, dims=dims[1:], coords=coords, name=stat_name)
 
     # thresh
-    if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
-        # two-tail thresholds
-        results['thresh'] = np.stack(results['thresh'], axis=0)
-        dims2 = ['tail'] + dims[1:]
-        coords.update({'tail': ['pos', 'neg']})
-    else:
-        dims2 = dims[1:]
+    if n_perm > 0:
+        if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
+            # two-tail thresholds
+            results['thresh'] = np.stack(results['thresh'], axis=0)
+            dims2 = ['tail'] + dims[1:]
+            coords.update({'tail': ['pos', 'neg']})
+        else:
+            dims2 = dims[1:]
 
-    results['thresh'] = xr.DataArray(
-        data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
+        results['thresh'] = xr.DataArray(
+            data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
 
     # copy unit information
+    # TODO: use a separate utility function
     for key in results.keys():
         results[key].attrs['unit'] = stat_unit
         if 'coord_units' in frate.attrs:
