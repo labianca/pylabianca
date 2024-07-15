@@ -77,7 +77,7 @@ def explained_variance(frate, groupby, kind='omega'):
 
 
 # TODO: ! adapt for multiple cells
-def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
+def depth_of_selectivity(frate, groupby):
     '''Compute depth of selectivity for given category.
 
     Parameters
@@ -87,21 +87,12 @@ def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
     groupby : str
         Name of the dimension to group by and calculate depth of selectivity
         for.
-    ignore_below : float
-        Ignore values below this threshold. This is useful when spike density
-        is passed in ``frate`` - due to numerical errors, some values may be
-        very small or even negative but not exactly zero. Such values can lead
-        to depth of selectivity being far greater than 1. Default is ``1e-15``.
 
     Returns
     -------
     selectivity : xarray
         Xarray with depth of selectivity.
     '''
-    if ignore_below > 0:
-        frate = frate.copy()
-        msk = frate.values < ignore_below
-        frate.values[msk] = 0.
 
     avg_by_probe = frate.groupby(groupby).mean(dim='trial')
     n_categories = len(avg_by_probe.coords[groupby])
@@ -127,7 +118,7 @@ def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
 #           (important for t test interpretation for example)
 # TODO: change tail order to neg, pos?
 def compute_selectivity_continuous(frate, compare='image', n_perm=500,
-                                   n_jobs=1, min_Hz=False):
+                                   n_jobs=1):
     '''
     Compute population selectivity for specific experimental category.
 
@@ -145,9 +136,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     n_jobs : int
         Number of parallel jobs. No parallel computation is done when
         ``n_jobs=1`` (default).
-    min_Hz : 0.1 | bool
-        Minimum spiking rate threshold (in Hz). Cells below this threshold will
-        be ignored.
 
     Returns
     -------
@@ -169,13 +157,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     from .stats import permutation_test
 
     has_time = 'time' in frate.dims
-
-    # select cells
-    # TODO: put in a separate function for cell selection
-    if min_Hz:
-        reduce_dims = 'trial' if not has_time else ('trial', 'time')
-        msk = frate.mean(dim=reduce_dims) >= min_Hz
-        frate = frate.sel(cell=msk)
 
     frate_dims = ['trial', 'cell']
     if has_time:
@@ -675,6 +656,7 @@ def compute_time_in_window(df_cluster, window_of_interest):
 # RENAME: select_cells, as it can be used with various other cell-selection
 #         criteria
 # CONSIDER dataset case ...
+# CONSIDER: too complicated, try to simplify
 def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
     # one xarray and session_coord is None: assumes one subject
     #    - if same order of cells -> simple bool selection
@@ -739,7 +721,7 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
 
 
 def threshold_selectivity(selectivity, threshold):
-    '''Threshold selectivity based on a given threshold.
+    '''Threshold selectivity statistics generating boolean selectivity.
 
     Parameters
     ----------
