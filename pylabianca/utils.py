@@ -1151,6 +1151,7 @@ def cellinfo_from_xarray(xarr):
 
 
 def parse_sub_ses(sub_ses, remove_sub_prefix=True, remove_ses_prefix=True):
+    """Parse subject and session from a BIDS-like string."""
     if remove_sub_prefix:
         sub_ses = sub_ses.replace('sub-', '')
     if remove_ses_prefix:
