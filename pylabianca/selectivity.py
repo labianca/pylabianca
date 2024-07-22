@@ -761,7 +761,6 @@ def threshold_selectivity(selectivity, threshold):
         return selected
 
 
-# ! TODO - np.percentile removes xarray "clothing", put it back
 def compute_percent_selective(selectivity, threshold=None, dist=None,
                               percentile=None, tail='both', groupby=None):
     '''
@@ -830,9 +829,12 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     perc_sel = (n_sig / n_tot) * 100.
 
     if has_dist and threshold is not None:
+        from .stats import find_percentile_threshold
         perc_sel_perm = (n_sig_perm / n_tot) * 100.
-        perm_thresh = np.percentile(perc_sel_perm, 95, axis=0)
-
+        perm_thresh = find_percentile_threshold(
+            perm_data, percentile=95, tail='pos', perm_dim=0
+        )
+        # TODO - return Dataset
         return perc_sel, perm_thresh, perc_sel_perm
     else:
         return perc_sel
