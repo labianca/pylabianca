@@ -273,18 +273,20 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     return clusters, cluster_stats, cluster_pval
 
 
-# TODO: ! move the xarray "clothing" function somewhere to utils
+# CONSIDER: move the xarray "clothing" function somewhere to utils
 #         something like this is used in many places of pylabianca
 # TODO: use neg, pos thresholds order - this would first require a change in
 #       borsar
-# TODO: perm_data has to be DataArray, not Dataset !
 def find_percentile_threshold(perm_data, percentile=None, tail='both',
                               perm_dim=None, as_xarray=True):
+    import xarray as xr
+
+    msg = 'perm_data should be xarray.DataArray'
+    assert isinstance(perm_data, xr.DataArray), msg
     assert tail in ['both', 'pos', 'neg']
     percentile = 5 if percentile is None else percentile
 
-    if as_xarray:
-        import xarray as xr
+
 
     _, perm_dim_idx = _find_dim(perm_data, perm_dim=perm_dim)
 
