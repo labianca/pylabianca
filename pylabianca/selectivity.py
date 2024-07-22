@@ -840,6 +840,35 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         return perc_sel
 
 
+# TODO: move to pylabianca
+#       then create apply_dict ?
+def compute_selectivity_multisession(frate, compare=None, select=None,
+                                     n_perm=1_000, n_jobs=1):
+    import xarray as xr
+    assert isinstance(frate, dict)
+
+    all_results = list()
+    sessions = list(frate.keys())
+    for ses in sessions:
+        fr = frate[ses]
+
+        # trial selection
+        if select is not None:
+            fr = fr.query({'trial': select})
+
+        fr = pln.utils.assign_session_coord(
+            fr, ses, dim_name='cell', ses_name='sub')
+
+        results = pln.selectivity.compute_selectivity_continuous(
+            fr, compare=compare, n_perm=n_perm, n_jobs=n_jobs)
+        all_results.append(results)
+
+    # concatenate
+    all_results = xr.concat(all_results, dim='cell')
+
+    return all_results
+
+
 # TODO: compare with time resolved selectivity
 def compute_selectivity_windows(spk, windows=None, compare='image',
                                 baseline=None, test='kruskal', n_perm=2000,
