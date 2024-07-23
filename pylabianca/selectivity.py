@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from .utils import (xr_find_nested_dims, cellinfo_from_xarray,
-                    _inherit_metadata_from_xarray)
+                    _inherit_metadata_from_xarray, assign_session_coord)
 
 
 # TODO: ! adapt for multiple cells
@@ -106,11 +106,6 @@ def depth_of_selectivity(frate, groupby):
     selectivity = numerator / (n_categories - 1)
     selectivity.name = 'depth of selectivity'
 
-    if not singleton:
-        bad_selectivity = r_max < ignore_below
-        if (bad_selectivity).any():
-            selectivity[bad_selectivity] = 0
-
     return selectivity, avg_by_probe
 
 
@@ -187,10 +182,13 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     if n_perm > 0:
         results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
                                     coords=coords, name=stat_name)
+        use_data = results['stat']
+    else:
+        use_data = results
+        results = dict()
 
     # stat
     coords = {k: coords[k] for k in dims[1:]}
-    use_data = results['stat'] if n_perm > 0 else results
     results['stat'] = xr.DataArray(
         data=use_data, dims=dims[1:], coords=coords, name=stat_name)
 
@@ -712,6 +710,7 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
         return fr_sel
 
 
+# CONSIDER: when threshold is Real, then > threshold and < -threshold
 def threshold_selectivity(selectivity, threshold):
     '''Threshold selectivity statistics generating boolean selectivity.
 
@@ -832,8 +831,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         return perc_sel
 
 
-# TODO: move to pylabianca
-#       then create apply_dict ?
+# TODO: create apply_dict function (with out_type='dict' or 'xarray' etc.)
 def compute_selectivity_multisession(frate, compare=None, select=None,
                                      n_perm=1_000, n_jobs=1):
     import xarray as xr
@@ -848,10 +846,9 @@ def compute_selectivity_multisession(frate, compare=None, select=None,
         if select is not None:
             fr = fr.query({'trial': select})
 
-        fr = pln.utils.assign_session_coord(
-            fr, ses, dim_name='cell', ses_name='sub')
+        fr = assign_session_coord(fr, ses, dim_name='cell', ses_name='sub')
 
-        results = pln.selectivity.compute_selectivity_continuous(
+        results = compute_selectivity_continuous(
             fr, compare=compare, n_perm=n_perm, n_jobs=n_jobs)
         all_results.append(results)
 
