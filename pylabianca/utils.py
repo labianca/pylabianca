@@ -1176,6 +1176,7 @@ def parse_sub_ses(sub_ses, remove_sub_prefix=True, remove_ses_prefix=True):
     return sub, ses
 
 
+# TODO: change name to something more descriptive like "select_data"?
 # CONSIDER: ses_name -> ses_coord ?
 # CONSIDER: change the loop to use .groupby() xarr method instead of _get_arr
 #           (might be faster)
@@ -1185,7 +1186,7 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub'):
     Parameters
     ----------
     xarr_dict : dict | xarray.DataArray
-        Dictionary with xarrays.
+        Dictionary with xarrays or one xarray.DataArray.
     df : pandas.DataFrame
         DataFrame with selection properties.
     sub_col : str
