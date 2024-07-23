@@ -978,6 +978,7 @@ def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
     return arr
 
 
+# CONSIDER: ses_name -> ses_coord ?
 def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
     '''Convert dictionary to xarray.DataArray.
 
@@ -1053,6 +1054,7 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
     return arr
 
 
+# CONSIDER: ses_name -> ses_coord ?
 def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                    ensure_correct_reduction=True):
     '''Convert multi-session xarray to dictionary of session -> xarray pairs.
@@ -1137,6 +1139,21 @@ def find_index(vec, vals):
 
 
 def cellinfo_from_xarray(xarr):
+    '''
+    Extract cell information (cellinfo) dataframe from xarray.
+
+    Parameters
+    ----------
+    xarr : xarray.DataArray
+        DataArray to use. Must contain cell dimension.
+
+    Returns
+    -------
+    cellinfo : pd.DataFrame | None
+        DataFrame with cell information. If there are multiple cell coordinates
+        in the xarray, the DataFrame will have multiple columns. If there are
+        no cell coordinates, None is returned.
+    '''
     cell_dims = xr_find_nested_dims(xarr, 'cell')
 
     if len(cell_dims) > 1:
