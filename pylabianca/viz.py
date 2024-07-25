@@ -771,7 +771,10 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 
     if pvals_significant.any():
         from borsar.viz import highlight
+<<<<<<< HEAD
         from borsar.stats import format_pvalue
+=======
+>>>>>>> eb678ad (FIX: avoid future errors when importing full borsar (borsar.freq submodule relies on parts of mne that get moved around / changed pretty frequently))
 
         ylm = ax.get_ylim()
         y_rng = np.diff(ylm)[0]
