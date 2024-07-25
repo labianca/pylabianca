@@ -1180,7 +1180,8 @@ def parse_sub_ses(sub_ses, remove_sub_prefix=True, remove_ses_prefix=True):
 # CONSIDER: ses_name -> ses_coord ?
 # CONSIDER: change the loop to use .groupby() xarr method instead of _get_arr
 #           (might be faster)
-def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub'):
+def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
+                 df2xarr=None):
     '''Extract data from xarray dictionary using a dataframe.
 
     Parameters
@@ -1205,6 +1206,7 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub'):
     row_indices : np.ndarray
         Array with indices of rows.
     '''
+    import xarray as xr
     assert isinstance(xarr_dict, (dict, xr.DataArray))
     has_dict = isinstance(xarr_dict, dict)
 
