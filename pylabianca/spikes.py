@@ -867,15 +867,15 @@ class Spikes(object):
         '''
         return _pick_cells(self, picks=picks, query=query)
 
-    def drop_cells(self, picks):
+    def drop_cells(self, drop):
         '''Drop cells by name or index. Operates in-place.
 
         Parameters
         ----------
-        picks : int | str | list-like of int
+        drop : int | str | list-like of int
             Cell  indices to drop.
         '''
-        return _drop_cells(self, picks)
+        return _drop_cells(self, drop)
 
     def n_spikes(self):
         """Calculate number of spikes per cell.
@@ -1225,17 +1225,23 @@ def _pick_cells(spk, picks=None, query=None):
     return spk
 
 
-def _drop_cells(spk, picks):
+def _drop_cells(spk, drop):
     '''Drop cells by name or index. Operates in-place.
 
     Parameters
     ----------
-    picks : int | str | list-like of int
+    drop : int | str | list-like of int
         Cell  indices to drop.
     '''
+    # special case for dropping no cells
+    if isinstance(drop, (list, np.ndarray)):
+        if len(drop) == 0:
+            return spk
+
+    # invert drop to pick and use pick_cells
     all_idx = np.arange(spk.n_units())
-    picks = _deal_with_picks(spk, picks)
-    is_dropped = np.in1d(all_idx, picks)
+    drop = _deal_with_picks(spk, drop)
+    is_dropped = np.in1d(all_idx, drop)
     retain_idx = np.where(~is_dropped)[0]
     return spk.pick_cells(retain_idx)
 
