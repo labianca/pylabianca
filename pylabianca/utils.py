@@ -1292,7 +1292,23 @@ def _get_arr(arr, sub_ses, ses_name='sub'):
 
 
 # TODO: stimulus selectivity should be added to the xarray -
-#       it can be done as cell x trial coordinate
+#       it can be done as cell x trial coordinate, this could be a function
+#       in .selectivity module
+# - [ ] better argument names:
+#     -> select_query -> select (the select_query is currently applied only
+#        to the trials, so it's a bit misleading, while select functions
+#        everywhere else in pylabianca as applied to trials, so it might be
+#        better to keep it consistent)
+#        so maybe select (auto on trials) vs query ?
+#     -> is per_cell_query (per_cell_select etc.) even needed is we
+#        have per_cell=True and pass to specific subfunction?
+#     -> zscore - with True vs "before query" is a bit confusing
+#        we could make it: True, array (then array is used as baseline)
+#        or time range (-0.2, 0.) for example then a selection of the
+#        array is used as baseline
+#        if someone wants to zscore after query, they would have to perform
+#        the query themselves and pass the queried array / dict to aggregate
+#        (but arguably zscoring after query is not a good idea)
 # - [ ] option to zscore only wrt the baseline period (zscore='baseline'?)
 # ? option to pass the baseline calculated from a different period
 def aggregate(frate, groupby=None, select_query=None, per_cell_query=None,
@@ -1483,10 +1499,14 @@ def _aggregate_dict(frates, groupby=None, select_query=None,
     for key in keys:
         frate = frates[key]
         frate_agg = aggregate(
-            frate, groupby=groupby, select_query=select, zscore=zscore)
+            frate, groupby=groupby, select_query=select_query,
+            per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
+            per_cell=per_cell
+        )
         if frate_agg is not None:
             aggregated.append(frate_agg)
             # TODO: assign subject / session information coordinate
+            #       - only if not already present
 
     aggregated = xr.concat(aggregated, dim='cell')
     return aggregated
