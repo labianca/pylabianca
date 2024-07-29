@@ -1329,19 +1329,20 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
         fulfilling the query. For example ``'ifcorrect == True'`` will select
         those trials where ifcorrect column (whether response was correct) is
         True.
-    per_cell_query : str | None
-        A query to perform on the SpikeEpochs object separately for each cell.
-        These are mostly properties related to cell selectivity, like whether
-        the preferred stimulus is in memory etc.
-    zscore : bool | str
-        Whether to zscore firing rate of each cell. If ``zscore=True`` then
-        zscoring is performed (separately for each cell) after selecting trials
-        with ``select_query``. If you want the z scoring to happen before
-        selecting trials specify ``zscore='before query'``. Defaults to
+    per_cell_query : dict | None
+        An xarray-compatible query to perform on the SpikeEpochs object
+        separately for each cell. These are often properties related to cell
+        selectivity, like whether the preferred stimulus is in memory etc.
+    zscore : bool | tuple | xarray.DataArray
+        Whether (and how) to zscore firing rate of each cell.  Defaults to
         ``False``, which does not zscore cell firing rate timecourses.
+        If True, the whole array is used to calculate mean and standard
+        deviation for zscoring. If tuple, it is interpreted as time range to
+        use to calculate mean and standard deviation. If xarray.DataArray,
+        this xarray is used to calculate mean and standard deviation.
     baseline : tuple | False
         If not ``False`` (default) - ``(tmin, tmax)`` tuple specifying time
-        limits of baseline correction. The baseline correction is performed
+        limits for baseline calculation. Baseline correction is performed
         after zscoring.
     per_cell : bool
         Whether to perform selection and groupby operations on each cell
@@ -1406,13 +1407,14 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
         Firing rate data.
     groupby : str | list | None
         Dimension to groupby and average along.
-    zscore : bool | str
-        Whether to zscore firing rate of each cell. If ``zscore=True`` then
-        zscoring is performed (separately for each cell) after selecting trials
-        with ``select_query``. If you want the z scoring to happen before
-        selecting trials specify ``zscore='before query'``. Defaults to
-        ``False``, which does not zscore cell firing rate time courses.
-    select_query : str | None
+    zscore : bool | tuple | xarray.DataArray
+        Whether (and how) to zscore firing rate of each cell.  Defaults to
+        ``False``, which does not zscore cell firing rate timecourses.
+        If True, the whole array is used to calculate mean and standard
+        deviation for zscoring. If tuple, it is interpreted as time range to
+        use to calculate mean and standard deviation. If xarray.DataArray,
+        this xarray is used to calculate mean and standard deviation.
+    select : str | None
         A query to perform on the DataArray to select trials fulfilling the
         query. For example ``'ifcorrect == True'`` will select those trials
         where ifcorrect trial coord (whether response was correct) is True.
@@ -1426,10 +1428,10 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
     frate : xarray.DataArray
         Aggregated firing rate data.
     """
-    zscore_before_query = isinstance(zscore, str) and 'before query' in zscore
 
-    if zscore and zscore_before_query:
-        frate = zscore_xarray(frate)
+    if zscore:
+        bsln = None if isinstance(zscore, bool) else zscore
+        frate = zscore_xarray(frate, baseline=bsln)
 
     if select is not None:
         frate = frate.query(trial=select)
@@ -1442,9 +1444,6 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
     else:
         # average all trials
         frate = frate.mean(dim='trial')
-
-    if zscore and not zscore_before_query:
-        frate = zscore_xarray(frate)
 
     if baseline:
         time_range = slice(baseline[0], baseline[1])
@@ -1501,21 +1500,20 @@ def _aggregate_dict(frates, groupby=None, select=None,
     for key in keys:
         frate = frates[key]
         frate_agg = aggregate(
-            frate, groupby=groupby, select_query=select_query,
+            frate, groupby=groupby, select=select,
             per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
             per_cell=per_cell
         )
         if frate_agg is not None:
             aggregated.append(frate_agg)
             # TODO: assign subject / session information coordinate
-            #       - only if not already present
+            #       - only if not already present ?
 
     aggregated = xr.concat(aggregated, dim='cell')
     return aggregated
 
 
-# TODO: add baseline? or even a separate array to calculate mean, std on?
-def zscore_xarray(arr, groupby='cell'):
+def zscore_xarray(arr, groupby='cell', baseline=None):
     '''
     Z-score an xarray.DataArray.
 
@@ -1528,19 +1526,38 @@ def zscore_xarray(arr, groupby='cell'):
         Data to z-score.
     groupby : str
         Dimension name to z-score separately.
+    baseline : None | tuple | xarray.DataArray
+        If None, the whole array is used to calculate mean and standard
+        deviation. If tuple, the time range is used to calculate mean and
+        standard deviation. If xarray.DataArray, this xarray is used to
+        calculate mean and standard deviation.
 
     Returns
     -------
     arr : xarray.DataArray
         Z-scored data.
     '''
-    has_cell_dim = groupby in arr.dims and len(arr.coords[groupby]) > 1
+    import xarray as xr
+
+    if baseline is None:
+        baseline_arr = arr
+    elif isinstance(baseline, tuple):
+        assert len(baseline) == 2
+        time_range = slice(*baseline)
+        baseline_arr = arr.sel(time=time_range)
+    elif isinstance(baseline, xr.DataArray):
+        baseline_arr = baseline
+    else:
+        raise ValueError('baseline has to be None, tuple or xarray.DataArray.')
+
+    has_cell_dim = (groupby in baseline_arr.dims
+                    and len(baseline_arr.coords[groupby]) > 1)
 
     if not has_cell_dim:
-        avg, std = arr.mean(), arr.std()
+        avg, std = baseline_arr.mean(), baseline_arr.std()
     else:
-        dims = tuple(dim for dim in arr.dims if dim != groupby)
-        avg, std = arr.mean(dim=dims), arr.std(dim=dims)
+        dims = tuple(dim for dim in baseline_arr.dims if dim != groupby)
+        avg, std = baseline_arr.mean(dim=dims), baseline_arr.std(dim=dims)
 
     arr = (arr - avg) / std
     return arr
