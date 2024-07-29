@@ -979,7 +979,7 @@ def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
 
 
 # CONSIDER: ses_name -> ses_coord ?
-def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
+def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
     '''Convert dictionary to xarray.DataArray.
 
     Parameters
@@ -991,12 +991,13 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
         Name of the dimension to concatenate along. Defaults to ``'cell'``.
         This dimension is also enriched with subject / session information from
         the dictionary keys.
-    query : dict | None
-        If not None, the query is passed to .query() method of the xarray.
-        This can be useful to select only specific data from the xarray, which
-        can be difficult to do after concatenation (some coordinates may
-        become multi-dimensional and querying would raise an error "Unlabeled
-        multi-dimensional array cannot be used for indexing").
+    select : dict | None
+        Trial selection query. If not None, select is passed to .query() method
+        of the xarray. This can be useful to select only specific data from the
+        xarray, which can be difficult to do after concatenation (after
+        concatenation some coordinates may become multi-dimensional and
+        querying would raise an error "Unlabeled multi-dimensional array cannot
+        be used for indexing").
     ses_name : str
         Name of the subject / session coordinate that will be automatically
         added to the concatenated dimension from the dictionary keys. Defaults
@@ -1015,18 +1016,18 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
                 for sb in keys]
     assert all(all_xarr)
 
-    if (query is not None) and (not isinstance(query, dict)):
-        query = {'trial': query}
+    if (select is not None) and (not isinstance(select, dict)):
+        select = {'trial': select}
 
     use_coords = None
     arr_list = list()
     different_coords = False
     for key, arr in data.items():
-        if query is not None:
-            arr = arr.query(query)
+        if select is not None:
+            arr = arr.query(select)
 
-            # if trial was in query dict, then we should reset trial indices
-            if 'trial' in query:
+            # if trial was in select dict, then we should reset trial indices
+            if 'trial' in select:
                 arr = arr.reset_index('trial', drop=False)
 
         # add subject / session information to the concatenated dimension
@@ -1311,7 +1312,7 @@ def _get_arr(arr, sub_ses, ses_name='sub'):
 #        (but arguably zscoring after query is not a good idea)
 # - [ ] option to zscore only wrt the baseline period (zscore='baseline'?)
 # ? option to pass the baseline calculated from a different period
-def aggregate(frate, groupby=None, select_query=None, per_cell_query=None,
+def aggregate(frate, groupby=None, select=None, per_cell_query=None,
               zscore=False, baseline=False, per_cell=False):
     """
     Prepare spikes object for firing rate analysis.
@@ -1323,7 +1324,7 @@ def aggregate(frate, groupby=None, select_query=None, per_cell_query=None,
         methods.
     groupby : str | False
         Condition by which trials are grouped and averaged.
-    select_query : str | None
+    select : str | None
         A query to perform on the SpikeEpochs object to select trials
         fulfilling the query. For example ``'ifcorrect == True'`` will select
         those trials where ifcorrect column (whether response was correct) is
@@ -1357,12 +1358,13 @@ def aggregate(frate, groupby=None, select_query=None, per_cell_query=None,
 
     if isinstance(frate, dict):
         return _aggregate_dict(
-            frate, groupby=groupby, select_query=select_query,
+            frate, groupby=groupby, select=select,
             per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
             per_cell=per_cell
         )
     else:
-        msg = 'frate has to be an xarray.DataArray.'
+        msg = ('frate has to be an xarray.DataArray or dictionary of '
+               'xarray.DataArrays.')
         assert isinstance(frate, xr.DataArray), msg
 
     if per_cell_query is not None:
@@ -1371,7 +1373,7 @@ def aggregate(frate, groupby=None, select_query=None, per_cell_query=None,
     if not per_cell:
         # integrate with per_cell approach
         frates = _aggregate_xarray(
-                frate, groupby, zscore, select_query, baseline
+                frate, groupby, zscore, select, baseline
             )
         return frates
     else:
@@ -1381,10 +1383,10 @@ def aggregate(frate, groupby=None, select_query=None, per_cell_query=None,
             frate_cell = frate[cell_idx]
 
             if per_cell_query is not None:
-                frate_cell = frate_cell.query({'trial': per_cell_query})
+                frate_cell = frate_cell.query(per_cell_query)
 
             frate_cell = _aggregate_xarray(
-                frate_cell, groupby, zscore, select_query, baseline
+                frate_cell, groupby, zscore, select, baseline
             )
             frates.append(frate_cell)
 
@@ -1395,7 +1397,7 @@ def aggregate(frate, groupby=None, select_query=None, per_cell_query=None,
             return None
 
 
-def _aggregate_xarray(frate, groupby, zscore, select_query, baseline):
+def _aggregate_xarray(frate, groupby, zscore, select, baseline):
     """Aggregate xarray.DataArray with firing rate data.
 
     Parameters
@@ -1429,8 +1431,8 @@ def _aggregate_xarray(frate, groupby, zscore, select_query, baseline):
     if zscore and zscore_before_query:
         frate = zscore_xarray(frate)
 
-    if select_query is not None:
-        frate = frate.query(trial=select_query)
+    if select is not None:
+        frate = frate.query(trial=select)
 
     if groupby:
         if isinstance(groupby, list):
@@ -1488,7 +1490,7 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
 
 # TODO: this could be changed and used with apply_dict / dict_apply
 #       the dict apply function could have output='xarray' option
-def _aggregate_dict(frates, groupby=None, select_query=None,
+def _aggregate_dict(frates, groupby=None, select=None,
                     per_cell_query=None, zscore=False, baseline=False,
                     per_cell=False):
     import xarray as xr
