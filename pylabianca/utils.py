@@ -971,6 +971,7 @@ def xr_find_nested_dims(arr, dim_name):
     return names
 
 
+# CONSIDER: ses_name -> ses_coord ?
 def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
     n_cells = len(arr.coords[dim_name])
     sub_dim = [ses] * n_cells
@@ -1297,21 +1298,8 @@ def _get_arr(arr, sub_ses, ses_name='sub'):
 #       it can be done as cell x trial coordinate, this could be a function
 #       in .selectivity module
 # - [ ] better argument names:
-#     -> select_query -> select (the select_query is currently applied only
-#        to the trials, so it's a bit misleading, while select functions
-#        everywhere else in pylabianca as applied to trials, so it might be
-#        better to keep it consistent)
-#        so maybe select (auto on trials) vs query ?
 #     -> is per_cell_query (per_cell_select etc.) even needed is we
 #        have per_cell=True and pass to specific subfunction?
-#     -> zscore - with True vs "before query" is a bit confusing
-#        we could make it: True, array (then array is used as baseline)
-#        or time range (-0.2, 0.) for example then a selection of the
-#        array is used as baseline
-#        if someone wants to zscore after query, they would have to perform
-#        the query themselves and pass the queried array / dict to aggregate
-#        (but arguably zscoring after query is not a good idea)
-# - [ ] option to zscore only wrt the baseline period (zscore='baseline'?)
 # ? option to pass the baseline calculated from a different period
 def aggregate(frate, groupby=None, select=None, per_cell_query=None,
               zscore=False, baseline=False, per_cell=False):

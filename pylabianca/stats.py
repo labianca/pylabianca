@@ -276,7 +276,7 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
 
 
 # CONSIDER: move the xarray "clothing" function somewhere to utils
-#         something like this is used in many places of pylabianca
+#           something like this is used in many places of pylabianca
 # TODO: use neg, pos thresholds order - this would first require a change in
 #       borsar
 def find_percentile_threshold(perm_data, percentile=None, tail='both',
