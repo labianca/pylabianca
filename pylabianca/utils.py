@@ -1544,3 +1544,13 @@ def zscore_xarray(arr, groupby='cell', baseline=None):
 
     arr = (arr - avg) / std
     return arr
+
+
+def reset_trial_id(xarr_dict):
+    """Reset trial IDs in xarray dictionary."""
+    keys = list(xarr_dict.keys())
+    for key in keys:
+        this_arr = xarr_dict[key]
+        n_tri = len(this_arr.coords['trial'].values)
+        new_tri = np.arange(n_tri)
+        this_arr.coords['trial'].values[:] = new_tri[:]
