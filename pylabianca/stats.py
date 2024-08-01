@@ -168,7 +168,9 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
 
 # ENH: move to sarna/borsar sometime
-# ENH: allow for standard arrays (and perm_index)
+# ENH: allow for standard arrays (and perm_index) - separate the inner
+#      machinery into a separate xarray-agnostic function
+# ENH: return borsar.Clusters object as output
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
                                          adjacency=None, percentile=5):
     '''Performs a cluster-based test from precalculated permutations.
@@ -286,9 +288,11 @@ def find_percentile_threshold(perm_data, percentile=None, tail='both',
     assert tail in ['both', 'pos', 'neg']
     percentile = 5 if percentile is None else percentile
 
-
-
     _, perm_dim_idx = _find_dim(perm_data, perm_dim=perm_dim)
+    if perm_dim_idx == -1:
+        raise ValueError('The array has to contain a dimension named "perm"'
+                         ' or "permutation". Otherwise specify the dimension'
+                         ' name or index using the perm_dim argument.')
 
     if tail == 'both':
         percentiles = [100 - (percentile / 2), (percentile / 2)]
@@ -327,7 +331,8 @@ def _find_dim(perm_data, perm_dim=None):
     if perm_dim is None:
         dim_names = ['perm', 'permutation']
         has_dim = [dim_name in perm_data.dims for dim_name in dim_names]
-        assert any(has_dim)
+        if not any(has_dim):
+            return None, -1
         perm_dim = dim_names[np.where(has_dim)[0][0]]
 
     if isinstance(perm_dim, str):
