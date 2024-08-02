@@ -1285,10 +1285,11 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
 
 
 def _get_arr(arr, sub_ses, ses_name='sub'):
+    import xarray as xr
     if isinstance(arr, dict):
         arr = arr[sub_ses]
     elif isinstance(arr, xr.DataArray):
-        arr = arr.query({'cell': f'{ses_name} == {sub_ses}'})
+        arr = arr.query({'cell': f'{ses_name} == "{sub_ses}"'})
     return arr
 
 
