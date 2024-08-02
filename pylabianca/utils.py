@@ -963,6 +963,7 @@ def xr_find_nested_dims(arr, dim_name):
     return names
 
 
+# CONSIDER: ses_name -> ses_coord ?
 def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
     n_cells = len(arr.coords[dim_name])
     sub_dim = [ses] * n_cells
@@ -1272,6 +1273,7 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
 
 def _get_arr(arr, sub_ses, ses_name='sub'):
     import xarray as xr
+
     if isinstance(arr, dict):
         arr = arr[sub_ses]
     elif isinstance(arr, xr.DataArray):
@@ -1283,21 +1285,8 @@ def _get_arr(arr, sub_ses, ses_name='sub'):
 #       it can be done as cell x trial coordinate, this could be a function
 #       in .selectivity module
 # - [ ] better argument names:
-#     -> select_query -> select (the select_query is currently applied only
-#        to the trials, so it's a bit misleading, while select functions
-#        everywhere else in pylabianca as applied to trials, so it might be
-#        better to keep it consistent)
-#        so maybe select (auto on trials) vs query ?
 #     -> is per_cell_query (per_cell_select etc.) even needed is we
 #        have per_cell=True and pass to specific subfunction?
-#     -> zscore - with True vs "before query" is a bit confusing
-#        we could make it: True, array (then array is used as baseline)
-#        or time range (-0.2, 0.) for example then a selection of the
-#        array is used as baseline
-#        if someone wants to zscore after query, they would have to perform
-#        the query themselves and pass the queried array / dict to aggregate
-#        (but arguably zscoring after query is not a good idea)
-# - [ ] option to zscore only wrt the baseline period (zscore='baseline'?)
 # ? option to pass the baseline calculated from a different period
 def aggregate(frate, groupby=None, select=None, per_cell_query=None,
               zscore=False, baseline=False, per_cell=False):
@@ -1548,3 +1537,13 @@ def zscore_xarray(arr, groupby='cell', baseline=None):
 
     arr = (arr - avg) / std
     return arr
+
+
+def reset_trial_id(xarr_dict):
+    """Reset trial IDs in xarray dictionary."""
+    keys = list(xarr_dict.keys())
+    for key in keys:
+        this_arr = xarr_dict[key]
+        n_tri = len(this_arr.coords['trial'].values)
+        new_tri = np.arange(n_tri)
+        this_arr.coords['trial'].values[:] = new_tri[:]
