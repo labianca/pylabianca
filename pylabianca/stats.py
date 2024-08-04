@@ -44,10 +44,14 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
     if has_xarr:
         arrays = [x.values for x in arrays]
 
-    thresh, dist = borsar.stats._compute_threshold_via_permutations(
-        arrays, paired=paired, tail=tail, stat_fun=stat_fun,
-        return_distribution=True, n_permutations=n_perm, progress=progress,
-        n_jobs=n_jobs)
+    if n_perm > 0:
+        thresh, dist = borsar.stats._compute_threshold_via_permutations(
+            arrays, paired=paired, tail=tail, stat_fun=stat_fun,
+            return_distribution=True, n_permutations=n_perm, progress=progress,
+            n_jobs=n_jobs)
+    else:
+        return_pvalue = False
+        return_distribution = False
 
     stat = stat_fun(*arrays)
 
@@ -61,6 +65,7 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
     #     except IndexError:
     #         stat = stat.item()
 
+    # TODO: use borsar functions for this or just put into separate function
     if return_pvalue:
         multiply_p = 2 if tail == 'both' else 1
 
@@ -163,7 +168,9 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
 
 # ENH: move to sarna/borsar sometime
-# ENH: allow for standard arrays (and perm_index)
+# ENH: allow for standard arrays (and perm_index) - separate the inner
+#      machinery into a separate xarray-agnostic function
+# ENH: return borsar.Clusters object as output
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
                                          adjacency=None, percentile=5):
     '''Performs a cluster-based test from precalculated permutations.
@@ -214,23 +221,12 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
 
     assert isinstance(data, xr.DataArray)
     assert isinstance(perm_data, xr.DataArray)
-    assert tail in ['both', 'pos', 'neg']
-    dim_names = ['perm', 'permutation']
-    has_dim = [dim_name in perm_data.dims for dim_name in dim_names]
-    assert any(has_dim)
-    perm_dim_name = dim_names[np.where(has_dim)[0][0]]
-    perm_dim = perm_data.dims.index(perm_dim_name)
 
-    if tail == 'both':
-        percentiles = [100 - (percentile / 2), (percentile / 2)]
-        thresholds = np.percentile(perm_data, percentiles, axis=perm_dim)
-        thresholds = [thresholds[0], thresholds[1]]
-    elif tail == 'pos':
-        thresholds = np.percentile(perm_data, 100 - percentile, axis=perm_dim)
-        thresholds = [thresholds, None]
-    elif tail == 'neg':
-        thresholds = np.percentile(perm_data, percentile, axis=perm_dim)
-        thresholds = [None, thresholds[1]]
+    perm_dim_name, _ = _find_dim(perm_data)
+    thresholds = find_percentile_threshold(
+        perm_data, perm_dim=perm_dim_name,
+        percentile=percentile, tail=tail, as_xarray=False
+    )
 
     # clusters on actual data
     clusters, cluster_stats = borsar.find_clusters(
@@ -277,3 +273,73 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
         cluster_pval = np.minimum(cluster_pval * 2, 1)
 
     return clusters, cluster_stats, cluster_pval
+
+
+# CONSIDER: move the xarray "clothing" function somewhere to utils
+#           something like this is used in many places of pylabianca
+# TODO: use neg, pos thresholds order - this would first require a change in
+#       borsar
+def find_percentile_threshold(perm_data, percentile=None, tail='both',
+                              perm_dim=None, as_xarray=True):
+    import xarray as xr
+
+    msg = 'perm_data should be xarray.DataArray'
+    assert isinstance(perm_data, xr.DataArray), msg
+    assert tail in ['both', 'pos', 'neg']
+    percentile = 5 if percentile is None else percentile
+
+    _, perm_dim_idx = _find_dim(perm_data, perm_dim=perm_dim)
+    if perm_dim_idx == -1:
+        raise ValueError('The array has to contain a dimension named "perm"'
+                         ' or "permutation". Otherwise specify the dimension'
+                         ' name or index using the perm_dim argument.')
+
+    if tail == 'both':
+        percentiles = [100 - (percentile / 2), (percentile / 2)]
+        thresholds = np.percentile(perm_data, percentiles, axis=perm_dim_idx)
+        if not as_xarray:
+            thresholds = [thresholds[0], thresholds[1]]
+
+    elif tail == 'pos':
+        thresholds = np.percentile(
+            perm_data, [100 - percentile], axis=perm_dim_idx)
+        if not as_xarray:
+            thresholds = [thresholds[0], None]
+    elif tail == 'neg':
+        thresholds = np.percentile(perm_data, [percentile], axis=perm_dim_idx)
+        if not as_xarray:
+            thresholds = [None, thresholds[0]]
+
+    if as_xarray:
+        tail_coords = ['pos', 'neg'] if tail == 'both' else [tail]
+        perm_data_dims = list(perm_data.dims)
+        perm_data_dims.pop(perm_dim_idx)
+
+        dims = ['tail'] + perm_data_dims
+        coords = {'tail': tail_coords}
+        for dim_idx, dim_name in enumerate(perm_data_dims):
+            coords[dim_name] = perm_data.coords[dim_name].data
+
+        thresholds = xr.DataArray(thresholds, dims=dims, coords=coords)
+
+    return thresholds
+
+
+# CONSIDER: move to utils (very similar code is also used somewhere else
+#                          in pylabianca)
+def _find_dim(perm_data, perm_dim=None):
+    if perm_dim is None:
+        dim_names = ['perm', 'permutation']
+        has_dim = [dim_name in perm_data.dims for dim_name in dim_names]
+        if not any(has_dim):
+            return None, -1
+        perm_dim = dim_names[np.where(has_dim)[0][0]]
+
+    if isinstance(perm_dim, str):
+        perm_dim_idx = perm_data.dims.index(perm_dim)
+    else:
+        # TODO: assert it is an integer
+        perm_dim_idx = perm_dim
+        perm_dim = perm_data.dims[perm_dim_idx]
+
+    return perm_dim, perm_dim_idx
