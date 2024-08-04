@@ -831,7 +831,7 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
             trials.append(this_tri)
 
     if return_epochs:
-        return SpikeEpochs(times, trials, **args)
+        return SpikeEpochs(times, trials, time_limits=(tmin, tmax), **args)
     else:
         if 'sfreq' not in args:
             args['sfreq'] = 10_000
@@ -1050,7 +1050,7 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
     if different_coords:
         for idx, arr in enumerate(arr_list):
             drop_coords = set(list(arr.coords)) - use_coords
-            arr_list[idx] = arr.drop(drop_coords)
+            arr_list[idx] = arr.drop_vars(drop_coords)
 
     arr = xr.concat(arr_list, dim=dim_name)
     return arr
@@ -1111,7 +1111,7 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                     new_coords[coord] = ('trial', one_cell.values)
 
             if len(drop_coords) > 0:
-                arr = arr.drop(drop_coords)
+                arr = arr.drop_vars(drop_coords)
                 arr = arr.assign_coords(new_coords)
 
         xarr_dct[lab] = arr
@@ -1351,6 +1351,8 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
                'xarray.DataArrays.')
         assert isinstance(frate, xr.DataArray), msg
 
+        _validate_xarray_for_aggregation(frate, groupby)
+
     if per_cell_query is not None:
         per_cell = True
 
@@ -1381,8 +1383,30 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
             return None
 
 
+def _validate_xarray_for_aggregation(arr, groupby):
+    if groupby is not None:
+        nested = xr_find_nested_dims(arr, ('cell', 'trial'))
+        if groupby in nested:
+            raise ValueError(
+                'The groupby coordinate cannot be cell x trial, it has to be '
+                'a simple trial dimension coordinate. Complex cell x trial '
+                'coordinates often arise when the data is transformed from '
+                'dictionary of xarrays to one concatenated xarray '
+                '(using pylabianca.utils.dict_to_xarray) and at the trial '
+                'metadata is not the same across sessions (e.g. the order of '
+                'conditions is different, which is common for '
+                'non-pseudo-random experiments). Use '
+                'pylabianca.utils.xarray_to_dict to convert the data to '
+                'a dictionary of xarrays and then perform the aggregation on '
+                'the dictionary.')
+
+
 def _aggregate_xarray(frate, groupby, zscore, select, baseline):
     """Aggregate xarray.DataArray with firing rate data.
+
+    The aggregation is performed within cells, i.e. the firing rate of each
+    cell is averaged across trials. Optionally, the data can be zscored
+    (separately for each cell) and baseline corrected.
 
     Parameters
     ----------
@@ -1392,7 +1416,7 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
         Dimension to groupby and average along.
     zscore : bool | tuple | xarray.DataArray
         Whether (and how) to zscore firing rate of each cell.  Defaults to
-        ``False``, which does not zscore cell firing rate timecourses.
+        ``False``, which does not zscore cell firing rate time courses.
         If True, the whole array is used to calculate mean and standard
         deviation for zscoring. If tuple, it is interpreted as time range to
         use to calculate mean and standard deviation. If xarray.DataArray,
