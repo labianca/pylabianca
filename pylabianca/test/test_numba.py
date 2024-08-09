@@ -63,3 +63,32 @@ def test_find_first():
 
     idx_np = np.where(values == 9)[0][0]
     assert idx_nb == idx_np
+
+
+def test_trial_boundaries_numba():
+    from pylabianca.utils import has_numba
+
+    if has_numba:
+        from pylabianca._numba import _get_trial_boundaries_numba
+        n_tri = 200
+        per_tri = (0, 35)
+        trials = list()
+        times = list()
+        for tri in range(n_tri):
+            n_spk = np.random.randint(*per_tri)
+            this_trials = np.full(n_spk, tri)
+            this_times = np.sort(np.random.rand(n_spk) * 2. - 0.5)
+            trials.append(this_trials)
+            times.append(this_times)
+
+        trials = np.concatenate(trials)
+        times = np.concatenate(times)
+        spk = pln.SpikeEpochs([times], [trials])
+
+        # get boundaries
+        boundaries, tri = _get_trial_boundaries(spk, 0)
+        boundaries2, tri2 = _get_trial_boundaries_numba(
+            spk.trial[0], spk.n_trials)
+
+        assert (boundaries == boundaries2).all()
+        assert (tri == tri2).all()
