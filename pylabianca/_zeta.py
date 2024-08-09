@@ -50,21 +50,16 @@ def var_func(x):
     return np.var(x, axis=0)
 
 
-def std_func(x):
-    return np.std(x, axis=0)
-
-
 def cumulative_n_conditions(spikes, n_trials, reference_time,
                             reduction=diff_func):
-    # introduce minimum jitter to identical spikes
-    spikes = [np.sort(spks) for spks in spikes]
+    spikes = [np.sort(spk) for spk in spikes]
 
     n_cond = len(spikes)
     n_points = reference_time.shape[0]
     fractions = np.zeros((n_cond, n_points))
-    for idx, (spks, n_tri) in enumerate(zip(spikes, n_trials)):
+    for idx, (spk, n_tri) in enumerate(zip(spikes, n_trials)):
         fractions[idx] = cumulative_spikes_norm(
-            spks, reference_time, n_tri)
+            spk, reference_time, n_tri)
 
     reduced_fraction = reduction(fractions)
     reduced_fraction -= reduced_fraction.mean()
@@ -231,7 +226,7 @@ def _get_times_and_trials(spk, pick, tmin, tmax, subsample, backend):
 
 
 # TODO: CONSIDER renaming return_dist to return_traces / return_dict, etc.
-# MOVE to pylabianca.selectivity
+# MOVE to pylabianca.selectivity ?
 def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
          n_permutations=100, significance='gumbel', return_dist=False,
          subsample=1, reduction=None):
@@ -312,7 +307,7 @@ def ZETA(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         if n_cnd == 2:
             from ._zeta_numba import ZETA_numba_2cond as numba_func
         elif n_cnd > 2:
-            from ._zeta_numba import ZETA_numba_ncond as numba_func
+            from ._zeta_numba import ZETA_numba_Ncond as numba_func
 
     picks = _deal_with_picks(spk, picks)
     n_cells = len(picks)
@@ -398,7 +393,7 @@ def gumbel(mean, std, x):
     # define p-value
     gumbel_p = 1 - gumbel_cdf
 
-    # transform to output z-score
+    # transform to z-score
     z_stat = -stats.norm.ppf(gumbel_p / 2)
 
     # approximation for large X
@@ -412,7 +407,7 @@ def gumbel(mean, std, x):
 
 
 def compute_pvalues(real_abs_max, perm_abs_max, significance='gumbel'):
-    """Compute p-values for the maximum values of the real data compared to
+    """Compute p-values for the maxima of the real data compared to
     permutations.
 
     Parameters
