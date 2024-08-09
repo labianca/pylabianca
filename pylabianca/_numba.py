@@ -329,13 +329,15 @@ def _select_spikes_numba(spikes, trials, tri_sel):
     return spikes[msk]
 
 
+# TODO: could return error if not found (or be wrapped to return error)
+#       (or [x] at least return out-of-bounds index)
 @njit
 def _monotonic_find_first(values, find_val):
     n_val = values.shape[0]
     for idx in range(n_val):
         if values[idx] == find_val:
             return idx
-    return -1
+    return n_val
 
 
 def _get_trial_boundaries(spk, cell_idx):
