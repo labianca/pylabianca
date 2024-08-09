@@ -1,7 +1,7 @@
 import numpy as np
 from numba import njit
 
-from ._numba import _get_trial_boundaries_numba
+from ._numba import _get_trial_boundaries_numba, var_2d_axis_0
 
 
 # try compiling this too
@@ -192,7 +192,7 @@ def cumulative_sel_multi_conditions_numba(spikes_list, n_trials,
                 spikes_all[idx], reference_time, n_trials[idx]
         )
 
-    fraction_sel = np.var(cumulative_fraction, axis=0)
+    fraction_sel = var_2d_axis_0(cumulative_fraction)
     fraction_sel -= fraction_sel.mean()
 
     return fraction_sel
