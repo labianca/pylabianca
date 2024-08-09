@@ -425,13 +425,6 @@ def depth_of_selectivity_numba_low_level(avg_by_cond, n_categories):
 
 
 @njit
-def w_depth_of_selectivity_numba_low_level(avg_by_cond, n_categories):
-    r_max = max_2d_axis_0(avg_by_cond)
-    numerator = n_categories - (avg_by_cond / r_max).sum(axis=0)
-    return numerator / (n_categories - 1) * r_max
-
-
-@njit
 def groupby_mean(arr, groupby):
     cnd_idx_per_tri, n_trials_per_cond, _, n_cnd = (
         get_condition_indices_and_unique_numba(groupby)
@@ -446,6 +439,16 @@ def max_2d_axis_0(arr):
     out = np.zeros(arr.shape[1], dtype=arr.dtype)
     for idx in range(arr.shape[1]):
         out[idx] = arr[:, idx].max()
+    return out
+
+
+@njit
+def var_2d_axis_0(arr):
+    out = np.zeros(arr.shape[1], dtype=arr.dtype)
+    for idx in range(arr.shape[1]):
+        this_arr = arr[:, idx]
+        avg = this_arr.mean()
+        out[idx] = ((this_arr - avg) ** 2).sum() / (this_arr.shape[0] - 1)
     return out
 
 
