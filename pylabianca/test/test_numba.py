@@ -57,7 +57,11 @@ def test_find_first():
     idx = _monotonic_find_first(values, 9)
     assert idx == 3
 
-    values = np.sort(np.random.randint(0, 100, size=120))
+    has_nine = False
+    while not has_nine:
+        values = np.random.randint(0, 100, size=120)
+        has_nine = 9 in values
+
     idx_nb = _monotonic_find_first(values, 9)
     assert np.all(values[idx_nb] == 9)
 
