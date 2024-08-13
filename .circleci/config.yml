@@ -32,6 +32,7 @@ jobs:
       - run:
           name: Run tests
           command: |
+            apt-get install -y sudo
             sudo apt update
             sudo apt-get -y install curl gnupg
             source activate pylabianca
