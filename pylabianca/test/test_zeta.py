@@ -5,7 +5,6 @@ import pandas as pd
 from scipy.io import loadmat
 
 import pylabianca as pln
-from pylabianca._zeta import ZETA
 
 
 def test_against_zetapy():
@@ -52,7 +51,7 @@ def test_against_zetapy():
     spk_epochs_sel = spk_epochs['orientation in [0, 90]']
 
     time_start = time.time()
-    z_val, p_val, dist = ZETA(
+    z_val, p_val, dist = pln.selectivity.zeta_test(
         spk_epochs_sel, compare='orientation', n_permutations=500,
         tmax=1., return_dist=True, backend='numpy', picks=0)
     time_taken_pln = time.time() - time_start
@@ -74,7 +73,7 @@ def test_against_zetapy():
     # if has_numba
     has_numba = pln.utils.has_numba()
     if has_numba:
-        z_val_numba, p_val_numba, dist_numba = ZETA(
+        z_val_numba, p_val_numba, dist_numba = pln.selectivity.zeta_test(
             spk_epochs_sel, compare='orientation', n_permutations=500,
             tmax=1., return_dist=True, backend='numba', picks=0)
 
@@ -90,10 +89,10 @@ def test_against_zetapy():
     spk_epochs.metadata = pd.DataFrame({'orientation': stim_ori_str})
 
     backend = 'numba' if has_numba else 'numpy'
-    z_val_n1, p_val_n1 = ZETA(
+    z_val_n1, p_val_n1 = pln.selectivity.zeta_test(
         spk_epochs, compare='orientation', n_permutations=100,
         backend='numpy', picks=0, significance='empirical')
-    z_val_n2, p_val_n2 = ZETA(
+    z_val_n2, p_val_n2 = pln.selectivity.zeta_test(
         spk_epochs, compare='orientation', n_permutations=100,
         backend=backend, picks=0, significance='both')
 
