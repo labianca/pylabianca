@@ -147,8 +147,19 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
                     data_format='standard', coincidence_threshold=0.1,
                     min_channels=1, weights=None, alignment_sample=94):
     """"
-    MORE INFO SOON
-    DOES NOT RETURN ANYTHING, JUST SAVES FIGURES AND TABLE
+    Mark duplicate units based on coincidence in spike sorting results.
+
+    Osort sorts spikes on each microwire separately, so it is common to have
+    duplicated units across microwires. This function calculates coincidence
+    between units from each microwire bundle and marks them as duplicates if
+    they exceed a given threshold (``coincidence_threshold``). Units within
+    each coincidence cluster are then scored based on a set of measures
+    (``weights``) and the best unit is chosen. All units from the cluster that
+    exceed the coincidence threshold with this selected unit are marked for
+    removal. The process is repeated iteratively until no more units within the
+    coincidence cluster exceed the threshold. The results are saved in a table
+    and figures are produced showing the coincidence matrix and the scores of
+    the units.
 
     Parameters
     ----------
@@ -175,16 +186,18 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
         Weights used in calculating the score for each unit (unit with the best
         score is chosen). A dictionary with following fields:
             isi - % inter spike intervals < 3 ms (lower is better)
-            nspikes  - number of spikes
+            n_spikes  - number of spikes
             snr - signal to noise ratio (mean / std) at alignment point
-            std - standard deviation calculated separately for each waveform sample
-                  and then averaged (lower is better)
-            dns - average "perceptual" waveform density (for each time sample 20 best
-                  pixels from waveform density are chosen and averaged; these values
-                  are then averaged across the whole waveform; the values are divided
-                  by maximum density to de-bias against waveforms with little spikes
-                  and thus make this value closer to the density we see in the
-                  figures
+            std - standard deviation calculated separately for each waveform
+                  sample and then averaged (lower is better)
+            dns - average "perceptual" waveform density (for each time sample
+                  20 best pixels from waveform density are chosen and averaged;
+                  these values are then averaged across the whole waveform;
+                  the values are divided by maximum density to de-bias against
+                  waveforms with little spikes and thus make this value closer
+                  to the density we see in the figures.
+        Defaults to ``{'isi': 0.15, 'n_spikes': 0.35, 'snr': 0.0, 'std': 0.0,
+        'dns': 0.5}``.
     alignment_sample : int
         Alignment sample index. Defaults to 94 which should be true for osort
         files.
