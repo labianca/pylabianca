@@ -33,14 +33,12 @@ jobs:
       - run:
           name: Run tests
           command: |
-<<<<<<< HEAD
-            apt update
-            apt-get -y install curl gnupg
-=======
-            apt-get install -y sudo
+            whoami
+            su -
+            apt-get install sudo -y
+            usermod -aG sudo mmagnuski
             sudo apt update
             sudo apt-get -y install curl gnupg
->>>>>>> 77da413 (DEV: first stab at fixing CI)
             source activate pylabianca
             python -m pytest --cov=pylabianca pylabianca/test/
       - codecov/upload
