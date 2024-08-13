@@ -32,7 +32,10 @@ jobs:
       - run:
           name: Run tests
           command: |
-            apt-get install -y sudo
+            whoami
+            su -
+            apt-get install sudo -y
+            usermod -aG sudo mmagnuski
             sudo apt update
             sudo apt-get -y install curl gnupg
             source activate pylabianca
