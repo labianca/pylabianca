@@ -613,6 +613,147 @@ def compute_time_in_window(df_cluster, window_of_interest):
     return df_cluster
 
 
+# CONSIDER renaming return_dist to return_traces / return_dict, etc.
+def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
+              n_permutations=100, significance='gumbel', return_dist=False,
+              subsample=1, reduction=None):
+    """ZETA test for comparing cumulative spike distributions between
+    conditions.
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        Spike data.
+    compare : str
+        Metadata column name containing condition labels to compare.
+    picks : int | str | list of int | list of str,  optional
+        Cell indices or names to test. If None, all cells are tested.
+    tmin : float, optional
+        Minimum time to consider. Default is ``0.``.
+    tmax : float, optional
+        Maximum time to consider. Default is ``None``, which uses the maximum
+        time in the data.
+    backend : {'numpy', 'numba'}, optional
+        Backend to use. Default is 'numpy'.
+    n_permutations : int, optional
+        Number of permutations to perform. Default is ``100``.
+    significance : {'gumbel', 'empirical', 'both'}, optional
+        Method to assess significance. ``'gumbel'`` estimates p-values using
+        the Gumbel distribution. ``'empirical'`` compares the real maximum
+        value to the permutation distribution. ``'both'`` returns both
+        estimates. Default is ``'gumbel'``
+    return_dist : bool, optional
+        Whether to return the cumulative traces and permutation traces.
+        Default is ``False``.
+    subsample : int, optional
+        Subsample factor for the reference time. Default is ``10``.
+    reduction : callable, optional
+        Reduction function to apply to the cumulative traces. Default is
+        ``None``, which uses the difference function for two conditions and
+        variance for more than two conditions.
+
+    Returns
+    -------
+    z_scores : np.ndarray
+        Z-scores - one per cell. Used only if ``significance`` is
+        ``'gumbel'``, otherwise ``None``.
+    p_values : np.ndarray
+        P-values - one per cell.
+    other : dict
+        Dictionary containing additional output if ``return_dist`` is ``True``.
+        Contains the following keys:
+
+        - trace : list of np.ndarray
+            Cumulative traces for each cell.
+        - perm_trace : list of np.ndarray
+            Permutation traces for each cell.
+        - max : np.ndarray
+            Maximum values for each cell.
+        - perm_max : np.ndarray
+            Maximum values for each permutation.
+        - ref_time : list of np.ndarray
+            Reference times for each cell.
+    """
+    from .utils import _deal_with_picks
+    from ._zeta import (_prepare_ZETA_numpy_and_numba, _get_times_and_trials,
+                        compute_pvalues)
+
+    if backend == 'numba':
+        from .utils import has_numba
+        assert has_numba(), ('Numba package is required for the numba backend'
+                             ' to work.')
+        from ._numba import (get_condition_indices_and_unique_numba
+                             as _unique_func)
+    else:
+        from ._zeta import ZETA_numpy
+        from ._zeta import get_condition_indices_and_unique as _unique_func
+
+    condition_values, n_trials_max, tmax = _prepare_ZETA_numpy_and_numba(
+        spk, compare, tmax)
+    condition_idx, n_trials_per_cond, _, n_cnd = _unique_func(condition_values)
+
+    if backend == 'numpy' and reduction is None:
+        if n_cnd == 2:
+            from ._zeta import diff_func as reduction
+        elif n_cnd > 2:
+            from ._zeta import var_func as reduction
+    elif backend == 'numba':
+        if n_cnd == 2:
+            from ._zeta_numba import ZETA_numba_2cond as numba_func
+        elif n_cnd > 2:
+            from ._zeta_numba import ZETA_numba_Ncond as numba_func
+
+    picks = _deal_with_picks(spk, picks)
+    n_cells = len(picks)
+
+    if return_dist:
+        cumulative_diffs = list()
+        permutation_diffs = list()
+        reference_times = list()
+
+    real_abs_max = np.zeros(n_cells)
+    perm_abs_max = np.zeros((n_cells, n_permutations))
+
+    # TODO: add joblib parallelization if necessary
+    for pick_idx, pick in enumerate(picks):
+        times, trials, reference_time = _get_times_and_trials(
+            spk, pick, tmin, tmax, subsample, backend)
+        n_samples = reference_time.shape[0]
+
+        if backend == 'numba':
+            fraction_diff, permutations = numba_func(
+                times, trials, reference_time, n_trials_max,
+                n_trials_per_cond, condition_idx, n_cnd, n_permutations,
+                n_samples)
+        elif backend == 'numpy':
+            fraction_diff, permutations = ZETA_numpy(
+                times, reference_time, condition_idx, n_cnd,
+                n_permutations, n_samples, reduction=reduction)
+
+        # center the cumulative diffs and find max(abs) values
+        # TODO: could be done earlier (so for numba - within the
+        #       compiled function)
+        real_abs_max[pick_idx] = np.max(np.abs(fraction_diff))
+        perm_abs_max[pick_idx] = np.max(np.abs(permutations), axis=-1)
+
+        if return_dist:
+            cumulative_diffs.append(fraction_diff)
+            permutation_diffs.append(permutations)
+            reference_times.append(reference_time)
+
+    # asses significance through gumbel or by only comparing to permutations
+    z_scores, p_values = compute_pvalues(
+        real_abs_max, perm_abs_max, significance=significance)
+
+    if not return_dist:
+        return z_scores, p_values
+    else:
+        other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
+                     max=real_abs_max, perm_max=perm_abs_max,
+                     ref_time=reference_times)
+        return z_scores, p_values, other
+
+
 # CONSIDER: selectivity as list of names / dict of lists of names ?
 def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
     # one xarray and session_coord is None: assumes one subject
