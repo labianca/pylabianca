@@ -30,48 +30,20 @@ def test_numba_select_spikes():
     assert (out == expected).all()
 
 
-def test_get_trial_boundaries():
-    from pylabianca._numba import (
-        _get_trial_boundaries as _get_trial_boundaries_numba)
+def test_trial_boundaries():
+    from pylabianca.utils import has_numba
     from pylabianca.utils import _get_trial_boundaries
 
-    trials = np.sort(np.random.randint(0, 13, size=253))
-    times = np.random.rand(len(trials)) * 2. - 0.5
-    spk = pln.SpikeEpochs([times], [trials])
-
-    # get boundaries
-    tri_bnd, tri_num = _get_trial_boundaries(spk, 0)
-    tri_bnd_numba, tri_num_numba = _get_trial_boundaries_numba(spk, 0)
-    assert (tri_num == tri_num_numba).all()
-    assert (tri_bnd == tri_bnd_numba).all()
-
-
-def test_find_first():
-    from pylabianca._numba import _monotonic_find_first
-
-    values = np.array([2, 5, 8, 9, 10], dtype='int64')
-    idx = _monotonic_find_first(values, 9)
-    assert idx == 3
-
-    has_nine = False
-    while not has_nine:
-        values = np.random.randint(0, 100, size=120)
-        has_nine = 9 in values
-
-    idx_nb = _monotonic_find_first(values, 9)
-    assert np.all(values[idx_nb] == 9)
-
-    idx_np = np.where(values == 9)[0][0]
-    assert idx_nb == idx_np
-
-
-def test_trial_boundaries_numba():
-    from pylabianca.utils import has_numba
-
     if has_numba:
+        from pylabianca._numba import (
+            _get_trial_boundaries as _get_trial_boundaries_numba_high_level)
         from pylabianca._numba import _get_trial_boundaries_numba
+
+        # TEST 1
+        # ------
         n_tri = 200
         per_tri = (0, 35)
+
         trials = list()
         times = list()
         for tri in range(n_tri):
@@ -92,3 +64,36 @@ def test_trial_boundaries_numba():
 
         assert (boundaries == boundaries2).all()
         assert (tri == tri2).all()
+
+        # TEST 2
+        # ------
+        trials = np.sort(np.random.randint(0, 13, size=253))
+        times = np.random.rand(len(trials)) * 2. - 0.5
+        spk = pln.SpikeEpochs([times], [trials])
+
+        # get boundaries
+        tri_bnd, tri_num = _get_trial_boundaries(spk, 0)
+        tri_bnd_numba, tri_num_numba = (
+            _get_trial_boundaries_numba_high_level(spk, 0)
+        )
+        assert (tri_num == tri_num_numba).all()
+        assert (tri_bnd == tri_bnd_numba).all()
+
+
+def test_find_first():
+    from pylabianca._numba import _monotonic_find_first
+
+    values = np.array([2, 5, 8, 9, 10], dtype='int64')
+    idx = _monotonic_find_first(values, 9)
+    assert idx == 3
+
+    has_nine = False
+    while not has_nine:
+        values = np.random.randint(0, 100, size=120)
+        has_nine = 9 in values
+
+    idx_nb = _monotonic_find_first(values, 9)
+    assert np.all(values[idx_nb] == 9)
+
+    idx_np = np.where(values == 9)[0][0]
+    assert idx_nb == idx_np
