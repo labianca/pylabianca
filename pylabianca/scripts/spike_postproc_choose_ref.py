@@ -43,7 +43,7 @@ save_fig_dir = (r'G:\.shortcut-targets-by-id\1XlCWYRlHP0YDbmo3p1NGIC6lN9'
                 'XZ8l1O\switchorder\derivatives\sel_ref\sub-U05\ses-main')
 
 # data format - 'standard' or 'mm' (depends on how you exported the curated units)
-data_format = 'mm'
+data_format = 'standard'
 
 # minimum coincidence threshold for coincidence cluster formation
 coincidence_threshold = 0.25
@@ -75,7 +75,9 @@ algn_smpl = 94
 
 # read the file
 print('Reading files - including all waveforms...')
-spk = pln.io.read_osort(data_dir, waveform=True, format=data_format)
+use_usenegative = False if data_format == 'mm' else True
+spk = pln.io.read_osort(data_dir, waveform=True, format=data_format,
+                        use_usenegative=use_usenegative)
 print('done.')
 
 # remove units with no spikes
