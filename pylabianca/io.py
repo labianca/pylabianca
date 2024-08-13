@@ -314,7 +314,7 @@ def read_combinato(path, label=None, alignment='both'):
 
 
 def read_osort(path, waveform=True, channels='all', format='mm',
-               progress=True):
+               progress=True, use_usenegative=False):
     '''Read osort sorting results.
 
     The mm format can be obtained using updateSORTINGresults_mm matlab
@@ -340,6 +340,9 @@ def read_osort(path, waveform=True, channels='all', format='mm',
             information
     progress : bool
         Whether to show progress bar. Defaults to ``True``.
+    use_usenegative : bool
+        Whether to use the ``usenegative`` field to select units. Defaults to
+        ``False``. Works only with the ``'standard'`` format.
 
     Returns
     -------
@@ -355,6 +358,11 @@ def read_osort(path, waveform=True, channels='all', format='mm',
     if not good_format:
         msg = f'Unrecognized format "{format}".'
         raise ValueError(msg)
+
+    if use_usenegative and format == 'mm':
+        raise ValueError('The "usenegative" field is not available in the '
+                         'mm format. mm format keeps the selected units only '
+                         'during the export.')
 
     one_file = not op.isdir(path)
 
@@ -397,6 +405,8 @@ def read_osort(path, waveform=True, channels='all', format='mm',
         # var_names = ['assignedNegative', '', '', 'newTimestampsNegative']
         if waveform:
             var_names.append('newSpikesNegative')
+        if use_usenegative:
+            var_names.append('useNegative')
 
         translate = {'cluster_id': 'assignedNegative',
                      'timestamp': 'newTimestampsNegative',
@@ -455,10 +465,13 @@ def read_osort(path, waveform=True, channels='all', format='mm',
                 waveforms.extend([x[0] for x in data['waveform']])
         else:
             # find cluster ids
-            cluster_ids = np.unique(this_cluster_id)
-            msk = np.in1d(cluster_ids, ignore_cluster)
-            if msk.any():
-                cluster_ids = cluster_ids[~msk]
+            if not use_usenegative:
+                cluster_ids = np.unique(this_cluster_id)
+                msk = np.in1d(cluster_ids, ignore_cluster)
+                if msk.any():
+                    cluster_ids = cluster_ids[~msk]
+            else:
+                cluster_ids = data['useNegative'].ravel().astype('int64')
             cluster_id.append(cluster_ids)
 
             # find channel
