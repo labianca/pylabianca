@@ -93,22 +93,23 @@ def turn_to_percentiles(arr):
 
 
 def plot_scores(spk_sel, score):
-    from string import ascii_letters
+    from string import printable as use_letters
 
     n_uni = len(spk_sel)
-    letters = ascii_letters[1:n_uni + 1]
+    first = use_letters[0]
+    letters = use_letters[1:n_uni + 1]
     ax = plt.figure(constrained_layout=True, figsize=(12, 6)).subplot_mosaic(
-        'a' * n_uni + '\n' + letters,
+        first * n_uni + '\n' + letters,
          gridspec_kw={'height_ratios': [3, 1]}
     )
 
     # plot scores
-    ax['a'].plot(score, marker='o')
+    ax[first].plot(score, marker='o')
 
     # plot best score in red
     best_idx = np.nanargmax(score)
-    ax['a'].plot(best_idx, score[best_idx], marker='o', markersize=18,
-                 markerfacecolor='r')
+    ax[first].plot(best_idx, score[best_idx], marker='o', markersize=18,
+                   markerfacecolor='r')
 
     # add waveforms at the bottom
     letters = list(letters)
@@ -117,8 +118,8 @@ def plot_scores(spk_sel, score):
         ax[letters[ix]].set_title(f'{len(spk_sel.timestamps[ix])} spikes')
         ax[letters[ix]].set(yticks=[], xticks=[])
 
-    ax['a'].set_ylabel('Weighted score', fontsize=14)
-    return ax['a'].figure
+    ax[first].set_ylabel('Weighted score', fontsize=14)
+    return ax[first].figure
 
 
 # check channel packs
