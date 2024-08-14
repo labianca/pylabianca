@@ -766,6 +766,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     clusters_x_sorting = np.argsort([np.where(x)[0][0] for x in clusters])
 
     if pvals_significant.any():
+        from borsar.stats import format_pvalue
         from borsar.viz import highlight
         from borsar.stats import format_pvalue
 
