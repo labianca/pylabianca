@@ -33,12 +33,8 @@ jobs:
       - run:
           name: Run tests
           command: |
-            whoami
-            su -
-            apt-get install sudo -y
-            usermod -aG sudo mmagnuski
-            sudo apt update
-            sudo apt-get -y install curl gnupg
+            apt update
+            apt-get -y install curl gnupg
             source activate pylabianca
             python -m pytest --cov=pylabianca pylabianca/test/
       - codecov/upload
