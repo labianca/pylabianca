@@ -29,6 +29,7 @@ jobs:
             fi
             mamba install pytest -y;
             hash -r pytest
+            pip install pytest-cov
       - run:
           name: Run tests
           command: |
