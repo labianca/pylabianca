@@ -1,6 +1,6 @@
 [project]
 name = "pylabianca"
-version = "0.2.0"
+version = "0.4.dev0"
 description = "Package for analysis of single-neuron spike data."
 maintainers = [
     { name = "Mikołaj Magnuski", email = "mmagnuski@swps.edu.pl" },

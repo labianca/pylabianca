@@ -5,4 +5,4 @@ from .viz import plot_shaded, plot_raster, plot_spikes  # NOQA
 from .spikes import SpikeEpochs, Spikes  # NOQA
 from .selectivity import depth_of_selectivity, explained_variance  # NOQA
 
-__version__ = '0.3.dev0'
+__version__ = '0.4.dev0'

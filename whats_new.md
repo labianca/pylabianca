@@ -1,6 +1,10 @@
 # What's new
 
-## DEV (upcoming version 0.3)
+## DEV (upcoming version 0.4)
+
+<br/><br/>
+
+## Version 0.3
 * much increased code coverage of automated tests
 
 <br/>
