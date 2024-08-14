@@ -282,7 +282,7 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
         measures['snr'][ix] = np.abs(waveform_amplitude) / waveform_std
 
         # ISI
-        isi_val = np.diff(spk_epo.time[ix])s
+        isi_val = np.diff(spk_epo.time[ix])
         prop_below_3ms = (isi_val < 0.003).mean()
         measures['isi'][ix] = prop_below_3ms
 
@@ -320,7 +320,10 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
             if len(pack_idx) < 2: similarity_per_pack.append(None)
             else:
                 this_spk = spk.copy().pick_cells(pack_idx)
-                similarity = compute_spike_coincidence_matrix(this_spk)
+                similarity = (
+                    pln.spike_distance.compute_spike_coincidence_matrix(
+                        this_spk)
+                )
                 similarity_per_pack.append(similarity)
 
         print('done.')
