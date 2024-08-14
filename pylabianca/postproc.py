@@ -348,7 +348,7 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
     for pack_idx, (pack_units_idx, similarity) in enumerate(
             zip(units_in_pack, similarity_per_pack)):
 
-        if similarity is None:
+        if similarity is None or len(pack_units_idx) == 0:
             continue
 
         spk_pack = spk.copy().pick_cells(pack_units_idx)
