@@ -373,18 +373,18 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
             # -----------------------------
             measures_sel = np.stack(
                 [measures[name][cell_idx]
-                for name in ['n_spikes', 'snr', 'dns']
+                 for name in ['n_spikes', 'snr', 'dns']
                 ] +
                 [(1 - measures_prc[name][cell_idx])
-                for name in ['isi', 'std']],
+                 for name in ['isi', 'std']],
                 axis=1
             )
             measures_perc_sel = np.stack(
                 [measures_prc[name][cell_idx]
-                for name in ['n_spikes', 'snr', 'dns']
+                 for name in ['n_spikes', 'snr', 'dns']
                 ] +
                 [(1 - measures_prc[name][cell_idx])
-                for name in ['isi', 'std']]
+                 for name in ['isi', 'std']]
             , axis=1)
 
             score = (measures_perc_sel * weights_sel).sum(axis=1)
