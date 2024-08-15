@@ -27,9 +27,10 @@ def simple_xcorr_hist(times1, times2, bins):
 
 
 def test_xcorr():
+    has_numba = has_numba()
     if has_numba:
         from pylabianca._numba import (_xcorr_hist_auto_numba,
-                                    _xcorr_hist_cross_numba)
+                                       _xcorr_hist_cross_numba)
 
     spk = pln.io.read_plexon_nex(ft_data)
     spk_ep = spk.to_epochs()
