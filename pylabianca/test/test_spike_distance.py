@@ -27,8 +27,8 @@ def simple_xcorr_hist(times1, times2, bins):
 
 
 def test_xcorr():
-    has_numba = has_numba()
-    if has_numba:
+    _has_numba = has_numba()
+    if _has_numba:
         from pylabianca._numba import (_xcorr_hist_auto_numba,
                                        _xcorr_hist_cross_numba)
 
@@ -49,7 +49,7 @@ def test_xcorr():
 
     assert (hist == hist2).all()
 
-    if has_numba:
+    if _has_numba:
         hist3 = _xcorr_hist_auto_numba(times, bins)
         assert (hist2 == hist3).all()
 
