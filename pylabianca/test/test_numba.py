@@ -1,6 +1,9 @@
+import pytest
 import numpy as np
+from .utils import has_numba
 
 
+@pytest.mark.skipif(not has_numba(), reason="requires numba")
 def test_monotonic_unique_counts():
     from pylabianca._numba import _monotonic_unique_counts
 
