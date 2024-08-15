@@ -333,7 +333,7 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
 
         if labels:
             use_ax[idx].set_xlabel(f'Time ({time_unit})')
-            use_ax[idx].set_ylabel('Amplitude ($\mu$V)')
+            use_ax[idx].set_ylabel(r'Amplitude ($\mu$V)')
             use_ax[idx].set_title(spk.cell_names[unit_idx])
 
         if upsample > 1:
