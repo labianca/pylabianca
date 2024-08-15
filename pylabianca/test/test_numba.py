@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from .utils import has_numba
+from pylabianca.utils import has_numba
 
 
 @pytest.mark.skipif(not has_numba(), reason="requires numba")
