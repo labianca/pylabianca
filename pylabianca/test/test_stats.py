@@ -6,7 +6,8 @@ import pylabianca as pln
 
 
 def test_permutation_test():
-    ttest_ind_uneq = partial(ttest_ind, equal_var=False)
+    # current borsar does not have ttest_ind_no_p with equal_var=False
+    ttest_ind_eq = partial(ttest_ind, equal_var=True)
 
     arr1 = np.random.rand(15, 10)
     arr2 = np.random.rand(15, 10)
@@ -15,7 +16,7 @@ def test_permutation_test():
 
     paireds = [True, False, False]
     array_comb = [(arr1, arr2), (arr1, arr3), (arr2, arr3, arr4)]
-    stat_funs = [ttest_rel, ttest_ind_uneq, f_oneway]
+    stat_funs = [ttest_rel, ttest_ind_eq, f_oneway]
 
 
     for arrays, paired, stat_fun in zip(array_comb, paireds, stat_funs):
