@@ -698,9 +698,12 @@ def download_test_data():
     # check if test data exist
     data_dir = get_data_path()
     check_files = [
-        'ft_spk_epoched.mat', 'monkey_stim.csv', ('p029_sort_final_01_events'
-        '.mat'), r'test_osort_data\sub-U04_switchorder\CSCA130_mm_format.mat',
-        r'test_neuralynx\sub-U06_ses-screening_set-U6d_run-01_ieeg\CSC129.ncs'
+        'ft_spk_epoched.mat', 'monkey_stim.csv',
+        'p029_sort_final_01_events.mat',
+        op.join('test_osort_data', 'sub-U04_switchorder',
+                'CSCA130_mm_format.mat'),
+        op.join('test_neuralynx', 'sub-U06_ses-screening_set-U6d_run-01_ieeg',
+                'CSC129.ncs')
     ]
 
     if all([op.isfile(op.join(data_dir, f)) for f in check_files]):
