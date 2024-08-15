@@ -67,6 +67,6 @@ def test_xcorr():
     # for some reason sometimes one spike gets in the adjacent bin
     assert (hist1 == hist2).mean() > 0.95
 
-    if has_numba:
+    if _has_numba:
         hist3 = _xcorr_hist_cross_numba(times1, times2, bins)
         assert (hist2 == hist3).mean() > 0.95
