@@ -36,7 +36,8 @@ jobs:
             apt update
             apt-get -y install curl gnupg
             source activate pylabianca
-            python -m pytest --cov=pylabianca pylabianca/test/
+            python -m pytest --cov=pylabianca pylabianca/test/ \
+                             --cov-report xml:"./coverage.xml"
       - codecov/upload
 
 workflows:
