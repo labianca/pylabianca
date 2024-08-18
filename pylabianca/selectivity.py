@@ -394,11 +394,11 @@ def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
     cols += add_cols
 
     if calculate_pev:
-        cols += ['pev']
+        cols += ['PEV']
     if calculate_dos:
         cols += ['DoS']
     if calculate_peak_pev:
-        cols += ['peak_pev']
+        cols += ['peak_PEV']
     if baseline_window is not None:
         cols += ['FR_vs_baseline']
 
