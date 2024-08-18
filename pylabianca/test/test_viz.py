@@ -50,3 +50,15 @@ def test_plot_shaded():
     for line1, line2 in zip(ax1.lines, ax2.lines):
         assert (line1.get_xdata() == line2.get_xdata()).all()
         assert (line1.get_ydata() == line2.get_ydata()).all()
+
+
+def test_plot_raster():
+    spk = create_random_spikes(n_cells=1)
+
+    ax = pln.viz.plot_raster(spk)
+
+    for idx, tri in enumerate(np.unique(spk.trial[0])):
+        tri_msk = spk.trial[0] == tri
+        time_real = spk.time[0][tri_msk]
+        time_plot = ax.collections[idx].get_positions()
+        assert (time_real == time_plot).all()
