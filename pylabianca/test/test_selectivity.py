@@ -97,6 +97,7 @@ def test_cluster_based_selectivity():
     )
     spk.cellinfo = pd.DataFrame(
         {'cell_type': ['A'], 'region': ['AMY'], 'quality': [0.78]}
+    )
     fr_orig = spk.spike_density(fwhm=0.2)
 
     # add effect to one condition
