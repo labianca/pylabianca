@@ -452,7 +452,7 @@ def _characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
 
     # copy info from cellinfo
     if cellinfo_row is not None:
-        for col in cellinfo_row.columns:
+        for col in cellinfo_row.index:
             df_cluster.loc[0, col] = cellinfo_row[col]
 
     # calculate depth of selectivity for each selective window
