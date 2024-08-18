@@ -4,6 +4,8 @@ import xarray as xr
 from scipy.ndimage import gaussian_filter1d
 import pylabianca as pln
 
+import pytest
+
 
 def test_plot_shaded():
     # create random xarray
@@ -21,14 +23,10 @@ def test_plot_shaded():
         coords={'time': times})
 
     # %%
-
-    # error when doing
-    # pln.plot_shaded(xarr1)
-    #
-    # it should test that the array is too big (without groupby dim)
-    # or in future plot multi-lines for each element of the left fim (?)
-
-    ax = pln.plot_shaded(xarr1, groupby='cell')
+    msg_to_match = 'DataArray contains too many dimensions'
+    with pytest.raises(ValueError, match=msg_to_match):
+        pln.plot_shaded(xarr1)
+        ax = pln.plot_shaded(xarr1, groupby='cell')
 
     # has n_cells lines, each n_times long
     assert len(ax.lines) == n_cells
