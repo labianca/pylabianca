@@ -91,10 +91,12 @@ def test_cluster_based_selectivity():
     spk = pln.utils.create_random_spikes(
         n_cells=1, n_trials=50, n_spikes=(5, 15))
 
-    # add metadata
+    # add metadata and cellinfo
     spk.metadata = pd.DataFrame(
         {'cond': np.concatenate([np.ones(25), np.ones(25) * 2])}
     )
+    spk.cellinfo = pd.DataFrame(
+        {'cell_type': ['A'], 'region': ['AMY'], 'quality': [0.78]}
     fr_orig = spk.spike_density(fwhm=0.2)
 
     # add effect to one condition
@@ -114,10 +116,16 @@ def test_cluster_based_selectivity():
     # test that effect is present
     df = pln.selectivity.cluster_based_selectivity(
         fr_effect, 'cond', n_permutations=250, calculate_pev=True,
-        calculate_peak_pev=True)
+        calculate_peak_pev=True, copy_cellinfo=['region', 'quality'])
 
     msk = df.pval < 0.05
     assert msk.any()
+
+    # make sure relevant cellinfo columns were copied
+    assert 'region' in df.columns
+    assert 'quality' in df.columns
+    assert np.unique(df.region)[0] == 'AMY'
+    assert np.isclose(df.quality[0], 0.78)
 
     # "int_toi" and "selective" columns are added by assess_selectivity
     # function, so they should not be present in the original data
