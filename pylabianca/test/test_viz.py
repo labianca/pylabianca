@@ -17,10 +17,11 @@ def test_plot_shaded():
     data = gaussian_filter1d(data, sigma=15)
 
     # add cell names
+    cell_names = [f'cell_{i:02d}' for i in range(n_cells)]
 
     xarr1 = xr.DataArray(
         data, dims=['cell', 'trial', 'time'],
-        coords={'time': times})
+        coords={'cell': cell_names, 'time': times})
 
     msg_to_match = 'DataArray contains too many dimensions'
     with pytest.raises(ValueError, match=msg_to_match):
@@ -37,7 +38,13 @@ def test_plot_shaded():
     # line has correct y values
     assert (line.get_ydata() == xarr1.isel(cell=idx).mean(dim='trial')).all()
 
-    # LATER: check that there is legend present with correct labels
+    # check that there is legend present with correct labels
+    leg = ax.get_legend()
+    leg.get_title().get_text() == 'cell:'
+
+    for idx, txt in enumerate(leg.get_texts()):
+        this_text = txt.get_text()
+        assert this_text == cell_names[idx]
 
     # groupby dim should be removed from auto-finding reduce_dim
     ax1 = pln.plot_shaded(xarr1, groupby='trial', legend=False)
