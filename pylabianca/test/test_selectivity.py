@@ -8,7 +8,7 @@ from pylabianca.selectivity import compute_selectivity_continuous
 
 
 def test_selectivity_continuous():
-    spk_epochs = pln.utils.create_random_spikes(
+    spk_epochs = create_random_spikes(
         n_cells=20, n_trials=60, n_spikes=(10, 50))
 
     # add metadata
@@ -68,7 +68,7 @@ def test_selectivity_continuous():
         assert all([coo in results[key].coords for coo in cellinfo.columns])
 
     # test also in time with two conditions
-    spk = pln.utils.create_random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
+    spk = create_random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
 
     # add metadata
     spk.metadata = pd.DataFrame(
@@ -76,7 +76,6 @@ def test_selectivity_continuous():
     )
     fr = spk.spike_density(fwhm=0.2, sfreq=100.)
 
-    # %%
     sel = pln.selectivity.compute_selectivity_continuous(
         fr, compare='cond', n_jobs=2)
 
@@ -88,8 +87,7 @@ def test_selectivity_continuous():
 
 def test_cluster_based_selectivity():
     # create random spikes
-    spk = pln.utils.create_random_spikes(
-        n_cells=1, n_trials=50, n_spikes=(5, 15))
+    spk = create_random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
 
     # add metadata and cellinfo
     spk.metadata = pd.DataFrame(
@@ -102,7 +100,7 @@ def test_cluster_based_selectivity():
 
     # add effect to one condition
     window, _ = _symmetric_window_samples(winlen=1., sfreq=500.)
-    gauss = pln.utils._gauss_kernel_samples(window, gauss_sd=100)
+    gauss = _gauss_kernel_samples(window, gauss_sd=100)
     gauss /= gauss.max()
     n_gauss = len(gauss)
 
