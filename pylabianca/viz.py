@@ -53,6 +53,9 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     if reduce_dim is None:
         auto_reduce_dims = ['trial', 'fold', 'perm', 'permutation', 'cell',
                             'spike']
+        if groupby is not None and groupby in auto_reduce_dims:
+            auto_reduce_dims.remove(groupby)
+
         for dim_name in auto_reduce_dims:
             if dim_name in arr.dims:
                 reduce_dim = dim_name
