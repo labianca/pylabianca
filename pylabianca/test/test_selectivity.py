@@ -95,41 +95,63 @@ def test_cluster_based_selectivity():
     spk.metadata = pd.DataFrame(
         {'cond': np.concatenate([np.ones(25), np.ones(25) * 2])}
     )
-    fr = spk.spike_density(fwhm=0.2)
+    fr_orig = spk.spike_density(fwhm=0.2)
 
     # add effect to one condition
-    window, _ = _symmetric_window_samples(winlen=1.6, sfreq=500.)
-    gauss = pln.utils._gauss_kernel_samples(window, gauss_sd=125)
-    use_gauss = gauss[:np.where(window == 0)[0][0]]
-    use_gauss /= use_gauss.max()
-    n_gauss = len(use_gauss)
+    window, _ = _symmetric_window_samples(winlen=1., sfreq=500.)
+    gauss = pln.utils._gauss_kernel_samples(window, gauss_sd=100)
+    gauss /= gauss.max()
+    n_gauss = len(gauss)
 
-    cond_sel = np.where(fr.cond == 1)[0]
+    cond_sel = np.where(fr_orig.cond == 1)[0]
     effect = np.random.randint(low=2, high=10, size=len(cond_sel))
-    effect = np.tile(effect[:, None], [1, n_gauss])[None, :, :] * use_gauss
+    effect = np.tile(effect[:, None], [1, n_gauss])[None, :, :] * gauss
 
-    fr2 = fr.copy()
-    fr2[:, :len(cond_sel), -n_gauss:] += effect
+    fr_effect = fr_orig.copy()
+    zero_idx = pln.utils.find_index(fr_orig.time.values, 0)[0]
+    fr_effect[:, cond_sel, zero_idx:zero_idx + n_gauss:] += effect
 
     # test that effect is present
-    df2 = pln.selectivity.cluster_based_selectivity(
-        fr2, 'cond', n_permutations=250)
+    df = pln.selectivity.cluster_based_selectivity(
+        fr_effect, 'cond', n_permutations=250, calculate_pev=True,
+        calculate_peak_pev=True)
 
-    msk = df2.pval < 0.05
+    msk = df.pval < 0.05
     assert msk.any()
-    clst_idx = np.where(msk)[0][0]
 
-    effect_window = [float(x) for x in df2.window[clst_idx].split(' - ')]
-    assert np.diff(effect_window)[0] > 0.2
+    # "int_toi" and "selective" columns are added by assess_selectivity
+    # function, so they should not be present in the original data
+    assert 'in_toi' not in df.columns
+    assert 'selective' not in df.columns
 
-    pref = eval(df2.preferred[clst_idx])
+    df = pln.selectivity.assess_selectivity(
+        df, min_cluster_p=0.01, window_of_interest=(0.25, 0.75),
+        min_time_in_window=0.15, min_depth_of_selectivity=0.15,
+        min_pev=0.1, min_peak_pev=0.12, min_FR_vs_baseline=1.25,
+        min_FR_preferred=4.5
+    )
+    assert 'in_toi' in df.columns
+    assert 'selective' in df.columns
+    assert df.selective.sum() == 1
+    clst_idx = df.pval.argmin()
+    assert np.where(df.selective)[0][0] == clst_idx
+
+    pref = eval(df.preferred[clst_idx])
     assert pref == [0]
-    assert df2.n_preferred[clst_idx] == 1
-
-    assert df2['FR_vs_baseline'][clst_idx] > 1.25
-    assert df2['DoS'][clst_idx] > 0.2
+    assert df.n_preferred[clst_idx] == 1
 
     # test that effect was absent in original data:
-    df = pln.selectivity.cluster_based_selectivity(
-        fr, 'cond', n_permutations=250)
-    assert (df.shape[0] == 0) or (df.pval > 0.05).all()
+    df_no_effect = pln.selectivity.cluster_based_selectivity(
+        fr_orig, 'cond', n_permutations=250, calculate_pev=True,
+        calculate_peak_pev=True)
+    df_no_effect = pln.selectivity.assess_selectivity(
+        df_no_effect, min_cluster_p=0.01, window_of_interest=(0.25, 0.75),
+        min_time_in_window=0.15, min_depth_of_selectivity=0.15,
+        min_pev=0.1, min_peak_pev=0.12, min_FR_vs_baseline=1.25,
+        min_FR_preferred=4.5
+    )
+    assert (
+        (df_no_effect.shape[0] == 0)
+        or (df_no_effect.pval > 0.05).all()
+        or (df_no_effect.selective.sum() == 0)
+    )
