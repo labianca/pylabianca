@@ -252,13 +252,13 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
     # (assuming each wire pack is 8, starting from first_channel)
     packs = list()
     current_ch_idx = first_channel
-    for idx in range(n_packs):
+    for _ in range(n_packs):
         this_pack = np.arange(current_ch_idx, current_ch_idx + 8)
         packs.append(this_pack)
         current_ch_idx += 8
 
     units_in_pack = [np.where(np.in1d(unit_channel, pack))[0]
-                    for pack in packs]
+                     for pack in packs]
 
     # calculate measures
     # ------------------
