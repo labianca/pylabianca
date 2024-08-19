@@ -240,10 +240,11 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     return results
 
 
+# pbar is now True, which defaults to text tqdm, but could be 'auto'
 # TODO: create more progress bars and pass to cluster_based_test
 def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
                               n_permutations=1000, n_stat_permutations=0,
-                              n_jobs=1, pbar='notebook', correct_window=0.,
+                              n_jobs=1, pbar=True, correct_window=0.,
                               min_cluster_pval=0.1, calculate_pev=False,
                               calculate_dos=True, calculate_peak_pev=False,
                               stat_fun=None, baseline_window=(-0.5, 0),
@@ -277,8 +278,9 @@ def cluster_based_selectivity(frate, compare, cluster_entry_pval=0.05,
         available CPUs are used. ``n_jobs > 1`` requires the ``joblib``
         package.
     pbar : str | tqdm progressbar
-        Progressbar to use. The default is ``'notebook'`` which creates a
-        ``tqdm.notebook.tqdm`` progressbar.
+        Progressbar to use. The default is ``'text'`` which creates a
+        standard ``tqdm.tqdm`` text progressbar. Can also be ``'notebook'`` for
+        a Jupyter notebook progressbar or ``False`` to disable progressbar.
     correct_window : float
         The cluster time window will be extended by this value when calculating
         window average statistics (DoS, PEV). The default is ``0.``.

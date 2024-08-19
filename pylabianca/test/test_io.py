@@ -11,7 +11,8 @@ data_dir = get_data_path()
 
 
 def test_read_osort(tmp_path):
-    osort_dir = op.join(data_dir, r'test_osort_data\sub-U04_switchorder')
+    osort_dir = op.join(
+        data_dir, 'test_osort_data', 'sub-U04_switchorder')
 
     # read without waveforms
     spk = pln.io.read_osort(osort_dir, waveform=False)
@@ -65,7 +66,9 @@ def test_read_osort(tmp_path):
 
 def test_read_events_neuralynx():
     lynx_dir = op.join(
-        data_dir, r'test_neuralynx\sub-U06_ses-screening_set-U6d_run-01_ieeg')
+        data_dir, 'test_neuralynx',
+        'sub-U06_ses-screening_set-U6d_run-01_ieeg'
+    )
     events_df = pln.io.read_events_neuralynx(lynx_dir)
 
     # one experiment start trigger

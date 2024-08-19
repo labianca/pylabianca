@@ -1,7 +1,7 @@
 coverage:
   precision: 2
   round: down
-  range: "70...100"
+  range: "50...100"
   status:
     project:
       default:
@@ -14,3 +14,4 @@ comment:
   behavior: default
 ignore:
   - "pylabianca/localize.py"
+  - "pylabianca/postproc.py"

@@ -27,9 +27,10 @@ def simple_xcorr_hist(times1, times2, bins):
 
 
 def test_xcorr():
-    if has_numba:
+    _has_numba = has_numba()
+    if _has_numba:
         from pylabianca._numba import (_xcorr_hist_auto_numba,
-                                    _xcorr_hist_cross_numba)
+                                       _xcorr_hist_cross_numba)
 
     spk = pln.io.read_plexon_nex(ft_data)
     spk_ep = spk.to_epochs()
@@ -48,7 +49,7 @@ def test_xcorr():
 
     assert (hist == hist2).all()
 
-    if has_numba:
+    if _has_numba:
         hist3 = _xcorr_hist_auto_numba(times, bins)
         assert (hist2 == hist3).all()
 
@@ -66,6 +67,6 @@ def test_xcorr():
     # for some reason sometimes one spike gets in the adjacent bin
     assert (hist1 == hist2).mean() > 0.95
 
-    if has_numba:
+    if _has_numba:
         hist3 = _xcorr_hist_cross_numba(times1, times2, bins)
         assert (hist2 == hist3).mean() > 0.95

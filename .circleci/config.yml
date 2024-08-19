@@ -29,13 +29,15 @@ jobs:
             fi
             mamba install pytest -y;
             hash -r pytest
+            pip install pytest-cov
       - run:
           name: Run tests
           command: |
-            sudo apt update
-            sudo apt-get -y install curl gnupg
+            apt update
+            apt-get -y install curl gnupg
             source activate pylabianca
-            python -m pytest --cov=pylabianca pylabianca/
+            python -m pytest --cov=pylabianca pylabianca/test/ \
+                             --cov-report xml:"./coverage.xml"
       - codecov/upload
 
 workflows:

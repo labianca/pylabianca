@@ -422,8 +422,8 @@ def test_degenerate():
     assert spk.n_units() == 25
     assert (spk.n_spikes() == 0).mean() > 0.9
 
-    msg = ('window length \(``winlen=0.25``\) is longer than '
-           'available data \(0.0001\)')
+    msg = (r'window length \(``winlen=0.25``\) is longer than '
+           r'available data \(0.0001\)')
     with pytest.raises(ValueError, match=msg):
         fr = spk.spike_rate()
 

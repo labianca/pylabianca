@@ -1,4 +1,8 @@
 # pylabianca
+
+[![labianca](https://circleci.com/gh/labianca/pylabianca.svg?style=svg)](https://app.circleci.com/pipelines/github/labianca/pylabianca)
+[![codecov](https://codecov.io/gh/labianca/pylabianca/graph/badge.svg?token=HQ7KN5FWL5)](https://codecov.io/gh/labianca/pylabianca)
+
 Python tools for spike analysis.
 
 pylabianca:
@@ -24,10 +28,10 @@ pip install git+https://github.com/labianca/pylabianca
 See [whats_new.md](whats_new.md) for documentation of recent changes in pylabianca.
 
 ## docs
-Online docs are currently under construction.  
+Online docs are currently under construction.
 
 Below you can find jupyter notebook examples showcasing `pylabianca` features.
-* [introductory notebook](doc/intro_overview.ipynb) - a general overview using human intracranial spike data (sorted with Osort).  
+* [introductory notebook](doc/intro_overview.ipynb) - a general overview using human intracranial spike data (sorted with Osort).
 * [FiedTrip data example notebook](doc/fieldtrip_example.ipynb) - another broad overview using fieldtrip sample spike data from non-human primates.
 * [decoding example](doc/decoding_example.ipynb) - overview of decoding with pylabianca
 * [spike-triggered LFP analysis](doc/spike-triggered_analysis.ipynb) - use pylabianca and [`MNE-Python`](https://github.com/mne-tools/mne-python) to perform spike-triggered analysis of LFP

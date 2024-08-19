@@ -262,10 +262,25 @@ def check_modify_progressbar(pbar, total=None):
             from tqdm import tqdm
         pbar = tqdm(total=total)
     else:
-        from tqdm.notebook import tqdm_notebook
-        if isinstance(pbar, tqdm_notebook):
-            pbar.reset(total=total)
+        try:
+            from tqdm import tqdm
+            if isinstance(pbar, tqdm):
+                pbar.reset(total=total)
+            else:
+                from tqdm.notebook import tqdm_notebook
+                if isinstance(pbar, tqdm_notebook):
+                    pbar.reset(total=total)
+        except ImportError:
+            pbar = EmptyProgressbar(total=total)
     return pbar
+
+
+class EmptyProgressbar(object):
+    def __init__(self, total=None):
+        self.total = total
+
+    def update(self, val):
+        pass
 
 
 # TODO:
@@ -333,7 +348,7 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
 
         if labels:
             use_ax[idx].set_xlabel(f'Time ({time_unit})')
-            use_ax[idx].set_ylabel('Amplitude ($\mu$V)')
+            use_ax[idx].set_ylabel(r'Amplitude ($\mu$V)')
             use_ax[idx].set_title(spk.cell_names[unit_idx])
 
         if upsample > 1:
