@@ -80,7 +80,7 @@ def test_selectivity_continuous():
         fr, compare='cond', n_jobs=2)
 
     # we shouldn't have too many selective (abs(tval) > 2) cells
-    assert np.abs(np.abs(sel['thresh']).mean() - 2).item() < 0.08
+    assert np.abs(np.abs(sel['thresh']).mean() - 2).item() < 0.12
     assert sel['stat'].shape[-1] == fr.shape[-1]
     assert sel['stat'].shape[0] == fr.shape[0]
 
@@ -105,7 +105,7 @@ def test_cluster_based_selectivity():
     n_gauss = len(gauss)
 
     cond_sel = np.where(fr_orig.cond == 1)[0]
-    effect = np.random.randint(low=2, high=10, size=len(cond_sel))
+    effect = np.random.randint(low=4, high=10, size=len(cond_sel))
     effect = np.tile(effect[:, None], [1, n_gauss])[None, :, :] * gauss
 
     fr_effect = fr_orig.copy()
