@@ -53,25 +53,29 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     if reduce_dim is None:
         auto_reduce_dims = ['trial', 'fold', 'perm', 'permutation', 'cell',
                             'spike']
+        if groupby is not None and groupby in auto_reduce_dims:
+            auto_reduce_dims.remove(groupby)
+
         for dim_name in auto_reduce_dims:
             if dim_name in arr.dims:
                 reduce_dim = dim_name
                 break
 
-    if ('cell' in arr.coords and not reduce_dim == 'cell'
-        and len(arr.cell.shape) > 0):
-        if len(arr.coords['cell'] == 1):
-            arr = arr.isel(cell=0)
-        elif reduce_dim is None:
-            reduce_dim = 'cell'
-        else:
-            msg = ('DataArray contains more than one cell to plot - this is '
-                    'not supported.')
-            raise RuntimeError(msg)
-
     # if reduce_dim is still None - use the first dim for 2d array
     if reduce_dim is None:
         reduce_dim = arr.dims[0]
+
+    # make sure enough dimensions to plot
+    plot_ndim = arr.ndim - 1  # -1 for reduce_dim
+    if groupby is not None and groupby in arr.dims:
+        plot_ndim -= 1
+
+    if plot_ndim > 1:
+        msg = ('DataArray contains too many dimensions to plot. The number of'
+               f'dimensions in the array is {arr.ndim}, while {plot_ndim} '
+               'would have to be plotted (after accounting for the reduced '
+               'dimension and the groupby dimension).')
+        raise ValueError(msg)
 
     # auto-infer x_dim
     # ----------------

@@ -394,11 +394,11 @@ def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
     cols += add_cols
 
     if calculate_pev:
-        cols += ['pev']
+        cols += ['PEV']
     if calculate_dos:
         cols += ['DoS']
     if calculate_peak_pev:
-        cols += ['peak_pev']
+        cols += ['peak_PEV']
     if baseline_window is not None:
         cols += ['FR_vs_baseline']
 
@@ -452,7 +452,7 @@ def _characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
 
     # copy info from cellinfo
     if cellinfo_row is not None:
-        for col in cellinfo_row.columns:
+        for col in cellinfo_row.index:
             df_cluster.loc[0, col] = cellinfo_row[col]
 
     # calculate depth of selectivity for each selective window
@@ -550,6 +550,48 @@ def assess_selectivity(df_cluster, min_cluster_p=0.05,
                        min_depth_of_selectivity=None, min_pev=None,
                        min_peak_pev=None, min_FR_vs_baseline=None,
                        min_FR_preferred=None):
+    '''
+    Assess selectivity of clusters based on various criteria.
+
+    Parameters
+    ----------
+    df_cluster : pandas.DataFrame
+        Dataframe with cluster information.
+    min_cluster_p : float
+        Minimum p value for a cluster to be considered selective.
+    window_of_interest : tuple of float
+        Time window of interest.
+    min_time_in_window : float
+        Minimum time in the window of interest for a cluster to be considered
+        selective.
+    min_depth_of_selectivity : float
+        Minimum depth of selectivity for a cluster to be considered selective.
+    min_pev : float
+        Minimum percentage of explained variance for a cluster to be considered
+        selective.
+    min_peak_pev : float
+        Minimum peak percentage of explained variance for a cluster to be
+        considered selective.
+    min_FR_vs_baseline : float
+        Minimum firing rate vs baseline for a cluster to be considered
+        selective.
+    min_FR_preferred : float
+        Minimum firing rate of the preferred category for a cluster to be
+        considered selective.
+
+    Returns
+    -------
+    df_cluster : pandas.DataFrame
+        Dataframe with cluster information, including selectivity information.
+    '''
+    # skip if no clusters, adding empty columns
+    n_rows = df_cluster.shape[0]
+    if n_rows == 0:
+        df_cluster['selective'] = None
+        if min_time_in_window is not None:
+            df_cluster['in_toi'] = None
+        return df_cluster
+
     pval_msk = df_cluster.pval <= min_cluster_p
 
     def eval_column(column_name, min_value):

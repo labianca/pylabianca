@@ -1,5 +1,8 @@
 import numpy as np
+import xarray as xr
+
 from functools import partial
+from scipy.ndimage import gaussian_filter1d
 from scipy.stats import ttest_rel, ttest_ind, f_oneway
 
 import pylabianca as pln
@@ -31,3 +34,58 @@ def test_permutation_test():
 
         assert (pval_abs_diff < 0.25).all()
         assert (pval_abs_diff < 0.1).mean() > 0.6
+
+
+def test_cluster_based_test_from_permutations():
+    n_trials, n_times = 50, 100
+    times = np.linspace(-0.5, 1.5, num=n_times)
+    data = np.random.rand(n_trials, n_times)
+
+    # create conditions and add effect to one of them
+    conditions = np.array([1] * 25 + [2] * 25)
+    np.random.shuffle(conditions)
+    effect_cond_mask = conditions == 1
+    data[effect_cond_mask, 35:55] += 1
+
+    # smooth the data
+    data = gaussian_filter1d(data, sigma=20)
+
+    # create xarray
+    arr = xr.DataArray(
+        data, dims=['trial', 'time'],
+        coords={'time': times, 'cond': ('trial', conditions)}
+    )
+
+    # standard cluster-based test
+    n_permutations = 250
+    _, clst, pval = pln.stats.cluster_based_test(
+        arr, compare='cond', n_permutations=n_permutations)
+
+    # compute the effect
+    cond = conditions.copy()
+    msk = cond == 1
+    stat, _ = ttest_ind(data[msk, :], data[~msk, :])
+
+    # compute stats from permuted data
+    stat_perm = np.zeros((n_permutations, n_times))
+    for perm_idx in range(n_permutations):
+        np.random.shuffle(cond)
+        msk = cond == 1
+        this_stat, _ = ttest_ind(data[msk, :], data[~msk, :])
+        stat_perm[perm_idx, :] = this_stat
+
+    # turn to xarrays
+    stat = xr.DataArray(stat, dims=['time'], coords={'time': times})
+    stat_perm = xr.DataArray(stat_perm, dims=['perm', 'time'],
+                             coords={'time': times})
+
+    # compute test from permuted stats
+    clst2, _, pval2 = pln.stats.cluster_based_test_from_permutations(
+        stat, stat_perm)
+
+    # sort for comparison
+    srt_idx = pval2.argsort()
+    pval2 = pval2[srt_idx]
+    clst2 = [clst2[idx] for idx in srt_idx]
+
+    assert (clst2[0] == clst[0]).mean() >= 0.9
