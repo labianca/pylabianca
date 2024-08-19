@@ -918,7 +918,12 @@ def _handle_cell_names(cell_names, time):
         cell_names = np.array(['cell{:03d}'.format(idx)
                                for idx in range(n_cells)])
     else:
-        if not is_list_or_array(cell_names, dtype=(np.unicode_, np.object_)):
+        try:
+            str_type = np.unicode_
+        except AttributeError:
+            str_type = np.str_
+
+        if not is_list_or_array(cell_names, dtype=(str_type, np.object_)):
             raise ValueError('cell_names has to be list or object array.')
         if not is_iterable_of_strings(cell_names):
             raise ValueError('All elements of cell_names have to be strings.')
