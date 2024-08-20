@@ -766,10 +766,11 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
                               percentile=None, tail='both', groupby=None):
     '''
     Selectivity can be:
-    * boolean array / xarray (already thresholded)
-    * xarray with the selectivity statistic (requires thresholding)
+    * boolean xarray (already thresholded)
+    * xarray with the selectivity statistic (requires threshold argument)
     * xarray.Dataset containing the selectivity statistic, the threshold and
-        the null distribution (requires thresholding)
+        the null distribution (will be thrsholded, unless percentile is
+        defined)
 
     if percentiles is not defined (default None) and selectivity is not already
     a boolean array, threshold must be defined. Either in the threshold keyword
@@ -777,8 +778,18 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     '''
     import xarray as xr
 
+    # selectivity has to be DataArray or Dataset
+    if not isinstance(selectivity, (xr.DataArray, xr.Dataset)):
+        raise TypeError('`selectivity` must be an xarray.DataArray or '
+                        f'xarray.Dataset. Got {type(selectivity)}.')
+
+    # test that dims are ['cell'] or ['cell', 'time']
+    if not selectivity.dims[0] == 'cell':
+        raise ValueError('Selectivity must have "cell" as the first dimension')
+
     has_perc = percentile is not None
     has_dist = dist is not None
+
     if isinstance(selectivity, xr.Dataset):
         if 'thresh' in selectivity and threshold is None and not has_perc:
             threshold = selectivity['thresh']
