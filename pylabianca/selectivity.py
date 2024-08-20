@@ -718,7 +718,6 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
         return fr_sel
 
 
-# CONSIDER: when threshold is Real, then > threshold and < -threshold
 def threshold_selectivity(selectivity, threshold):
     '''Threshold selectivity statistics generating boolean selectivity.
 
@@ -745,11 +744,15 @@ def threshold_selectivity(selectivity, threshold):
         has_pos, has_neg = False, False
         if 'pos' in threshold.coords['tail']:
             has_pos = True
-            above = selectivity > threshold.sel(tail='pos')
+            use_thresh = (threshold.sel(tail='pos')
+                          if 'tail' in threshold.dims else threshold)
+            above = selectivity > use_thresh
 
         if 'neg' in threshold.coords['tail']:
             has_neg = True
-            below = selectivity < threshold.sel(tail='neg')
+            use_thresh = (threshold.sel(tail='neg')
+                          if 'tail' in threshold.dims else threshold)
+            below = selectivity < use_thresh
 
         has_both = has_pos and has_neg
         selected = (
