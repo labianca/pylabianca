@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 import pylabianca as pln
 from pylabianca.utils import (create_random_spikes, _symmetric_window_samples,
@@ -167,8 +168,6 @@ def test_cluster_based_selectivity():
 
 
 def test_threshold_selectivity():
-    import xarray as xr
-
     # create data
     n_cells, n_times = 10, 120
     times = np.linspace(-0.25, 1., num=n_times)
@@ -206,3 +205,45 @@ def test_threshold_selectivity():
     # raises error when trying to use a vector without labels (not an xarray):
     with pytest.raises(ValueError, match='Threshold must be '):
         pln.selectivity.threshold_selectivity(sel, thresh_pos)
+
+
+def test_compute_percent_selective():
+    # create cell x time data
+    n_cells, n_times = 10, 120
+    times = np.linspace(-0.25, 1., num=n_times)
+    sel_data = np.random.randn(n_cells, n_times)
+    sel = xr.DataArray(sel_data, dims=['cell', 'time'], coords={'time': times})
+
+    # threshold selectivity
+    thresh1 = 1.85
+    sel_bool = pln.selectivity.threshold_selectivity(sel, thresh1)
+
+    # compute_percent_selective requires xarray as input
+    with pytest.raises(TypeError, match='must be an xarray'):
+        perc = pln.selectivity.compute_percent_selective(sel_bool.data)
+
+    # works with boolean xarray
+    perc = pln.selectivity.compute_percent_selective(sel_bool)
+
+    # same as expected values
+    perc_exp = sel_bool.mean(dim='cell') * 100.
+    assert perc.dims == ('time',)
+    assert (perc.data == perc_exp).all()
+
+    # passing selectivity + threshold
+    # -> the same as passing bool after threshold_selectivity
+    perc2 = pln.selectivity.compute_percent_selective(
+        sel, thresh1)
+    assert (perc == perc2).all()
+
+    # using groupby
+    anat = np.array(['AMY'] * 4 + ['HIP'] * 6)
+    sel_anat = sel.assign_coords(anat=('cell', anat))
+    perc3 = pln.selectivity.compute_percent_selective(
+        sel_anat, thresh1, groupby='anat')
+
+    expected_amy = (np.abs(sel_anat.data[:4]) > thresh1).mean(axis=0) * 100.
+    expected_hip = (np.abs(sel_anat.data[4:]) > thresh1).mean(axis=0) * 100.
+
+    assert (perc3.sel(anat='AMY').data == expected_amy).all()
+    assert (perc3.sel(anat='HIP').data == expected_hip).all()
