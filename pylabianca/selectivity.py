@@ -825,7 +825,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     n_cells = len(selectivity.cell)
 
     n_total = sel.copy()
-    n_total.values = np.ones(n_cells)
+    n_total.values = np.ones(n_total.shape, dtype=int)
 
     if groupby is not None:
         n_tot = n_total.groupby(groupby).sum(dim='cell')
@@ -844,7 +844,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         from .stats import find_percentile_threshold
         perc_sel_perm = (n_sig_perm / n_tot) * 100.
         perm_thresh = find_percentile_threshold(
-            perm_data, percentile=95, tail='pos', perm_dim=0
+            perc_sel_perm, percentile=95, tail='pos', perm_dim=0
         )
         # TODO - return Dataset
         return perc_sel, perm_thresh, perc_sel_perm
