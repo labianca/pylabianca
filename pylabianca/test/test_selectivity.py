@@ -6,6 +6,8 @@ from pylabianca.utils import (create_random_spikes, _symmetric_window_samples,
                               _gauss_kernel_samples)
 from pylabianca.selectivity import compute_selectivity_continuous
 
+import pytest
+
 
 def test_selectivity_continuous():
     spk_epochs = create_random_spikes(
@@ -162,3 +164,45 @@ def test_cluster_based_selectivity():
         or (df_no_effect.pval > 0.05).all()
         or (df_no_effect.selective.sum() == 0)
     )
+
+
+def test_threshold_selectivity():
+    import xarray as xr
+
+    # create data
+    n_cells, n_times = 10, 120
+    times = np.linspace(-0.25, 1., num=n_times)
+    sel_data = np.random.randn(n_cells, n_times)
+    sel = xr.DataArray(sel_data, dims=['cell', 'time'], coords={'time': times})
+
+    # test with a scalar threshold
+    thresh1 = 1.85
+    sel_bool = pln.selectivity.threshold_selectivity(sel, thresh1)
+    assert (sel_bool.data == (np.abs(sel.data) > thresh1)).all()
+
+    # create a threshold array (pos and neg tail)
+    thresh_pos = 1 + np.random.rand(n_cells, n_times)
+    thresh_neg = (1 + np.random.rand(n_cells, n_times)) * -1
+    thresh = xr.DataArray(
+        np.stack([thresh_pos, thresh_neg], axis=0),
+        dims=['tail', 'cell', 'time'],
+        coords={'tail': ['pos', 'neg'], 'time': times})
+
+    # use both tails
+    expected_bool = (sel.data > thresh_pos) | (sel.data < thresh_neg)
+    sel_bool = pln.selectivity.threshold_selectivity(sel, thresh)
+    assert (sel_bool.data == expected_bool).all()
+
+    # only pos tail:
+    expected_bool = sel.data > thresh_pos
+    sel_bool = pln.selectivity.threshold_selectivity(sel, thresh.sel(tail='pos'))
+    assert (sel_bool.data == expected_bool).all()
+
+    # only neg tail:
+    expected_bool = sel.data < thresh_neg
+    sel_bool = pln.selectivity.threshold_selectivity(sel, thresh.sel(tail='neg'))
+    assert (sel_bool.data == expected_bool).all()
+
+    # raises error when trying to use a vector without labels (not an xarray):
+    with pytest.raises(ValueError, match='Threshold must be '):
+        pln.selectivity.threshold_selectivity(sel, thresh_pos)
