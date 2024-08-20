@@ -758,6 +758,8 @@ def threshold_selectivity(selectivity, threshold):
             below
         )
         return selected
+    else:
+        raise ValueError('Threshold must be a float or xarray.DataArray.')
 
 
 def compute_percent_selective(selectivity, threshold=None, dist=None,
