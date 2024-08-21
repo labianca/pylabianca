@@ -327,6 +327,27 @@ def test_epoching_vs_fieldtrip(spk_epochs):
             spk_epochs.time[ch_idx], spk_epo_test_ft.time[ch_idx])
 
 
+def test_epoching():
+    events = np.array(
+        [[3.5, 0, 1], [5.1, 0, 3], [12.3, 0, 1],
+         [15.7, 0, 1], [21.6, 0, 3], [28.9, 0, 1]]
+    )
+    delays = np.array([0.1, 0.35, 0.5])
+    timestamps = (events[:, [0]] + delays[None, :]).ravel()
+    spk = pln.Spikes([timestamps], sfreq=1.)
+
+    spk_epochs = spk.epoch(events, event_id=[1, 3], tmin=-0.25, tmax=0.6)
+    np.testing.assert_almost_equal(spk_epochs.time[0], np.tile(delays, 6))
+
+    # error when no events of the specified id are found
+    with pytest.raises(ValueError, match='No events of any '):
+        spk.epoch(events, event_id=[2, 4], tmin=-0.25, tmax=0.6)
+
+    # warning when some events are missing
+    with pytest.warns(UserWarning, match='Some event ids are missing'):
+        spk.epoch(events, event_id=[1, 2], tmin=-0.25, tmax=0.6)
+
+
 def test_metadata():
     spk = create_random_spikes()
 
