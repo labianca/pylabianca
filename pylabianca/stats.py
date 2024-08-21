@@ -172,7 +172,8 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 #      machinery into a separate xarray-agnostic function
 # ENH: return borsar.Clusters object as output
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
-                                         adjacency=None, percentile=5):
+                                         adjacency=None, percentile=5,
+                                         threshold=None):
     '''Performs a cluster-based test from precalculated permutations.
 
     This function should get data ready for cluster-based permutation test
@@ -206,6 +207,9 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
         the 2.5th (``percentile / 2``) and 97.5th (``100 - (percentile / 2)``)
         percentiles are used as thresholds. The percentile should be between
         0 and 100.
+    threshold : float
+        Threshold to use for clustering. If ``None`` then the threshold is
+        calculated using the ``percentile`` parameter.
 
     Returns
     -------
@@ -223,17 +227,20 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     assert isinstance(perm_data, xr.DataArray)
 
     perm_dim_name, _ = _find_dim(perm_data)
-    thresholds = find_percentile_threshold(
-        perm_data, perm_dim=perm_dim_name,
-        percentile=percentile, tail=tail, as_xarray=False
-    )
+
+    if threshold is None:
+        thresholds = find_percentile_threshold(
+            perm_data, perm_dim=perm_dim_name,
+            percentile=percentile, tail=tail, as_xarray=False
+        )
+    else:
+        thresholds = threshold
 
     # clusters on actual data
     clusters, cluster_stats = borsar.find_clusters(
         data.values, thresholds, backend='borsar', adjacency=adjacency)
 
     # check which are pos and which neg:
-    is_neg = cluster_stats < 0
     cluster_distr_pos = list()
     cluster_distr_neg = list()
 
@@ -276,7 +283,7 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
 
 
 # CONSIDER: move the xarray "clothing" function somewhere to utils
-#           something like this is used in many places of pylabianca
+#           something like this is used in compute_selectivity_continuous
 # CONSIDER: especially when using one-tail one may expect that percentile
 #           95 works adequately, not 5
 #           we later do 100 - percentile, but that seems counter-intuitive

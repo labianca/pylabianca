@@ -863,7 +863,38 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
 
 
 # TODO - move this to separate submodule .waveform ?
-def calculate_perceptual_waveform_density(spk, cell_idx):
+# TODO - the API could be better / simplified: low level function that
+#        takes just waveform array and high-level function that takes
+#        Spikes object and cell indices (currently only one cell is supported)
+def calculate_perceptual_waveform_density(spk, cell_idx, take_n=15):
+    """
+    Experimental measure of "perceptual" waveform density.
+
+    The goal is to provide a single value that would reflect the density of
+    the waveform in the similar way we perceive it on waveform density plots.
+
+    The measure is calculated as follows:
+    - calculate 2d histogram of the waveform
+    - correct the y range to remove extreme values that bias the 2d histogram
+      calculation
+    - take the top N values from each row
+    - normalize these values by the maximum value
+    - average the normalized values
+
+    Parameters
+    ----------
+    spk : Spikes | SpikeEpochs
+        Spike object to use.
+    cell_idx : int
+        Index of the cell to calculate the perceptual waveform density for.
+    take_n : int
+        How many top values to take from each row of the 2d histogram.
+
+    Returns
+    -------
+    dns : float
+        Perceptual waveform density.
+    """
     # get waveform 2d histogram image
     hist, _, ybins = (
         _calculate_waveform_density_image(
@@ -903,7 +934,7 @@ def calculate_perceptual_waveform_density(spk, cell_idx):
     # TODO: a better way would be to calculate mean from a spatial window
     #       around max, not the top N values
     hist_sort = np.sort(hist)[:, ::-1]
-    vals = (hist_sort[:, :15] / hist_sort.max()).mean(axis=-1)
+    vals = (hist_sort[:, :take_n] / hist_sort.max()).mean(axis=-1)
     dns = vals.mean()
 
     return dns
