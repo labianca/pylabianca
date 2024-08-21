@@ -381,11 +381,11 @@ def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
     cols += add_cols
 
     if calculate_pev:
-        cols += ['pev']
+        cols += ['PEV']
     if calculate_dos:
         cols += ['DoS']
     if calculate_peak_pev:
-        cols += ['peak_pev']
+        cols += ['peak_PEV']
     if baseline_window is not None:
         cols += ['FR_vs_baseline']
 
@@ -441,7 +441,7 @@ def _characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
 
     # copy info from cellinfo
     if cellinfo_row is not None:
-        for col in cellinfo_row.columns:
+        for col in cellinfo_row.index:
             df_cluster.loc[0, col] = cellinfo_row[col]
 
     # calculate depth of selectivity for each selective window
@@ -576,6 +576,14 @@ def assess_selectivity(df_cluster, min_cluster_p=0.05,
         that indicates whether the cluster is selective based on the specified
         criteria.
     '''
+    # skip if no clusters, adding empty columns
+    n_rows = df_cluster.shape[0]
+    if n_rows == 0:
+        df_cluster['selective'] = None
+        if min_time_in_window is not None:
+            df_cluster['in_toi'] = None
+        return df_cluster
+
     pval_msk = df_cluster.pval <= min_cluster_p
 
     def eval_column(column_name, min_value):
@@ -710,7 +718,6 @@ def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
         return fr_sel
 
 
-# CONSIDER: when threshold is Real, then > threshold and < -threshold
 def threshold_selectivity(selectivity, threshold):
     '''Threshold selectivity statistics generating boolean selectivity.
 
@@ -737,11 +744,15 @@ def threshold_selectivity(selectivity, threshold):
         has_pos, has_neg = False, False
         if 'pos' in threshold.coords['tail']:
             has_pos = True
-            above = selectivity > threshold.sel(tail='pos')
+            use_thresh = (threshold.sel(tail='pos')
+                          if 'tail' in threshold.dims else threshold)
+            above = selectivity > use_thresh
 
         if 'neg' in threshold.coords['tail']:
             has_neg = True
-            below = selectivity < threshold.sel(tail='neg')
+            use_thresh = (threshold.sel(tail='neg')
+                          if 'tail' in threshold.dims else threshold)
+            below = selectivity < use_thresh
 
         has_both = has_pos and has_neg
         selected = (
@@ -750,16 +761,19 @@ def threshold_selectivity(selectivity, threshold):
             below
         )
         return selected
+    else:
+        raise ValueError('Threshold must be a float or xarray.DataArray.')
 
 
 def compute_percent_selective(selectivity, threshold=None, dist=None,
                               percentile=None, tail='both', groupby=None):
     '''
     Selectivity can be:
-    * boolean array / xarray (already thresholded)
-    * xarray with the selectivity statistic (requires thresholding)
+    * boolean xarray (already thresholded)
+    * xarray with the selectivity statistic (requires threshold argument)
     * xarray.Dataset containing the selectivity statistic, the threshold and
-        the null distribution (requires thresholding)
+        the null distribution (will be thrsholded, unless percentile is
+        defined)
 
     if percentiles is not defined (default None) and selectivity is not already
     a boolean array, threshold must be defined. Either in the threshold keyword
@@ -767,8 +781,18 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     '''
     import xarray as xr
 
+    # selectivity has to be DataArray or Dataset
+    if not isinstance(selectivity, (xr.DataArray, xr.Dataset)):
+        raise TypeError('`selectivity` must be an xarray.DataArray or '
+                        f'xarray.Dataset. Got {type(selectivity)}.')
+
+    # test that dims are ['cell'] or ['cell', 'time']
+    if not selectivity.dims[0] == 'cell':
+        raise ValueError('Selectivity must have "cell" as the first dimension')
+
     has_perc = percentile is not None
     has_dist = dist is not None
+
     if isinstance(selectivity, xr.Dataset):
         if 'thresh' in selectivity and threshold is None and not has_perc:
             threshold = selectivity['thresh']
@@ -804,7 +828,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     n_cells = len(selectivity.cell)
 
     n_total = sel.copy()
-    n_total.values = np.ones(n_cells)
+    n_total.values = np.ones(n_total.shape, dtype=int)
 
     if groupby is not None:
         n_tot = n_total.groupby(groupby).sum(dim='cell')
@@ -823,7 +847,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         from .stats import find_percentile_threshold
         perc_sel_perm = (n_sig_perm / n_tot) * 100.
         perm_thresh = find_percentile_threshold(
-            perm_data, percentile=95, tail='pos', perm_dim=0
+            perc_sel_perm, percentile=95, tail='pos', perm_dim=0
         )
         # TODO - return Dataset
         return perc_sel, perm_thresh, perc_sel_perm
