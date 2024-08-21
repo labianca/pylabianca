@@ -757,7 +757,7 @@ class Spikes(object):
             ``-0.2``.
         tmax : float
             Epoch start in seconds with respect to event onset. Default to
-            ``-0.2``.
+            ``1.0``.
         keep_timestamps : bool
             Whether to keep the original spike timestamps and store them in the
             epochs. Defaults to ``False``.

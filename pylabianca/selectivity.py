@@ -181,7 +181,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     if n_perm > 0:
         results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
-                                    coords=coords, name=stat_name)
+                                       coords=coords, name=stat_name)
         use_data = results['stat']
     else:
         use_data = results
@@ -213,6 +213,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
             results[key].attrs['coord_units'] = frate.attrs['coord_units']
 
     # add cell coords
+    # TODO: move after Dataset creation
     copy_coords = xr_find_nested_dims(frate, 'cell')
     if len(copy_coords) > 0:
         for key in results.keys():
@@ -825,7 +826,6 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
             perm_sel = threshold_selectivity(dist, threshold)
         else:
             perm_sel = None
-    n_cells = len(selectivity.cell)
 
     n_total = sel.copy()
     n_total.values = np.ones(n_total.shape, dtype=int)
