@@ -787,8 +787,9 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         perm_thresh = find_percentile_threshold(
             perc_sel_perm, percentile=5, tail='pos', perm_dim=0
         )
-        # TODO - return Dataset
-        return perc_sel, perm_thresh, perc_sel_perm
+
+        data_dict = dict(stat=perc_sel, thresh=perm_thresh, dist=perc_sel_perm)
+        return xr.Dataset(data_dict)
     else:
         return perc_sel
 
