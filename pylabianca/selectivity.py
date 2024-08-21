@@ -721,8 +721,13 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
                         f'xarray.Dataset. Got {type(selectivity)}.')
 
     # test that dims are ['cell'] or ['cell', 'time']
-    if not selectivity.dims[0] == 'cell':
-        raise ValueError('Selectivity must have "cell" as the first dimension')
+    bad_dim_msg = 'Selectivity must have "cell" as the first dimension'
+    if isinstance(selectivity, xr.DataArray):
+        if not selectivity.dims[0] == 'cell':
+            raise ValueError(bad_dim_msg)
+    elif isinstance(selectivity, xr.Dataset):
+        if not selectivity['stat'].dims[0] == 'cell':
+            raise ValueError(bad_dim_msg)
 
     has_perc = percentile is not None
     has_dist = dist is not None
