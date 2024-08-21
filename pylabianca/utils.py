@@ -582,7 +582,7 @@ def realign_waveforms(spk, picks=None, min_spikes=10, reject=True):
             # TODO: could be made a separate function one day
             n_reject = len(reject_idx)
             if n_reject > 0:
-                msg = (f'Removing {n_reject} bad waveforms for cell'
+                msg = (f'Removing {n_reject} bad waveforms for cell '
                        f'{spk.cell_names[cell_idx]}.')
                 print(msg)
 
@@ -605,17 +605,48 @@ def _get_trial_boundaries(spk, cell_idx):
     return trial_boundaries, tri_num
 
 
-# TODO - this can be made more universal
-def find_cells_by_cluster_id(spk, cluster_ids, channel=None):
+# TODO: first ~18 lines could be put in get_cellinfo function
+def find_cells_by_cluster_id(cellinfo_source, cluster_ids, channel=None):
     '''Find cell indices that create given clusters on specific channel.'''
+    from .spikes import Spikes, SpikeEpochs
+    spike_objects = (Spikes, SpikeEpochs)
+
+    if isinstance(cellinfo_source, spike_objects):
+        cellinfo = cellinfo_source.cellinfo
+    elif isinstance(cellinfo_source, pd.DataFrame):
+        cellinfo = cellinfo_source
+    else:
+        msg = ('``cellinfo_source`` has to be a Spikes, SpikeEpochs, xarray '
+               'DataArray or a pandas DataFrame object.')
+        try:
+            import xarray as xr
+            if isinstance(cellinfo_source, xr.DataArray):
+                cellinfo = cellinfo_from_xarray(cellinfo_source)
+            else:
+                raise ValueError(msg)
+        except ImportError:
+            raise ValueError(msg)
+
+    if cellinfo is None:
+        raise ValueError('No cellinfo found in the provided object.')
+
     cell_idx = list()
     if isinstance(cluster_ids, int):
         cluster_ids = [cluster_ids]
 
-    for cl in cluster_ids:
-        is_cluster = spk.cellinfo.cluster == cl
+    n_clusters = len(cluster_ids)
+    if isinstance(channel, str):
+        channel = [channel] * n_clusters
+    elif isinstance(channel, (list, np.ndarray)):
+        if len(channel) != n_clusters:
+            raise ValueError('Number of channels has to match the number of '
+                             'cluster IDs.')
+
+    for idx, cl in enumerate(cluster_ids):
+        is_cluster = cellinfo.cluster == cl
         if channel is not None:
-            is_channel = spk.cellinfo.channel == channel
+            this_channel = channel[idx]
+            is_channel = cellinfo.channel == this_channel
             idxs = np.where(is_cluster & is_channel)[0]
         else:
             idxs = np.where(is_cluster)[0]
@@ -625,7 +656,7 @@ def find_cells_by_cluster_id(spk, cluster_ids, channel=None):
         else:
             raise ValueError('Found 0 or > 1 cluster IDs.')
 
-    return cell_idx
+    return np.array(cell_idx)
 
 
 def read_drop_info(path):
