@@ -868,7 +868,8 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
 # TODO - the API could be better / simplified: low level function that
 #        takes just waveform array and high-level function that takes
 #        Spikes object and cell indices (currently only one cell is supported)
-def calculate_perceptual_waveform_density(spk, cell_idx, take_n=15):
+def calculate_perceptual_waveform_density(spk, cell_idx, take_n=15,
+                                          spatial_window=True):
     """
     Experimental measure of "perceptual" waveform density.
 
@@ -933,10 +934,26 @@ def calculate_perceptual_waveform_density(spk, cell_idx, take_n=15):
     )
 
     # calculate dns
-    # TODO: a better way would be to calculate mean from a spatial window
-    #       around max, not the top N values
-    hist_sort = np.sort(hist)[:, ::-1]
-    vals = (hist_sort[:, :take_n] / hist_sort.max()).mean(axis=-1)
+
+    if not spatial_window:
+        hist_sort = np.sort(hist)[:, ::-1]
+        vals = (hist_sort[:, :take_n] / hist_sort.max()).mean(axis=-1)
+    else:
+        # a bit more complex version that takes uses a spatial window around
+        # the maximum value for each time point
+        n_times, n_y_bins = hist.shape
+        vals = np.zeros(n_times)
+        max_ix = np.argmax(hist, axis=1)
+        take_each = take_n // 2
+        for time_idx in range(n_times):
+            this_max_idx = max_ix[time_idx]
+            start_ix = max(0, this_max_idx - take_each)
+            end_ix = min(n_y_bins, this_max_idx + take_each)
+            vals[time_idx] = hist[time_idx, start_ix:end_ix].mean()
+
+        top_5_perc = np.percentile(hist.ravel(), 95)
+        vals /= top_5_perc
+
     dns = vals.mean()
 
     return dns
