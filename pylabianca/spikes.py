@@ -483,7 +483,8 @@ class SpikeEpochs():
                            waveform=waveform, timestamps=timestamps)
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
-                      n_bins_y=100, cmap='viridis', backend='numpy'):
+                      n_bins_y=100, y_range=None, cmap='viridis',
+                      backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -510,7 +511,7 @@ class SpikeEpochs():
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, n_bins_y=n_bins_y,
+                             labels=labels, n_bins_y=n_bins_y, y_range=y_range,
                              times=self.waveform_time, cmap=cmap,
                              backend=backend)
 
@@ -921,7 +922,8 @@ class Spikes(object):
         return self
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
-                      n_bins_y=100, cmap='viridis', backend='numpy'):
+                      n_bins_y=100, y_range=None, cmap='viridis',
+                      backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -953,7 +955,7 @@ class Spikes(object):
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, n_bins_y=n_bins_y,
+                             labels=labels, n_bins_y=n_bins_y, y_range=y_range,
                              times=self.waveform_time, cmap=cmap,
                              backend=backend)
 
