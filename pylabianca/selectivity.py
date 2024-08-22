@@ -181,7 +181,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     if n_perm > 0:
         results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
-                                    coords=coords, name=stat_name)
+                                       coords=coords, name=stat_name)
         use_data = results['stat']
     else:
         use_data = results
@@ -196,11 +196,12 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     if n_perm > 0:
         if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
             # two-tail thresholds
-            results['thresh'] = np.stack(results['thresh'], axis=0)
             dims2 = ['tail'] + dims[1:]
+            results['thresh'] = np.stack(results['thresh'], axis=0)
             coords.update({'tail': ['pos', 'neg']})
         else:
             dims2 = dims[1:]
+            coords.update({'tail': np.array('pos')})
 
         results['thresh'] = xr.DataArray(
             data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
@@ -213,6 +214,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
             results[key].attrs['coord_units'] = frate.attrs['coord_units']
 
     # add cell coords
+    # TODO: move after Dataset creation
     copy_coords = xr_find_nested_dims(frate, 'cell')
     if len(copy_coords) > 0:
         for key in results.keys():
@@ -650,74 +652,6 @@ def compute_time_in_window(df_cluster, window_of_interest):
     return df_cluster
 
 
-# CONSIDER: selectivity as list of names / dict of lists of names ?
-# RENAME: select_cells, as it can be used with various other cell-selection
-#         criteria
-# CONSIDER dataset case ...
-# CONSIDER: too complicated, try to simplify
-def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
-    # one xarray and session_coord is None: assumes one subject
-    #    - if same order of cells -> simple bool selection
-    #    - if different order -> select by unique cell names
-    #    raise Warning that can be silenced with ``session_coord=False``
-    # one xarray and session_coord is not None: assumes multiple subjects
-    #    - ...
-    #    - ...
-    # dictionary of xarrays: assumes multiple subjects/sessions, one per key
-    import xarray as xr
-
-    frate_xarr = isinstance(frate, xr.DataArray)
-
-    if threshold is not None:
-        selectivity = threshold_selectivity(selectivity, threshold)
-
-    if frate_xarr:
-        has_session_coord = session_coord in frate.coords
-        same_cells = (frate.cell.values == selectivity.cell.values).all()
-
-        if not has_session_coord:
-            same_sessions = True
-        else:
-            same_sessions = (frate[session_coord].values
-                             == selectivity[session_coord].values).all()
-
-        # if same_cells and same_sessions:
-        if same_cells and same_sessions:
-            fr_sel = frate.isel(cell=np.where(selectivity)[0])
-        else:
-            # TODO: check if same sessions but with different order (or maybe
-            #       that all sessions from frate are in selectivity)
-            # if has_session_coord but not same_sessions / cells:
-            fr_list = list()
-            for ses, fr in frate.groupby(session_coord):
-                stat_ses = selectivity.query({'cell': f'{session_coord} == "{ses}"'})
-                sel_cell = stat_ses.cell.values[stat_ses.values]
-                fr_sel = fr.sel(cell=sel_cell)
-                fr_list.append(fr_sel)
-            fr_sel = xr.concat(fr_list, dim='cell')
-    elif isinstance(frate, dict):
-        assert isinstance(selectivity, xr.DataArray)
-        assert session_coord is not None
-
-        # iterate over sessions
-        fr_sel = dict()
-        for ses, sel in selectivity.groupby(session_coord):
-            if not sel.any():
-                continue
-
-            fr_ses = frate[ses].copy()
-            same_cells = (fr_ses.cell.values == sel.cell.values).all()
-            # raise warning when not same_cells ?
-            # use what is below or fr_ses.sel(cell=sel) ?
-            if same_cells:
-                fr_sel[ses] = fr_ses.isel(cell=np.where(sel)[0])
-            else:
-                sel_cell = sel.cell.values[sel.values]
-                fr_sel[ses] = fr_ses.sel(cell=sel_cell)
-
-        return fr_sel
-
-
 def threshold_selectivity(selectivity, threshold):
     '''Threshold selectivity statistics generating boolean selectivity.
 
@@ -787,8 +721,13 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
                         f'xarray.Dataset. Got {type(selectivity)}.')
 
     # test that dims are ['cell'] or ['cell', 'time']
-    if not selectivity.dims[0] == 'cell':
-        raise ValueError('Selectivity must have "cell" as the first dimension')
+    bad_dim_msg = 'Selectivity must have "cell" as the first dimension'
+    if isinstance(selectivity, xr.DataArray):
+        if not selectivity.dims[0] == 'cell':
+            raise ValueError(bad_dim_msg)
+    elif isinstance(selectivity, xr.Dataset):
+        if not selectivity['stat'].dims[0] == 'cell':
+            raise ValueError(bad_dim_msg)
 
     has_perc = percentile is not None
     has_dist = dist is not None
@@ -825,7 +764,6 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
             perm_sel = threshold_selectivity(dist, threshold)
         else:
             perm_sel = None
-    n_cells = len(selectivity.cell)
 
     n_total = sel.copy()
     n_total.values = np.ones(n_total.shape, dtype=int)
@@ -847,10 +785,11 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         from .stats import find_percentile_threshold
         perc_sel_perm = (n_sig_perm / n_tot) * 100.
         perm_thresh = find_percentile_threshold(
-            perc_sel_perm, percentile=95, tail='pos', perm_dim=0
+            perc_sel_perm, percentile=5, tail='pos', perm_dim=0
         )
-        # TODO - return Dataset
-        return perc_sel, perm_thresh, perc_sel_perm
+
+        data_dict = dict(stat=perc_sel, thresh=perm_thresh, dist=perc_sel_perm)
+        return xr.Dataset(data_dict)
     else:
         return perc_sel
 

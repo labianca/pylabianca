@@ -21,7 +21,6 @@ def test_permutation_test():
     array_comb = [(arr1, arr2), (arr1, arr3), (arr2, arr3, arr4)]
     stat_funs = [ttest_rel, ttest_ind_eq, f_oneway]
 
-
     for arrays, paired, stat_fun in zip(array_comb, paireds, stat_funs):
 
         stats_perm, pvals_perm = pln.stats.permutation_test(
