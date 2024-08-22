@@ -172,12 +172,9 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     cells = frate.cell.values
 
     # perm
-    dims = ['perm', 'cell']
-    coords = {'perm': np.arange(n_perm) + 1,
-              'cell': cells}
-    if has_time:
-        dims.append('time')
-        coords['time'] = frate.time.values
+    dims = ['perm'] + frate_dims[1:]
+    coords = {'cell': frate.coords[dim].values.copy()
+              for dim in frate_dims[1:]}
 
     if n_perm > 0:
         results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
@@ -188,7 +185,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         results = dict()
 
     # stat
-    coords = {k: coords[k] for k in dims[1:]}
     results['stat'] = xr.DataArray(
         data=use_data, dims=dims[1:], coords=coords, name=stat_name)
 
