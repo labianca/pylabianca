@@ -1045,6 +1045,10 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
     xarr_dct = dict()
     session_order = pd.unique(xarr.coords[ses_name].values)
 
+    # for some reason we need a name to perform query
+    if xarr.name is None:
+        xarr.name = 'data'
+
     for ses in session_order:
         arr = xarr.query(cell=f'{ses_name} == "{ses}"')
         if reduce_coords:
