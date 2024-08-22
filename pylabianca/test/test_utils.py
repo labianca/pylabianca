@@ -172,6 +172,14 @@ def test_xarr_dct_conversion():
     from string import ascii_lowercase
     import xarray as xr
 
+    def compare_dicts(x_dct1, x_dct2):
+        for key in x_dct1.keys():
+            assert (x_dct1[key].data == x_dct2[key].data).all()
+            coord_list = list(x_dct1[key].coords)
+            for coord in coord_list:
+                assert (x_dct1[key].coords[coord].values
+                        == x_dct2[key].coords[coord].values).all()
+
     letters = list(ascii_lowercase)
     n_cells1, n_cells2, n_trials, n_times = 10, 15, 20, 100
     time = np.linspace(-0.5, 1.5, num=n_times)
@@ -200,10 +208,11 @@ def test_xarr_dct_conversion():
 
     xarr = pln.utils.dict_to_xarray(x_dct1)
     x_dct2 = pln.utils.xarray_to_dict(xarr)
+    compare_dicts(x_dct1, x_dct2)
 
-    for key in x_dct1.keys():
-        assert (x_dct1[key].data == x_dct2[key].data).all()
-        coord_list = list(x_dct1[key].coords)
-        for coord in coord_list:
-            assert (x_dct1[key].coords[coord].values
-                    == x_dct2[key].coords[coord].values).all()
+    # test with non-sorted keys - this previously failed
+    # because xarray sorts during groupby operation used in xarray_to_dict
+    x_dct1 = {'C03': xarr1, 'A02': xarr2, 'W05': xarr1.copy()}
+    xarr = pln.utils.dict_to_xarray(x_dct1)
+    x_dct2 = pln.utils.xarray_to_dict(xarr)
+    compare_dicts(x_dct1, x_dct2)
