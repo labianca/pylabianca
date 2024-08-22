@@ -180,15 +180,15 @@ def test_xarr_dct_conversion():
 
     dim_names = ['cell', 'trial', 'time']
     xarr1 = xr.DataArray(np.random.rand(n_cells1, n_trials, n_times),
-                        dims=dim_names,
-                        coords={'cell': cell_names[:n_cells1],
-                                'trial': np.arange(n_trials),
-                                'time': time})
+                         dims=dim_names,
+                         coords={'cell': cell_names[:n_cells1],
+                                 'trial': np.arange(n_trials),
+                                 'time': time})
     xarr2 = xr.DataArray(np.random.rand(n_cells2, n_trials, n_times),
-                        dims=dim_names,
-                        coords={'cell': cell_names[:n_cells2],
-                                'trial': np.arange(n_trials),
-                                'time': time})
+                         dims=dim_names,
+                         coords={'cell': cell_names[:n_cells2],
+                                 'trial': np.arange(n_trials),
+                                 'time': time})
 
     load = np.concatenate([np.ones(10), np.ones(10) * 2])
     np.random.shuffle(load)
