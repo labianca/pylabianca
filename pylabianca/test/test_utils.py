@@ -207,8 +207,6 @@ def test_xarr_dct_conversion():
     x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
 
     xarr = pln.utils.dict_to_xarray(x_dct1)
-    # for some reason performing xarray_to_dict will not work without
-    # assigning a name to the DataArray
     x_dct2 = pln.utils.xarray_to_dict(xarr)
     compare_dicts(x_dct1, x_dct2)
 
@@ -221,3 +219,10 @@ def test_xarr_dct_conversion():
 
     xarr_2 = pln.utils.dict_to_xarray(x_dct2)
     assert (xarr == xarr_2).all().item()
+
+    # for some reason performing a query will not work without
+    # assigning a name to the DataArray
+    # we test this here to be warned when this behavior is changed in xarray
+    with pytest.raises(ValueError, match='without providing an explicit name'):
+        xarr.name = None
+        xarr.query(cell='sub == "W05"')
