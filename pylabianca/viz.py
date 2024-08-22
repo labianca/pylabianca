@@ -289,10 +289,10 @@ class EmptyProgressbar(object):
 
 # TODO:
 # - [ ] kind='line' ?
-# - [x] datashader backend?
 # - [ ] allow to plot multiple average waveforms as lines
 def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
-                  n_bins_y=100, times=None, cmap='viridis', backend='numpy'):
+                  n_bins_y=100, y_range=None, times=None, cmap='viridis',
+                  backend='numpy'):
     '''Plot waveform heatmap for one cell.
 
     Parameters
@@ -362,7 +362,7 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
 
         if backend == 'numpy':
             hist, _, ybins = _calculate_waveform_density_image(
-                this_waveform, n_bins_y
+                this_waveform, n_bins_y, y_range=y_range
             )
             alpha_map, vmax = _calculate_alpha_map(hist)
 
@@ -384,6 +384,8 @@ def plot_waveform(spk, picks=None, upsample=False, ax=None, labels=True,
     return ax
 
 
+# CONSIDER: the image matrix is time x amplitude, which is a bit
+#           counterintuitive as the heatmap shows time as columns
 def _calculate_waveform_density_image(waveform, n_bins_y, density=True,
                                       y_range=None):
     '''Helps in calculating 2d density histogram of the waveforms.
