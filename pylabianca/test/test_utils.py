@@ -214,7 +214,7 @@ def test_xarr_dct_conversion():
     # because xarray sorts during groupby operation used in xarray_to_dict
     x_dct1 = {'C03': xarr1, 'A02': xarr2, 'W05': xarr1.copy()}
     xarr = pln.utils.dict_to_xarray(x_dct1)
-    x_dct2 = pln.utils.xarray_to_dict(xarr)
+    x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=False)
     compare_dicts(x_dct1, x_dct2)
 
     xarr_2 = pln.utils.dict_to_xarray(x_dct2)
