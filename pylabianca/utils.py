@@ -1120,8 +1120,10 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
         Dictionary with session names as keys and xarrays as values.
     '''
     xarr_dct = dict()
+    session_order = pd.unique(xarr.coords[ses_name].values)
 
-    for lab, arr in xarr.groupby(ses_name):
+    for ses in session_order:
+        arr = xarr.query(cell=f'{ses_name} == "{ses}"')
         if reduce_coords:
             new_coords = dict()
             drop_coords = list()
@@ -1145,7 +1147,7 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                 arr = arr.drop_vars(drop_coords)
                 arr = arr.assign_coords(new_coords)
 
-        xarr_dct[lab] = arr
+        xarr_dct[ses] = arr
 
     return xarr_dct
 
