@@ -207,6 +207,9 @@ def test_xarr_dct_conversion():
     x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
 
     xarr = pln.utils.dict_to_xarray(x_dct1)
+    # for some reason performing xarray_to_dict will not work without
+    # assigning a name to the DataArray
+    xarr.name = 'data'
     x_dct2 = pln.utils.xarray_to_dict(xarr)
     compare_dicts(x_dct1, x_dct2)
 
@@ -214,5 +217,9 @@ def test_xarr_dct_conversion():
     # because xarray sorts during groupby operation used in xarray_to_dict
     x_dct1 = {'C03': xarr1, 'A02': xarr2, 'W05': xarr1.copy()}
     xarr = pln.utils.dict_to_xarray(x_dct1)
+
     x_dct2 = pln.utils.xarray_to_dict(xarr)
     compare_dicts(x_dct1, x_dct2)
+
+    xarr_2 = pln.utils.dict_to_xarray(x_dct2)
+    assert (xarr == xarr_2).all().item()
