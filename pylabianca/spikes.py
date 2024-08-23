@@ -7,7 +7,7 @@ from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
                     _validate_spikes_input, _validate_cellinfo,
                     _handle_cell_names)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
-from .spike_distance import compare_spike_times, xcorr_hist
+from .spike_distance import xcorr_hist
 
 
 class SpikeEpochs():
@@ -1330,10 +1330,12 @@ def _n_spikes(spk, per_epoch=False):
         if not isinstance(spk, SpikeEpochs):
             raise TypeError("When `per_epoch=True`, `spk` has to be an "
                             f"instance of SpikeEpochs, got {type(spk)}.")
-        tmin, tmax = spk.time_limits
-        winlen = tmax - tmin
 
-        # FIX: this could be changed into using np.unique() on spk.trial
-        frate = compute_spike_rate(spk, step=False, tmin=tmin, tmax=tmax)
-        n_spk = (frate.values * winlen).astype('int')
+        n_units = spk.n_units()
+        n_spk = np.zeros((n_units, spk.n_trials), dtype='int')
+
+        for idx in range(n_units):
+            boundaries, tri_idx = _get_trial_boundaries(spk, idx)
+            n_spk[idx, tri_idx] = np.diff(boundaries)
+
         return n_spk

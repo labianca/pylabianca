@@ -9,6 +9,7 @@ DEV: Set up automated testing on CircleCI and code coverage tracking with codeco
 <br/>
 
 * FIX: `pylabianca.utils.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if seession order was not alphabetical in the concatenated xarray. Now `pylabianca.utils.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
+* FIX: `SpikeEpochs.n_spikes(per_epoch=True)` used spike rate calculation to count spikes in each epoch. This was unnecessary (and possibly slow) and in rare cases could lead to wrong results (probably numerical error when multiplying spike rate by window duration and immediately turning to int, without rounding). Now `SpikeEpochs.n_spikes(per_epoch=True)` counts spikes directly using `pylabianca.utils._get_trial_boundaries`.
 * FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes
 
 <br/><br/>
