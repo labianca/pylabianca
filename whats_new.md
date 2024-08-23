@@ -37,7 +37,7 @@ DEV: Set up automated testing on CircleCI and code coverage tracking with codeco
 * ENH: allow to pass arguments to eventplot via `eventplot_kwargs` from `pylabianca.viz.plot_raster()` and `pylabianca.viz.plot_spikes()`
 
 * ENH: added `pylabianca.utils.cellinfo_from_xarray()` function to extract/reconstruct cellinfo dataframe from xarray DataArray coordinates.
-* ENH: `pylabianca.utils.xr_find_nested_dims()` now returns "nested" xarray coordinates also for coordinate tuplples (for example `('cell', 'trial')` - which happens often after concatenating multiple xarray sessions)
+* ENH: `pylabianca.utils.xr_find_nested_dims()` now returns "nested" xarray coordinates also for coordinate tuples (for example `('cell', 'trial')` - which happens often after concatenating multiple xarray sessions)
 * ENH: added `copy_cellinfo` argument to `pylabianca.selectivity.cluster_based_selectivity()`. It allows to select which cellinfo columns are copied to the selectivity dataframe.
 * ENH: expose `.to_spiketools()` as `SpikeEpochs` method (previously it was only available as a function in `pylabianca.io` module)
 * ENH: added `pylabianca.utils.dict_to_xarray()` function to convert dictionary of xarrays (multiple sessions / subjects) to one concatenated xarray DataArray
