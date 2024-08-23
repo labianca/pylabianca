@@ -172,6 +172,14 @@ def test_xarr_dct_conversion():
     from string import ascii_lowercase
     import xarray as xr
 
+    def compare_dicts(x_dct1, x_dct2):
+        for key in x_dct1.keys():
+            assert (x_dct1[key].data == x_dct2[key].data).all()
+            coord_list = list(x_dct1[key].coords)
+            for coord in coord_list:
+                assert (x_dct1[key].coords[coord].values
+                        == x_dct2[key].coords[coord].values).all()
+
     letters = list(ascii_lowercase)
     n_cells1, n_cells2, n_trials, n_times = 10, 15, 20, 100
     time = np.linspace(-0.5, 1.5, num=n_times)
@@ -180,15 +188,15 @@ def test_xarr_dct_conversion():
 
     dim_names = ['cell', 'trial', 'time']
     xarr1 = xr.DataArray(np.random.rand(n_cells1, n_trials, n_times),
-                        dims=dim_names,
-                        coords={'cell': cell_names[:n_cells1],
-                                'trial': np.arange(n_trials),
-                                'time': time})
+                         dims=dim_names,
+                         coords={'cell': cell_names[:n_cells1],
+                                 'trial': np.arange(n_trials),
+                                 'time': time})
     xarr2 = xr.DataArray(np.random.rand(n_cells2, n_trials, n_times),
-                        dims=dim_names,
-                        coords={'cell': cell_names[:n_cells2],
-                                'trial': np.arange(n_trials),
-                                'time': time})
+                         dims=dim_names,
+                         coords={'cell': cell_names[:n_cells2],
+                                 'trial': np.arange(n_trials),
+                                 'time': time})
 
     load = np.concatenate([np.ones(10), np.ones(10) * 2])
     np.random.shuffle(load)
@@ -200,10 +208,21 @@ def test_xarr_dct_conversion():
 
     xarr = pln.utils.dict_to_xarray(x_dct1)
     x_dct2 = pln.utils.xarray_to_dict(xarr)
+    compare_dicts(x_dct1, x_dct2)
 
-    for key in x_dct1.keys():
-        assert (x_dct1[key].data == x_dct2[key].data).all()
-        coord_list = list(x_dct1[key].coords)
-        for coord in coord_list:
-            assert (x_dct1[key].coords[coord].values
-                    == x_dct2[key].coords[coord].values).all()
+    # test with non-sorted keys - this previously failed
+    # because xarray sorts during groupby operation used in xarray_to_dict
+    x_dct1 = {'C03': xarr1, 'A02': xarr2, 'W05': xarr1.copy()}
+    xarr = pln.utils.dict_to_xarray(x_dct1)
+    x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=False)
+    compare_dicts(x_dct1, x_dct2)
+
+    xarr_2 = pln.utils.dict_to_xarray(x_dct2)
+    assert (xarr == xarr_2).all().item()
+
+    # for some reason performing a query will not work without
+    # assigning a name to the DataArray
+    # we test this here to be warned when this behavior is changed in xarray
+    with pytest.raises(ValueError, match='without providing an explicit name'):
+        xarr.name = None
+        xarr.query(cell='sub == "W05"')
