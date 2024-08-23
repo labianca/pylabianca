@@ -2,6 +2,15 @@
 
 ## DEV (upcoming version 0.4)
 
+## Version 0.3.1
+
+DEV: Set up automated testing on CircleCI and code coverage tracking with codecov.com
+
+<br/>
+
+* FIX: `pylabianca.utils.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if seession order was not alphabetical in the concatenated xarray. Now `pylabianca.utils.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
+* FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes
+
 <br/><br/>
 
 ## Version 0.3
@@ -31,6 +40,7 @@ ENH: allow for different percentile level in `pylabianca.stats.cluster_based_tes
 * ENH: added `copy_cellinfo` argument to `pylabianca.selectivity.cluster_based_selectivity()`. It allows to select which cellinfo columns are copied to the selectivity dataframe.
 * ENH: expose `.to_spiketools()` as `SpikeEpochs` method (previously it was only available as a function in `pylabianca.io` module)
 * ENH: added `pylabianca.utils.dict_to_xarray()` function to convert dictionary of xarrays (multiple sessions / subjects) to one concatenated xarray DataArray
+* EHN: added `pylabianca.utils.xarray_to_dict()` function to convert xarray DataArray to dictionary of xarrays (useful when splitting xarray DataArray to multiple sessions / subjects)
 * ENH: added `pylabianca.utils.assign_session_coord()` function to assign session / subject coordinate to xarray DataArray (useful when concatenating multiple sessions / subjects- using `pylabianca.utils.dict_to_xarray()`)
 
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
