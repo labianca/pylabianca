@@ -8,9 +8,9 @@ DEV: Set up automated testing on CircleCI and code coverage tracking with codeco
 
 <br/>
 
-* FIX: `pylabianca.utils.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if seession order was not alphabetical in the concatenated xarray. Now `pylabianca.utils.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
+* FIX: `pylabianca.utils.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if session order was not alphabetical in the concatenated xarray. Now `pylabianca.utils.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
 * FIX: `SpikeEpochs.n_spikes(per_epoch=True)` used spike rate calculation to count spikes in each epoch. This was unnecessary (and possibly slow) and in rare cases could lead to wrong results (probably numerical error when multiplying spike rate by window duration and immediately turning to int, without rounding). Now `SpikeEpochs.n_spikes(per_epoch=True)` counts spikes directly using `pylabianca.utils._get_trial_boundaries`.
-* FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes
+* FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes.
 
 <br/><br/>
 
@@ -28,7 +28,7 @@ DEV: Set up automated testing on CircleCI and code coverage tracking with codeco
 * ENH: around 10-fold speed up to `Spikes.epoch()` (20-fold for thousands of spikes and epoching events)
 * ENH: further speed up to `Spikes.epoch()` (around 5 - 13-fold) is now also possible by using `backend='numba'` (if numba is installed)
 * ENH: added `n_jobs` argument to `pylabianca.selectivity.cluster_based_selectivity()` to allow for parallel processing of cells
-ENH: allow for different percentile level in `pylabianca.stats.cluster_based_test_from_permutations()` using `percentile` argument.
+* ENH: allow for different percentile level in `pylabianca.stats.cluster_based_test_from_permutations()` using `percentile` argument.
 
 * ENH: `.plot_waveform()` method of `Spikes` and `SpikeEpochs` now allows to control the colormap to plot the waveform density with (`cmap` argument) and the number of y axis bins (`y_bins` argument)
 * ENH: added `colors` argument for explicit color control in `pylabianca.viz.plot_raster`
