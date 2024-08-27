@@ -4,13 +4,33 @@
 
 ## Version 0.3.1
 
-DEV: Set up automated testing on CircleCI and code coverage tracking with codecov.com
+* DEV: Set up automated testing on CircleCI and code coverage tracking with codecov.com
+
+<br/>
+
+* API: `pylabianca.viz.plot_waveform()` `y_bins` argument was renamed to `n_y_bins` to better reflect its meaning.
+
+<br/>
+
+* ENH: add `pylabianca.utils._inherit_from_xarray()` to allow inheriting metadata (cell or trial-level additional information) from xarray DataArray to new xarray DataArray.
+* ENH: `pylabianca.utils.dict_to_xarray()` now allows to pass dictionary of `xarray.Dataset` as input.
 
 <br/>
 
 * FIX: `pylabianca.utils.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if session order was not alphabetical in the concatenated xarray. Now `pylabianca.utils.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
+* FIX: make `pylabianca.utils.xarray_to_dict()` work also on arrays without cell x trial multi-dim coords (e.g. `('cell', 'trial')`), which are common after concatenating multiple sessions.
 * FIX: `SpikeEpochs.n_spikes(per_epoch=True)` used spike rate calculation to count spikes in each epoch. This was unnecessary (and possibly slow) and in rare cases could lead to wrong results (probably numerical error when multiplying spike rate by window duration and immediately turning to int, without rounding). Now `SpikeEpochs.n_spikes(per_epoch=True)` counts spikes directly using `pylabianca.utils._get_trial_boundaries`.
 * FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes.
+* FIX: dataframe returned by `pylabianca.selectivity.cluster_based_selectivity()` had two unused columns (`'pev'` and `'peak_pev'`), where correct names should have been `'PEV'` and `'peak_PEV'`. Now corrected.
+* FIX: make `pylabianca.selectivity.assess_selectivity()` work when empty DataFrame is passed (no clusters found in `pylabianca.selectivity.cluster_based_selectivity()`).
+* FIX: `pylabianca.viz.plot_shaded()` auto-inferring of dimension to reduce (average) now correctly ignores `groupby` argument (if identical to one of the dimensions).
+* FIX: `pylabianca.viz.plot_shaded()` now produces a clearer error when too many dimensional DataArray is used.
+* FIX: `pylabianca.utils._handle_cell_names()` (used internally in a few places) now works with NumPy >= 2.0.
+* FIX: `pylabianca.viz.plot_waveform()` (as well as `.plot_waveform()` methods of `Spikes` and `SpikeEpochs`) now produces a clearer error when no waveforms are present in the data.
+
+<br/>
+
+* DOC: add docstring to `pylabianca.selectivity.assess_selectivity()`
 
 <br/><br/>
 
@@ -47,6 +67,7 @@ DEV: Set up automated testing on CircleCI and code coverage tracking with codeco
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
 * ENH: `Spikes` `.sort()` method now exposes `inplace` argument to allow for sorting on a copy of the object (this can be also easily done by using `spk.copy().sort()`)
 
+* ENH: add `use_usenegative` argument to `pylabianca.io.read_osort()`. It allows to read only clusters / units indicated by `usenegative` field in the OSort output file. This field is used when exporting data from OSort in a lazy way (not removing unused clusters from the data file, but instead just adding / modifying `usenegative` field).
 * ENH: better error message when the format passed to `pylabianca.io.read_osort()` does not match the data
 * ENH: added better input validation to `SpikeEpochs` to avoid silly errors
 * ENH: added better input validation to `Spikes` to avoid silly errors
