@@ -395,6 +395,7 @@ def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
     return df_cluster
 
 
+# CONSIDER: move to utils?
 def _which_copy_cellinfo(frate, copy_cellinfo):
     '''Determine which cell information to copy to the results dataframe.'''
     do_copy_cellinfo = (
