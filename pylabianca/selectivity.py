@@ -718,13 +718,9 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
                         f'xarray.Dataset. Got {type(selectivity)}.')
 
     # test that dims are ['cell'] or ['cell', 'time']
-    bad_dim_msg = 'Selectivity must have "cell" as the first dimension'
-    if isinstance(selectivity, xr.DataArray):
-        if not selectivity.dims[0] == 'cell':
-            raise ValueError(bad_dim_msg)
-    elif isinstance(selectivity, xr.Dataset):
-        if not selectivity['stat'].dims[0] == 'cell':
-            raise ValueError(bad_dim_msg)
+    bad_dim_msg = 'Selectivity must contain "cell" dimension'
+    if not 'cell' in selectivity.dims:
+        raise ValueError(bad_dim_msg)
 
     apply_func = lambda arr: arr.sum(dim='cell')
 
@@ -778,7 +774,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
             perm_sel, groupby, apply_fn=apply_func)
         perc_sel_perm = (n_sel_perm / n_total) * 100.
         perm_thresh = find_percentile_threshold(
-            perc_sel_perm, percentile=5, tail='pos', perm_dim=0
+            perc_sel_perm, percentile=5, tail='pos', perm_dim=None
         )
 
         data_dict = dict(stat=perc_sel, thresh=perm_thresh, dist=perc_sel_perm)
