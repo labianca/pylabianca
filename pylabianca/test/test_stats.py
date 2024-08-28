@@ -88,3 +88,32 @@ def test_cluster_based_test_from_permutations():
     clst2 = [clst2[idx] for idx in srt_idx]
 
     assert (clst2[0] == clst[0]).mean() >= 0.9
+
+
+def test_find_percentile_threshold():
+    n_perm, n_cells, n_times = 100, 10, 67
+    data = np.random.rand(n_perm, n_cells, n_times)
+    data = xr.DataArray(data, dims=['perm', 'cell', 'time'])
+
+    # pos tail
+    # --------
+    thresh = pln.stats.find_percentile_threshold(
+        data, percentile=2.5, tail='pos', perm_dim=0, as_xarray=True
+    )
+
+    # currently there is always tail dimension:
+    assert thresh.shape == (1, n_cells, n_times)
+    assert thresh.dims == ('tail', 'cell', 'time')
+    assert thresh.coords['tail'][0].item() == 'pos'
+    assert (thresh.data == np.percentile(data, [97.5], axis=0)).all()
+
+    # neg tail
+    # --------
+    thresh = pln.stats.find_percentile_threshold(
+        data, percentile=2.3, tail='neg', perm_dim=0, as_xarray=True
+    )
+
+    assert thresh.shape == (1, n_cells, n_times)
+    assert thresh.dims == ('tail', 'cell', 'time')
+    assert thresh.coords['tail'][0].item() == 'neg'
+    assert (thresh.data == np.percentile(data, [2.3], axis=0)).all()
