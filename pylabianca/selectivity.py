@@ -173,8 +173,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     # perm
     dims = ['perm'] + frate_dims[1:]
-    coords = {'cell': frate.coords[dim].values.copy()
-              for dim in frate_dims[1:]}
+    coords = {dim: frate.coords[dim].values.copy() for dim in frate_dims[1:]}
 
     if n_perm > 0:
         results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
