@@ -697,8 +697,8 @@ def _create_mask_from_window_str(window, frate):
 # consider moving to sarna?
 # TODO: could infer x coords from plot (if lines are already present)
 def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
-                   min_pval=0.001, bottom_extend=True, pval_text=True,
-                   text_props=None):
+                   min_pval=0.001, bottom_extend=True, pval_textbox=True,
+                   pval_fontsize=10, textbox_props=None):
     '''Highlight significant clusters along the last array dimension.
 
     Parameters
@@ -728,13 +728,14 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     bottom_extend : bool
         Whether to extend the lower limits of y axis when adding bottom
         significance bars. Defaults to ``True``.
-    pval_text : bool
+    pval_textbox : bool
         Whether to add p value text boxes to respective cluster ranges in the
         plot. Defaults to ``True``.
     text_props : dict | None
         Dictionary with text properties for p value text boxes. If None,
         defaults to
-        ``{'boxstyle': 'round', 'facecolor': 'white', 'alpha': 0.75, edgecolor='gray'}``.
+        ``{'boxstyle': 'round', 'facecolor': 'white', 'alpha': 0.75,
+        'edgecolor': 'gray'}``.
 
     Returns
     -------
@@ -742,7 +743,6 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         Axis with the plot.
     '''
     import matplotlib.pyplot as plt
-    from borsar.viz import highlight
 
     try:
         import xarray as xr
@@ -750,9 +750,9 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     except ModuleNotFoundError:
         has_xarray = False
 
-    if text_props is None and pval_text:
-        text_props = dict(boxstyle='round', facecolor='white', alpha=0.75,
-                          edgecolor='gray')
+    if textbox_props is None and pval_textbox:
+        textbox_props = dict(boxstyle='round', facecolor='white', alpha=0.75,
+                             edgecolor='gray')
 
     if ax is None:
         ax = plt.gca()
@@ -778,7 +778,6 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     if pvals_significant.any():
         from borsar.stats import format_pvalue
         from borsar.viz import highlight
-        from borsar.stats import format_pvalue
 
         ylm = ax.get_ylim()
         y_rng = np.diff(ylm)[0]
@@ -810,8 +809,8 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                 p_txt = format_pvalue(this_pval)
 
             this_text = ax.text(
-                text_x, text_y, p_txt,
-                bbox=text_props, horizontalalignment='center'
+                text_x, text_y, p_txt, fontsize=pval_fontsize,
+                bbox=textbox_props, horizontalalignment='center'
             )
             try:
                 textbox = this_text.get_window_extent()
