@@ -597,9 +597,9 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
     return ax
 
 
-def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
-                pvals=None, pick=0, p_threshold=0.05, min_pval=0.001, ax=None,
-                eventplot_kwargs=None):
+def plot_spikes(spk, frate, groupby=None, colors=None, df_clst=None,
+                clusters=None, pvals=None, pick=0, p_threshold=0.05,
+                min_pval=0.001, ax=None, eventplot_kwargs=None, fontsize=12):
     '''Plot average spike rate and spike raster.
 
     spk : pylabianca.spikes.SpikeEpochs
@@ -609,6 +609,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
         ``spk.spike_density()``.
     groupby : str | None
         How to group the plots. If None, no grouping is done.
+    colors : list of str | None
+        List of colors to use for each group. If None uses the default
     df_clst : pandas.DataFrame | None
         DataFrame with cluster time ranges and p values. If None, no cluster
         information is shown. This argument is to support results obtained
@@ -634,6 +636,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
         is used for raster plot. If None, a new figure is created.
     eventplot_kwargs : dict | None
         Additional keyword arguments for the eventplot.
+    fontsize : int
+        Font size for the labels.
 
     Returns
     -------
@@ -657,7 +661,7 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
     else:
         assert(len(ax) == 2)
         fig = ax[0].figure
-    plot_shaded(this_frate, groupby=groupby, ax=ax[0])
+    plot_shaded(this_frate, groupby=groupby, colors=colors, ax=ax[0])
 
     # add highlight
     add_highlight = (df_clst is not None) or (
@@ -671,15 +675,15 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
         add_highlights(this_frate, clusters, pvals, ax=ax[0],
                        p_threshold=p_threshold, min_pval=min_pval)
 
-    plot_raster(spk.copy().pick_cells(cell_name), pick=0,
-                groupby=groupby, ax=ax[1], eventplot_kwargs=eventplot_kwargs)
+    plot_raster(spk.copy().pick_cells(cell_name), pick=0, groupby=groupby,
+                colors=colors, ax=ax[1], eventplot_kwargs=eventplot_kwargs)
     ylim = ax[1].get_xlim()
     ax[0].set_xlim(ylim)
 
     ax[0].set_xlabel('')
-    ax[0].set_ylabel('Spike rate (Hz)', fontsize=12)
-    ax[1].set_xlabel('Time (s)', fontsize=12)
-    ax[1].set_ylabel('Trials', fontsize=12)
+    ax[0].set_ylabel('Spike rate (Hz)', fontsize=fontsize)
+    ax[1].set_xlabel('Time (s)', fontsize=fontsize)
+    ax[1].set_ylabel('Trials', fontsize=fontsize)
 
     return fig
 
