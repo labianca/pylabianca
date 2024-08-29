@@ -1504,8 +1504,11 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
     ----------
     array : xarray.DataArray
         DataArray to groupby and apply function to.
-    groupby : list
-        List of dimensions/variables to apply groupby operations to.
+    groupby : str | list | None
+        Dimensions/variables to apply groupby operation to. Can be:
+        * str: single variable is used to group by.
+        * list: multiple variables are used to group by.
+        * None: no groupby operation is performed.
     apply_fn : function
         Function to apply to grouped DataArray. If ``None``, the mean along
         'trial' dimension is used.
@@ -1519,6 +1522,11 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
     if apply_fn is None:
         # average over trial by default
         apply_fn = lambda arr: arr.mean(dim='trial')
+
+    if groupby is None:
+        return apply_fn(array)
+    elif isinstance(groupby, str):
+        groupby = [groupby]
 
     if len(groupby) == 1:
         return array.groupby(groupby[0]).apply(apply_fn)
