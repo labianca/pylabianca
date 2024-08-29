@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 
 from .utils import (xr_find_nested_dims, cellinfo_from_xarray,
-                    _inherit_metadata_from_xarray, assign_session_coord)
+                    _inherit_metadata_from_xarray, assign_session_coord,
+                    nested_groupby_apply)
 
 
 # TODO: ! adapt for multiple cells
@@ -725,6 +726,8 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         if not selectivity['stat'].dims[0] == 'cell':
             raise ValueError(bad_dim_msg)
 
+    apply_func = lambda arr: arr.sum(dim='cell')
+
     has_perc = percentile is not None
     has_dist = dist is not None
 
@@ -764,22 +767,16 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     n_total = sel.copy()
     n_total.values = np.ones(n_total.shape, dtype=int)
 
-    if groupby is not None:
-        n_tot = n_total.groupby(groupby).sum(dim='cell')
-        n_sig = sel.groupby(groupby).sum(dim='cell')
-        if has_dist and threshold is not None:
-            n_sig_perm = perm_sel.groupby(groupby).sum(dim='cell')
-    else:
-        n_tot = n_total.sum(dim='cell')
-        n_sig = sel.sum(dim='cell')
-        if has_dist and threshold is not None:
-            n_sig_perm = perm_sel.sum(dim='cell')
-
-    perc_sel = (n_sig / n_tot) * 100.
+    n_total = nested_groupby_apply(n_total, groupby, apply_fn=apply_func)
+    n_sel = nested_groupby_apply(sel, groupby, apply_fn=apply_func)
+    perc_sel = (n_sel / n_total) * 100.
 
     if has_dist and threshold is not None:
         from .stats import find_percentile_threshold
-        perc_sel_perm = (n_sig_perm / n_tot) * 100.
+
+        n_sel_perm = nested_groupby_apply(
+            perm_sel, groupby, apply_fn=apply_func)
+        perc_sel_perm = (n_sel_perm / n_total) * 100.
         perm_thresh = find_percentile_threshold(
             perc_sel_perm, percentile=5, tail='pos', perm_dim=0
         )
