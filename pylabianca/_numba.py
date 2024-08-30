@@ -214,7 +214,6 @@ def numba_histogram(a, bin_edges):
     return hist, bin_edges
 
 
-# FIXME: this function assumes non-overlapping epochs
 @jit(nopython=True, cache=True)
 def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
     trial_idx = [-1]
@@ -236,7 +235,11 @@ def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
         event_time = event_times[epo_idx]
         t_low = event_time + tmin
         t_high = event_time + tmax
-        current_idx = t_idx_hi if t_idx_hi < t_low else t_idx_low
+
+        if timestamps[t_idx_hi] < t_low:
+            current_idx = t_idx_hi
+        else:
+            current_idx = t_idx_low
 
         while still_looking and current_idx < n_spikes:
             if timestamps[current_idx] >= t_low:
