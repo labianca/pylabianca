@@ -801,13 +801,20 @@ class Spikes(object):
 
         if backend == 'numba':
             from borsar.utils import has_numba
-            assert has_numba(), 'Numba is required for the "numba" backend.'
-            assert not has_waveform, (
-                'Waveforms are not supported with the "numba" backend. You '
-                'can drop waveforms by setting them to None ('
-                '``spk.waveform = None``) or use the "numpy" backend.')
-            assert not keep_timestamps, ('Keeping timestamps is not supported '
-                                         'with the "numba" backend.')
+
+            if not has_numba():
+                raise RuntimeError(
+                    'Numba package is required for the "numba" backend.')
+
+            if has_waveform:
+                raise RuntimeError(
+                    'Waveforms are not supported with the "numba" backend. You '
+                    'can drop waveforms by setting them to None ('
+                    '``spk.waveform = None``) or use the "numpy" backend.')
+
+            if keep_timestamps:
+                raise ValueError('Keeping timestamps is not supported '
+                                 'with the "numba" backend.')
             from ._numba import _epoch_spikes_numba
 
         for neuron_idx in range(n_neurons):
