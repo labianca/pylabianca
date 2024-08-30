@@ -247,7 +247,7 @@ def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
                 still_looking = False
             current_idx += 1
 
-        if still_looking and current_idx == max_idx:
+        if still_looking:
             break
 
         still_looking = True
@@ -257,7 +257,7 @@ def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
                 still_looking = False
             current_idx += 1
 
-        if still_looking and current_idx >= max_idx:
+        if still_looking:
             t_idx_hi = current_idx + 1
 
         # select these spikes and center wrt event time
