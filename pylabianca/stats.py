@@ -2,7 +2,7 @@ import numpy as np
 
 
 # TODO: move to borsar
-def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
+def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
                      return_pvalue=True, return_distribution=True, n_jobs=1):
     '''Perform permutation test on the data.
 
@@ -13,7 +13,8 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
     paired : bool
         Whether a paired (repeated measures) or unpaired test should be used.
     n_perm : int
-        Number of permutations to perform.
+        Number of permutations to perform. If ``0`` then only the statistic is
+        returned. Defaults to ``1_000``.
     progress : bool
         Whether to show progress bar.
     return_pvalue : bool
@@ -25,13 +26,14 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
 
     Returns
     -------
-    out : dict | tuple
+    out : dict | tuple | numpy.ndarray
         Dictionary with keys ``'stat'``, ``'thresh'``, ``'dist'`` and ``'pval'``
         if both ``return_pvalue`` and ``return_distribution`` are ``True``
         (the default). Otherwise a tuple with the first element being the
         statistic and the second being the p value (if ``return_pvalue`` is
         True). If both ``return_pvalue`` and ``return_distribution`` are False,
-        then only the statistic is returned.
+        then only the statistic is returned (numpy.ndarray). Only statistic is
+        returned also when `n_perm=0`.
     '''
     import borsar
 
@@ -55,16 +57,7 @@ def permutation_test(*arrays, paired=False, n_perm=1000, progress=False,
 
     stat = stat_fun(*arrays)
 
-    # this does not make sense for > 1d, but we could make sure
-    # that if output is 1d, 1-element array, it is returned as a scalar
-    #
-    # maybe it didn't make sense for 1d too?
-    # if isinstance(stat, np.ndarray):
-    #     try:
-    #         stat = stat[0]
-    #     except IndexError:
-    #         stat = stat.item()
-
+    # CONSIDER: if we perform just one test, we could return a scalar
     # TODO: use borsar functions for this or just put into separate function
     if return_pvalue:
         multiply_p = 2 if tail == 'both' else 1

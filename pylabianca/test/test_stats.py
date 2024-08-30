@@ -17,11 +17,11 @@ def test_permutation_test():
     arr3 = np.random.rand(12, 10)
     arr4 = np.random.rand(17, 10)
 
-    paireds = [True, False, False]
+    is_paired = [True, False, False]
     array_comb = [(arr1, arr2), (arr1, arr3), (arr2, arr3, arr4)]
-    stat_funs = [ttest_rel, ttest_ind_eq, f_oneway]
+    stat_functions = [ttest_rel, ttest_ind_eq, f_oneway]
 
-    for arrays, paired, stat_fun in zip(array_comb, paireds, stat_funs):
+    for arrays, paired, stat_fun in zip(array_comb, is_paired, stat_functions):
 
         stats_perm, pvals_perm = pln.stats.permutation_test(
             *arrays, paired=paired, return_distribution=False)
@@ -33,6 +33,15 @@ def test_permutation_test():
 
         assert (pval_abs_diff < 0.25).all()
         assert (pval_abs_diff < 0.1).mean() > 0.6
+
+
+def test_permutation_test_n_perm_0():
+    arr1 = np.random.rand(10, 20)
+    arr2 = np.random.rand(15, 20)
+    stats = pln.stats.permutation_test(arr1, arr2, n_perm=0)
+
+    assert isinstance(stats, np.ndarray)
+    assert stats.shape == (20,)
 
 
 def test_cluster_based_test_from_permutations():
