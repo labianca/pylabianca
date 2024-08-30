@@ -215,16 +215,18 @@ def numba_histogram(a, bin_edges):
 
 
 # FIXME: this function assumes non-overlapping epochs
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
     trial_idx = [-1]
     n_in_trial = [0]
     time = [np.array([0.2])]
+    n_spikes = len(timestamps)
 
     t_idx_low = 0
     t_idx_hi = 0
-    n_spikes = len(timestamps)
+    max_idx = n_spikes - 1
     n_epochs = event_times.shape[0]
+
     this_epo = (timestamps[0] < (event_times + tmax)).argmax()
     epo_indices = np.arange(this_epo, n_epochs, dtype=np.int16)
 
@@ -242,12 +244,18 @@ def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
                 still_looking = False
             current_idx += 1
 
+        if still_looking and current_idx == max_idx:
+            break
+
         still_looking = True
         while still_looking and current_idx < n_spikes:
             if timestamps[current_idx] >= t_high:
                 t_idx_hi = current_idx
                 still_looking = False
             current_idx += 1
+
+        if still_looking and current_idx >= max_idx:
+            t_idx_hi = current_idx + 1
 
         # select these spikes and center wrt event time
         tms = timestamps[t_idx_low:t_idx_hi] - event_time
