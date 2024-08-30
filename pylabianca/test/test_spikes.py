@@ -5,7 +5,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import (download_test_data, get_data_path,
-                              create_random_spikes)
+                              create_random_spikes, has_numba)
 from pylabianca.testing import ft_data, spk_epochs
 
 
@@ -346,6 +346,27 @@ def test_epoching():
     # warning when some events are missing
     with pytest.warns(UserWarning, match='Some event ids are missing'):
         spk.epoch(events, event_id=[1, 2], tmin=-0.25, tmax=0.6)
+
+    if has_numba():
+        # numba backend also gives correct outcome
+        spk_epochs = spk.epoch(
+            events, event_id=[1, 3], tmin=-0.25, tmax=0.6, backend='numba')
+        np.testing.assert_almost_equal(spk_epochs.time[0], np.tile(delays, 6))
+
+        # keep_timestamps does not work with numba backend:
+        msg = 'Keeping timestamps is not supported'
+        with pytest.raises(ValueError, match=msg):
+            spk_epochs = spk.epoch(
+                events, event_id=[1, 3], backend='numba', keep_timestamps=True)
+
+        # epoching with waveforms is also not supported with numba backend:
+        spk.waveform = [np.random.rand(len(spk), 36)]
+        with pytest.raises(RuntimeError, match='Waveforms are not supported'):
+            spk_epochs = spk.epoch(
+                events, event_id=[1, 3], backend='numba')
+    else:
+        with pytest.raises(RuntimeError, match='Numba package is required'):
+            spk_epochs = spk.epoch(events, backend='numba')
 
 
 def test_metadata():
