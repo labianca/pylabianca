@@ -1357,7 +1357,7 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
                'xarray.DataArrays.')
         assert isinstance(frate, xr.DataArray), msg
 
-        _validate_xarray_for_aggregation(frate, groupby)
+        _validate_xarray_for_aggregation(frate, groupby, per_cell)
 
     if per_cell_query is not None:
         per_cell = True
@@ -1389,22 +1389,26 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
             return None
 
 
-def _validate_xarray_for_aggregation(arr, groupby):
+def _validate_xarray_for_aggregation(arr, groupby, per_cell):
     if groupby is not None:
         nested = xr_find_nested_dims(arr, ('cell', 'trial'))
-        if groupby in nested:
+        if groupby in nested and per_cell is False:
             raise ValueError(
-                'The groupby coordinate cannot be cell x trial, it has to be '
-                'a simple trial dimension coordinate. Complex cell x trial '
-                'coordinates often arise when the data is transformed from '
-                'dictionary of xarrays to one concatenated xarray '
-                '(using pylabianca.utils.dict_to_xarray) and at the trial '
-                'metadata is not the same across sessions (e.g. the order of '
-                'conditions is different, which is common for '
-                'non-pseudo-random experiments). Use '
-                'pylabianca.utils.xarray_to_dict to convert the data to '
+                'When using `per_cell=False`, the groupby coordinate cannot be'
+                ' cell x trial, it has to be a simple trial dimension '
+                'coordinate. Complex cell x trial coordinates often arise when'
+                ' the data is transformed from a dictionary of xarrays to one'
+                ' concatenated xarray (using `pylabianca.utils.dict_to_xarray`'
+                'or `xarray.concat()` directly) and the trial metadata is not '
+                'the same across sessions (e.g. the order of conditions is '
+                'different, which is common for non-pseudo-random experiments)'
+                '. Use pylabianca.utils.xarray_to_dict to convert the data to '
                 'a dictionary of xarrays and then perform the aggregation on '
-                'the dictionary.')
+                'the dictionary. Alternatively, if the cell x trial '
+                'coordinates are inherent to each session (for example it'
+                'represents cell-specific properties that vary by trial, like'
+                ' whether the preferred stimulus was shown), you can perform '
+                'the aggregation using `per_cell=True`.')
 
 
 def _aggregate_xarray(frate, groupby, zscore, select, baseline):
