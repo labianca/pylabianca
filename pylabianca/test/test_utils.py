@@ -238,6 +238,8 @@ def test_xarr_dct_conversion():
     xarr2 = xarr2.assign_coords(
         cnd2=('trial', np.random.choice(['A', 'B'], n_trials)))
 
+    xarr1.name = 'data'
+    xarr2.name = 'data'
     x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
     xarr = pln.utils.dict_to_xarray(x_dct1, select='load == 1')
     n_tri = xarr.shape[0]
