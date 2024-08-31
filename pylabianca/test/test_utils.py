@@ -232,6 +232,22 @@ def test_xarr_dct_conversion():
         xarr.name = None
         xarr.query(cell='sub == "W05"')
 
+    # selecting by condition
+    xarr1 = xarr1.assign_coords(
+        cnd1=('trial', np.random.choice(['A', 'B'], n_trials)))
+    xarr2 = xarr2.assign_coords(
+        cnd2=('trial', np.random.choice(['A', 'B'], n_trials)))
+
+    x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
+    xarr = pln.utils.dict_to_xarray(x_dct1, select='load == 1')
+    n_tri = xarr.shape[0]
+
+    n_per_condition = 10
+    assert 'cnd1' not in xarr.coords
+    assert 'cnd2' not in xarr.coords
+    assert xarr.shape[0] == xarr1.shape[0] + xarr2.shape[0]
+    assert (xarr.trial.data == np.arange(n_per_condition)).all()
+
 
 def test_extract_data_and_aggregate():
     '''Test extract_data and some basic dict -> xarray operations.'''
