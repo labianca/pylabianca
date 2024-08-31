@@ -161,9 +161,11 @@ def test_sub_ses_parsing():
     assert sub == 'switch001'
     assert ses == 'stim1'
 
-    sub, ses = pln.utils.parse_sub_ses('sub-switch001_ses-stim1',
-                                    remove_sub_prefix=False,
-                                    remove_ses_prefix=False)
+    sub, ses = pln.utils.parse_sub_ses(
+        'sub-switch001_ses-stim1',
+        remove_sub_prefix=False,
+        remove_ses_prefix=False
+    )
     assert sub == 'sub-switch001'
     assert ses == 'ses-stim1'
 
@@ -216,6 +218,9 @@ def test_xarr_dct_conversion():
     xarr = pln.utils.dict_to_xarray(x_dct1)
     x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=False)
     compare_dicts(x_dct1, x_dct2)
+
+    # TODO: also add check for same key order
+    #       (compare_dicts does not check this)
 
     xarr_2 = pln.utils.dict_to_xarray(x_dct2)
     assert (xarr == xarr_2).all().item()
