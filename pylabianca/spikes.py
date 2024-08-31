@@ -1,4 +1,6 @@
 from typing import Type
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -481,7 +483,7 @@ class SpikeEpochs():
                            waveform=waveform, timestamps=timestamps)
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
-                      y_bins=100, cmap='viridis', backend='numpy'):
+                      n_bins_y=100, cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -496,7 +498,7 @@ class SpikeEpochs():
             Axis to plot to. By default opens a new figure.
         labels : bool
             Whether to add labels to the axes.
-        y_bins : int
+        n_bins_y : int
             How many bins to use for the y axis. Defaults to 100. Used only in
             the 'numpy' backend.
         cmap : str
@@ -508,7 +510,7 @@ class SpikeEpochs():
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, y_bins=y_bins,
+                             labels=labels, n_bins_y=n_bins_y,
                              times=self.waveform_time, cmap=cmap,
                              backend=backend)
 
@@ -733,8 +735,8 @@ class Spikes(object):
         '''Return the number of units in Spikes.'''
         return len(self.timestamps)
 
-    # TODO: potential speedup: epoch on timestamps directly, only then convert
-    #       to spike times in seconds (this would have been easier if
+    # CONSIDER: potential speedup: epoch on timestamps directly, only then
+    #       convert to spike times in seconds (this would have been easier if
     #       timestamps were always int, but for osort they can be floating
     #       point)
     def epoch(self, events, event_id=None, tmin=-0.2, tmax=1.,
@@ -755,7 +757,7 @@ class Spikes(object):
             ``-0.2``.
         tmax : float
             Epoch start in seconds with respect to event onset. Default to
-            ``-0.2``.
+            ``1.0``.
         keep_timestamps : bool
             Whether to keep the original spike timestamps and store them in the
             epochs. Defaults to ``False``.
@@ -772,7 +774,21 @@ class Spikes(object):
         # event_id support
         if event_id is not None:
             use_events = np.in1d(events[:, -1], event_id)
+            if not np.any(use_events):
+                raise ValueError(
+                    'No events of any of the types ({}) found.'.format(
+                        event_id)
+                )
             events = events[use_events, :]
+
+            # test if some events are missing
+            unique_events = np.unique(events[:, -1])
+            if len(event_id) != len(unique_events):
+                missing = np.setdiff1d(event_id, unique_events)
+                warnings.warn(
+                    'Some event ids are missing in the events array: '
+                    '{}'.format(missing)
+                )
 
         n_neurons = len(self.timestamps)
         trial, time = list(), list()
@@ -785,11 +801,20 @@ class Spikes(object):
 
         if backend == 'numba':
             from borsar.utils import has_numba
-            assert has_numba(), 'Numba is required for the "numba" backend.'
-            assert not has_waveform, ('Waveforms are not supported with the '
-                                      '"numba" backend.')
-            assert not keep_timestamps, ('Keeping timestamps is not supported '
-                                         'with the "numba" backend.')
+
+            if not has_numba():
+                raise RuntimeError(
+                    'Numba package is required for the "numba" backend.')
+
+            if has_waveform:
+                raise RuntimeError(
+                    'Waveforms are not supported with the "numba" backend. You '
+                    'can drop waveforms by setting them to None ('
+                    '``spk.waveform = None``) or use the "numpy" backend.')
+
+            if keep_timestamps:
+                raise ValueError('Keeping timestamps is not supported '
+                                 'with the "numba" backend.')
             from ._numba import _epoch_spikes_numba
 
         for neuron_idx in range(n_neurons):
@@ -849,15 +874,15 @@ class Spikes(object):
         '''
         return _pick_cells(self, picks=picks, query=query)
 
-    def drop_cells(self, picks):
+    def drop_cells(self, drop):
         '''Drop cells by name or index. Operates in-place.
 
         Parameters
         ----------
-        picks : int | str | list-like of int
+        drop : int | str | list-like of int
             Cell  indices to drop.
         '''
-        return _drop_cells(self, picks)
+        return _drop_cells(self, drop)
 
     def n_spikes(self):
         """Calculate number of spikes per cell.
@@ -903,7 +928,7 @@ class Spikes(object):
         return self
 
     def plot_waveform(self, picks=None, upsample=False, ax=None, labels=True,
-                      y_bins=100, cmap='viridis', backend='numpy'):
+                      n_bins_y=100, cmap='viridis', backend='numpy'):
         '''Plot waveform heatmap for one cell.
 
         Parameters
@@ -918,7 +943,7 @@ class Spikes(object):
             Axis to plot to. By default opens a new figure.
         labels : bool
             Whether to add labels to the axes.
-        y_bins : int
+        n_bins_y : int
             How many bins to use for the y axis. Defaults to 100. Used only in
             the 'numpy' backend.
         cmap : str
@@ -935,7 +960,7 @@ class Spikes(object):
         '''
         from .viz import plot_waveform
         return plot_waveform(self, picks=picks, upsample=upsample, ax=ax,
-                             labels=labels, y_bins=y_bins,
+                             labels=labels, n_bins_y=n_bins_y,
                              times=self.waveform_time, cmap=cmap,
                              backend=backend)
 
@@ -1195,6 +1220,9 @@ def _pick_cells(spk, picks=None, query=None):
 
         if spk.timestamps is not None:
             spk.timestamps = [spk.timestamps[ix] for ix in picks]
+    else:
+        raise TypeError('spk has to be Spikes or SpikeEpochs, got '
+                        f'{type(spk)}')
 
     if spk.cellinfo is not None:
         spk.cellinfo = spk.cellinfo.loc[picks, :].reset_index(drop=True)
@@ -1204,17 +1232,23 @@ def _pick_cells(spk, picks=None, query=None):
     return spk
 
 
-def _drop_cells(spk, picks):
+def _drop_cells(spk, drop):
     '''Drop cells by name or index. Operates in-place.
 
     Parameters
     ----------
-    picks : int | str | list-like of int
+    drop : int | str | list-like of int
         Cell  indices to drop.
     '''
+    # special case for dropping no cells
+    if isinstance(drop, (list, np.ndarray)):
+        if len(drop) == 0:
+            return spk
+
+    # invert drop to pick and use pick_cells
     all_idx = np.arange(spk.n_units())
-    picks = _deal_with_picks(spk, picks)
-    is_dropped = np.in1d(all_idx, picks)
+    drop = _deal_with_picks(spk, drop)
+    is_dropped = np.in1d(all_idx, drop)
     retain_idx = np.where(~is_dropped)[0]
     return spk.pick_cells(retain_idx)
 

@@ -2,15 +2,44 @@
 
 ## DEV (upcoming version 0.4)
 
-## Version 0.3.1
+* DEV: Set up automated testing on CircleCI and code coverage tracking with codecov.com
 
-DEV: Set up automated testing on CircleCI and code coverage tracking with codecov.com
+<br/>
+
+* API: `pylabianca.viz.plot_waveform()` `y_bins` argument was renamed to `n_y_bins` to better reflect its meaning.
+* API: `pylabianca.selectivity.compute_selectivity_continuous()` now returns an `xarray.Dataset` instead of dictionary of `xarray.DataArray` objects. This makes the output more convenient to work with (for example using `.sel()` to select elements of all items at the same time; or ability to use both `['key_name']` and `.key_name` to access items).
+* API: removed, now unnecessary, `ignore_below` argument of `pylabianca.selectivity.depth_of_selectivity()` function. It was used to ignore firing rate values below a certain threshold, but the issue of very small non-zero values was previously fixed (numerical error likely stemming from the fact convolution used fft under the hood).
+* API: removed `min_Hz` argument of `pylabianca.selectivity.compute_selectivity_continuous()`. It was used to ignore average firing rate values below a certain threshold, but such selection should be done by the user before calling the function.
+
+<br/>
+
+* ENH: add `pylabianca.utils._inherit_from_xarray()` to allow inheriting metadata (cell or trial-level additional information) from xarray DataArray to new xarray DataArray.
+* ENH: `pylabianca.utils.dict_to_xarray()` now allows to pass dictionary of `xarray.Dataset` as input.
+* ENH: added `pylabianca.selectivity.compute_percent_selective()` - function to use on the results of `pylabianca.selectivity.compute_selectivity_continuous()` to calculate the percentage of selective cells. Allows to split the calculations according to `groupby` argument value, specify selectivity threshold (single value or percentile of the permutation distribution). It also performs the percentage calculations on the permutation distribution - this is useful when calculating time-resolved selectivity and using the permutation distribution of percentages in cluster-based permutation test.
+* ENH: added `pylabianca.selectivity.threshold_selectivity()` to transform selectivity statistics xarray into binary selective / non-selective mask based on a given threshold (single value or percentile of the permutation distribution).
+* ENH: added `pylabianca.utils.aggregate()` to aggregate firing rate data. The aggregation is done by averaging the firing rate data over the trials dimension with optional grouping by one or more trial coordinates (conditions). The firing rate data can be optionally z-scored per-cell before aggregation. The function returns an xarray DataArray with aggregated firing rate data and accepts xarray DataArray or dictionary of xarray DataArray as input.
+* ENH: added `pylabianca.utils.zscore_xarray()` to z-score firing rate data in xarray DataArray. The z-scoring is done separately for each level of coordinate specified in `groupby` argument. Additional argument `baseline` allows to z-score the data using a baseline period (specified as a time range tuple or a separate xarray DataArray).
+* ENH: added `pylabianca.utils.compute_selectivity_multisession()` to compute selectivity on a multisession dictionary (session name -> xarray). The output is an xarray.Dataset with concatenated session selectivity results (the order of the sessions in the output xarray.Dataset is the same as in the input dictionary).
+* ENH: added `pylabianca.stats.find_percentile_threshold()` used to calculate significance threshold for given statistic based on percentile of the permutation distribution.
+* ENH: `pylabianca.selectivity.compute_selectivity_continuous()` now can be also run with `n_perm=0`, returning only the selectivity statistics, without the permutation distribution or permutation-based threshold. Also `pylabianca.stats.permutation_test()` can now be run with `n_perm=0`, returning only the statistic values without the permutation distribution or permutation-based threshold.
 
 <br/>
 
 * FIX: `pylabianca.utils.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if session order was not alphabetical in the concatenated xarray. Now `pylabianca.utils.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
+* FIX: make `pylabianca.utils.xarray_to_dict()` work also on arrays without cell x trial multi-dim coords (e.g. `('cell', 'trial')`), which are common after concatenating multiple sessions.
 * FIX: `SpikeEpochs.n_spikes(per_epoch=True)` used spike rate calculation to count spikes in each epoch. This was unnecessary (and possibly slow) and in rare cases could lead to wrong results (probably numerical error when multiplying spike rate by window duration and immediately turning to int, without rounding). Now `SpikeEpochs.n_spikes(per_epoch=True)` counts spikes directly using `pylabianca.utils._get_trial_boundaries`.
+* FIX: made `Spikes.epoch()` raise a more informative error when no `event_id` values were found in the provided `events` array. When some of the `event_id` values are missing, a warning is raised and the function proceeds with the available values.
 * FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes.
+* FIX: dataframe returned by `pylabianca.selectivity.cluster_based_selectivity()` had two unused columns (`'pev'` and `'peak_pev'`), where correct names should have been `'PEV'` and `'peak_PEV'`. Now corrected.
+* FIX: make `pylabianca.selectivity.assess_selectivity()` work when empty DataFrame is passed (no clusters found in `pylabianca.selectivity.cluster_based_selectivity()`).
+* FIX: `pylabianca.viz.plot_shaded()` auto-inferring of dimension to reduce (average) now correctly ignores `groupby` argument (if identical to one of the dimensions).
+* FIX: `pylabianca.viz.plot_shaded()` now produces a clearer error when too many dimensional DataArray is used.
+* FIX: `pylabianca.utils._handle_cell_names()` (used internally in a few places) now works with NumPy >= 2.0.
+* FIX: `pylabianca.viz.plot_waveform()` (as well as `.plot_waveform()` methods of `Spikes` and `SpikeEpochs`) now produces a clearer error when no waveforms are present in the data.
+
+<br/>
+
+* DOC: add docstring to `pylabianca.selectivity.assess_selectivity()`
 
 <br/><br/>
 
@@ -47,6 +76,7 @@ DEV: Set up automated testing on CircleCI and code coverage tracking with codeco
 * ENH: allow to select trials with boolean mask for `SpikeEpochs` objects (e.g. `spk_epochs[np.array([True, False, True])]` or `spk_epochs[my_mask]` where `my_mask` is a boolean array of length `len(spk_epochs)`)
 * ENH: `Spikes` `.sort()` method now exposes `inplace` argument to allow for sorting on a copy of the object (this can be also easily done by using `spk.copy().sort()`)
 
+* ENH: add `use_usenegative` argument to `pylabianca.io.read_osort()`. It allows to read only clusters / units indicated by `usenegative` field in the OSort output file. This field is used when exporting data from OSort in a lazy way (not removing unused clusters from the data file, but instead just adding / modifying `usenegative` field).
 * ENH: better error message when the format passed to `pylabianca.io.read_osort()` does not match the data
 * ENH: added better input validation to `SpikeEpochs` to avoid silly errors
 * ENH: added better input validation to `Spikes` to avoid silly errors

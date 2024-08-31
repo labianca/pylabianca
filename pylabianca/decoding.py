@@ -10,7 +10,7 @@ except ImportError:
 
 def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
                        n_jobs=1, time_generalization=False, random_state=None,
-                       clf=None, n_pca=0):
+                       clf=None, n_pca=0, time=None):
     '''Perform decoding analysis.
 
     Parameters
@@ -104,9 +104,15 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
         scores.append(score)
 
     scores = np.stack(scores, axis=0)
+
+    if time is not None:
+        scores = _scores_as_xarray(scores, scoring, n_splits, 'time', time,
+                                   time_generalization)
+
     return scores
 
 
+# TODO: decode_across is not actually used
 # CONSIDER: decim=None by default, decim=1 as no decimation may be confusing
 # CONSIDER: supporting ``select`` to select conditions (useful only when a
 #           dictionary of xarrays is passed, so multiple subjects)
@@ -167,10 +173,16 @@ def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
     scores = run_decoding_array(
         X, y, n_splits=n_splits, C=C, scoring=scoring, n_jobs=n_jobs,
         time_generalization=time_generalization, random_state=random_state,
-        clf=clf, n_pca=n_pca
+        clf=clf, n_pca=n_pca, time=time_dim
     )
 
-    # combine into xarray output
+    return scores
+
+
+def _scores_as_xarray(scores, scoring, n_splits, decode_across, time_dim,
+                      time_generalization):
+    import xarray as xr
+
     name = scoring
     coords = {'fold': np.arange(n_splits)}
     if time_generalization:
@@ -184,6 +196,7 @@ def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
     scores = xr.DataArray(
         scores, dims=dims, coords=coords, name=name,
     )
+
     return scores
 
 
@@ -242,6 +255,7 @@ def frate_to_sklearn(frate, target=None, select=None,
 
     if time_idx is not None:
         fr = fr.isel(time=time_idx)
+        has_time = 'time' in fr.dims
 
     if has_time:
         time = fr.time.values[::decim]
@@ -513,8 +527,6 @@ def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
         Xs, ys, time = frates_dict_to_sklearn(
             frates, target=target, select=select_trials, decim=decim)
 
-    # n_trials = _count_trials(Xs)
-
     if isinstance(permute, bool) and permute:
         ys = [np.random.permutation(y) for y in ys]
 
@@ -552,6 +564,7 @@ def _do_resample(Xs, ys, decoding_fun, arguments, time=None):
     return decoding_fun(X, y, time=time, **arguments)
 
 
+## a variant of this will be needed later in join_sessions
 def _count_trials(Xs):
     '''Check trials foe each array in the list.'''
     # check n trials (across subjects)

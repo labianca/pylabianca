@@ -165,6 +165,17 @@ def _inherit_metadata(coords, metadata, dimname, tri=None):
     return coords
 
 
+def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
+                                  copy_coords=None):
+    if copy_coords is None:
+        copy_coords = xr_find_nested_dims(xarr_from, dimname)
+    if len(copy_coords) > 0:
+        coords = {coord: (dimname, xarr_from.coords[coord].values)
+                  for coord in copy_coords}
+        xarr_to = xarr_to.assign_coords(coords)
+    return xarr_to
+
+
 def _symmetric_window_samples(winlen, sfreq):
     '''Returns a symmetric window of given length.'''
     half_len_smp = int(np.round(winlen / 2 * sfreq))
@@ -820,7 +831,7 @@ def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21),
             trials.append(this_tri)
 
     if return_epochs:
-        return SpikeEpochs(times, trials, **args)
+        return SpikeEpochs(times, trials, time_limits=(tmin, tmax), **args)
     else:
         if 'sfreq' not in args:
             args['sfreq'] = 10_000
@@ -924,6 +935,7 @@ def _handle_cell_names(cell_names, time):
     return cell_names
 
 
+# - [ ] does not have to be SpikeEpochs object, can be Spikes
 def _validate_cellinfo(spk, cellinfo):
     '''Validate cellinfo input for SpikeEpochs object.'''
     if cellinfo is not None:
@@ -959,6 +971,7 @@ def xr_find_nested_dims(arr, dim_name):
     return names
 
 
+# CONSIDER: ses_name -> ses_coord ?
 def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
     n_cells = len(arr.coords[dim_name])
     sub_dim = [ses] * n_cells
@@ -966,7 +979,8 @@ def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
     return arr
 
 
-def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
+# CONSIDER: ses_name -> ses_coord ?
+def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
     '''Convert dictionary to xarray.DataArray.
 
     Parameters
@@ -978,12 +992,13 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
         Name of the dimension to concatenate along. Defaults to ``'cell'``.
         This dimension is also enriched with subject / session information from
         the dictionary keys.
-    query : dict | None
-        If not None, the query is passed to .query() method of the xarray.
-        This can be useful to select only specific data from the xarray, which
-        can be difficult to do after concatenation (some coordinates may
-        become multi-dimensional and querying would raise an error "Unlabeled
-        multi-dimensional array cannot be used for indexing").
+    select : dict | None
+        Trial selection query. If not None, select is passed to .query() method
+        of the xarray. This can be useful to select only specific data from the
+        xarray, which can be difficult to do after concatenation (after
+        concatenation some coordinates may become multi-dimensional and
+        querying would raise an error "Unlabeled multi-dimensional array cannot
+        be used for indexing").
     ses_name : str
         Name of the subject / session coordinate that will be automatically
         added to the concatenated dimension from the dictionary keys. Defaults
@@ -998,22 +1013,23 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
 
     assert isinstance(data, dict)
     keys = list(data.keys())
-    all_xarr = [isinstance(data[sb], xr.DataArray) for sb in keys]
+    all_xarr = [isinstance(data[sb], (xr.DataArray, xr.Dataset))
+                for sb in keys]
     assert all(all_xarr)
 
-    if (query is not None) and (not isinstance(query, dict)):
-        query = {'trial': query}
+    if (select is not None) and (not isinstance(select, dict)):
+        select = {'trial': select}
 
     use_coords = None
     arr_list = list()
     different_coords = False
     for key, arr in data.items():
-        if query is not None:
-            arr = arr.query(query)
+        if select is not None:
+            arr = arr.query(select)
 
-            # if trial was in query dict, then we should reset trial indices
-            if 'trial' in query:
-                arr = arr.reset_index('trial', drop=False)
+            # if trial was in select dict, then we should reset trial indices
+            if 'trial' in select:
+                arr = arr.reset_index('trial', drop=True)
 
         # add subject / session information to the concatenated dimension
         arr = assign_session_coord(
@@ -1034,14 +1050,44 @@ def dict_to_xarray(data, dim_name='cell', query=None, ses_name='sub'):
     if different_coords:
         for idx, arr in enumerate(arr_list):
             drop_coords = set(list(arr.coords)) - use_coords
-            arr_list[idx] = arr.drop(drop_coords)
+            arr_list[idx] = arr.drop_vars(drop_coords)
 
     arr = xr.concat(arr_list, dim=dim_name)
     return arr
 
 
+# CONSIDER: ses_name -> ses_coord ?
 def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                    ensure_correct_reduction=True):
+    '''Convert multi-session xarray to dictionary of session -> xarray pairs.
+
+    Parameters
+    ----------
+    xarr : xarray.DataArray
+        Multi-session DataArray.
+    ses_name : str
+        Name of the session coordinate. Defaults to ``'sub'``.
+    reduce_coords : bool
+        If True, reduce coordinates were turned to cell x trial coordinates
+        when concatenating different session xarrays. This happens when
+        the order of the trial metadata (additional trial coordinates like
+        condition or response correctness) is different across concatenated
+        sessions. To keep these original trial metadata they have to be turned
+        to cell x trial format. When splitting back to dictionary of session
+        xarrays, this reduction can be undone. Defaults to True.
+    ensure_correct_reduction : bool
+        If True, ensure that the coord reduction is correct: check that,
+        indeed, all within-session trial metadata that is cell x trial is
+        the same across cells. See ``reduce_coords`` argument for more
+        information. Defaults to True, but can be slow, so set to False if
+        you are sure that all within-session trial metadata can be reduced
+        from ``cell x trial`` to just trial.
+
+    Returns
+    -------
+    xarr_dct : dict
+        Dictionary with session names as keys and xarrays as values.
+    '''
     xarr_dct = dict()
     session_order = pd.unique(xarr.coords[ses_name].values)
 
@@ -1054,7 +1100,10 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
         if reduce_coords:
             new_coords = dict()
             drop_coords = list()
-            nested_coords = xr_find_nested_dims(arr, ('cell', 'trial'))
+            if 'cell' in arr.coords and 'trial' in arr.coords:
+                nested_coords = xr_find_nested_dims(arr, ('cell', 'trial'))
+            else:
+                nested_coords = list()
 
             for coord in nested_coords:
                 one_cell = arr.coords[coord].isel(cell=0)
@@ -1068,7 +1117,7 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                     new_coords[coord] = ('trial', one_cell.values)
 
             if len(drop_coords) > 0:
-                arr = arr.drop(drop_coords)
+                arr = arr.drop_vars(drop_coords)
                 arr = arr.assign_coords(new_coords)
 
         xarr_dct[ses] = arr
@@ -1092,6 +1141,21 @@ def find_index(vec, vals):
 
 
 def cellinfo_from_xarray(xarr):
+    '''
+    Extract cell information (cellinfo) dataframe from xarray.
+
+    Parameters
+    ----------
+    xarr : xarray.DataArray
+        DataArray to use. Must contain cell dimension.
+
+    Returns
+    -------
+    cellinfo : pd.DataFrame | None
+        DataFrame with cell information. If there are multiple cell coordinates
+        in the xarray, the DataFrame will have multiple columns. If there are
+        no cell coordinates, None is returned.
+    '''
     cell_dims = xr_find_nested_dims(xarr, 'cell')
 
     if len(cell_dims) > 1:
@@ -1106,6 +1170,7 @@ def cellinfo_from_xarray(xarr):
 
 
 def parse_sub_ses(sub_ses, remove_sub_prefix=True, remove_ses_prefix=True):
+    """Parse subject and session from a BIDS-like string."""
     if remove_sub_prefix:
         sub_ses = sub_ses.replace('sub-', '')
     if remove_ses_prefix:
@@ -1119,13 +1184,18 @@ def parse_sub_ses(sub_ses, remove_sub_prefix=True, remove_ses_prefix=True):
     return sub, ses
 
 
-def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
+# TODO: change name to something more descriptive like "select_data"?
+# CONSIDER: ses_name -> ses_coord ?
+# CONSIDER: change the loop to use .groupby() xarr method instead of _get_arr
+#           (might be faster)
+def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
+                 df2xarr=None):
     '''Extract data from xarray dictionary using a dataframe.
 
     Parameters
     ----------
-    xarr_dict : dict
-        Dictionary with xarrays.
+    xarr_dict : dict | xarray.DataArray
+        Dictionary with xarrays or one xarray.DataArray.
     df : pandas.DataFrame
         DataFrame with selection properties.
     sub_col : str
@@ -1139,26 +1209,35 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
 
     Returns
     -------
-    xarr_dict_out : dict of xarray.DataArray
+    xarr_out : dict of xarray.DataArray | xarray.DataArray
         Dictionary with selected xarray cells.
     row_indices : np.ndarray
         Array with indices of rows.
     '''
-    assert isinstance(xarr_dict, dict)
+    import xarray as xr
+    assert isinstance(xarr_dict, (dict, xr.DataArray))
+    has_dict = isinstance(xarr_dict, dict)
 
     if df2xarr is None:
         df2xarr = {'label': 'region'}
 
-    row_indices = list()
-    keys = list(xarr_dict.keys())
-    xarr_dict_out = dict()
+    if has_dict:
+        keys = list(xarr_dict.keys())
+        xarr_out = dict()
+    else:
+        keys = pd.unique(xarr_dict.coords[ses_name].values)
+        xarr_out = list()
 
+    # TODO - check for sub / ses consistency and raise / warn
+    #        instead of doing too much magic
     remove_sub_prefix = 'sub-' in df[sub_col].values[0]
     if ses_col is not None:
         remove_ses_prefix = 'ses-' in df[ses_col].values[0]
     else:
         remove_ses_prefix = False
 
+    # TODO - check for sub / ses consistency and raise / warn
+    #        instead of doing too much magic
     if remove_sub_prefix or remove_ses_prefix:
         df = df.copy()
         if remove_sub_prefix:
@@ -1166,6 +1245,7 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
         if remove_ses_prefix:
             df[ses_col] = df[ses_col].str.replace('ses-', '')
 
+    row_indices = list()
     for key in keys:
         sub, ses = parse_sub_ses(key, remove_sub_prefix=remove_sub_prefix,
                                  remove_ses_prefix=remove_ses_prefix)
@@ -1173,7 +1253,8 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
         if ses is not None and ses_col is not None:
             df_sel = df_sel.query(f'{ses_col} == "{ses}"')
 
-        xarr = xarr_dict[key]
+        xarr = _get_arr(xarr_dict, key, ses_name=ses_name)
+
         n_cells = len(xarr.coords['cell'])
         mask_all = np.zeros(n_cells, dtype=bool)
         row_per_unit = np.zeros(n_cells, dtype=int)
@@ -1188,9 +1269,322 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, df2xarr=None):
             row_per_unit[mask_this] = row_idx
             mask_all |= mask_this
 
-        xarr_dict_out[key] = xarr.sel(cell=mask_all)
+        xarr_sel = xarr.sel(cell=mask_all)
         row_per_unit = row_per_unit[mask_all]
+
         row_indices.append(row_per_unit)
+        if has_dict:
+            xarr_out[key] = xarr_sel
+        else:
+            xarr_out.append(xarr_sel)
 
     row_indices = np.concatenate(row_indices)
-    return xarr_dict_out, row_indices
+    if not has_dict:
+        xarr_out = xr.concat(xarr_out, dim='cell')
+
+    return xarr_out, row_indices
+
+
+def _get_arr(arr, sub_ses, ses_name='sub'):
+    import xarray as xr
+    if isinstance(arr, dict):
+        arr = arr[sub_ses]
+    elif isinstance(arr, xr.DataArray):
+        arr = arr.query({'cell': f'{ses_name} == "{sub_ses}"'})
+    return arr
+
+
+# TODO: stimulus selectivity should be added to the xarray -
+#       it can be done as cell x trial coordinate, this could be a function
+#       in .selectivity module
+# - [ ] better argument names:
+#     -> is per_cell_query (per_cell_select etc.) even needed is we
+#        have per_cell=True and pass to specific subfunction?
+# ? option to pass the baseline calculated from a different period
+def aggregate(frate, groupby=None, select=None, per_cell_query=None,
+              zscore=False, baseline=False, per_cell=False):
+    """
+    Prepare spikes object for firing rate analysis.
+
+    Parameters
+    ----------
+    frate : xarray.DataArray | dict
+        Firing rate data. Output of ``.spike_rate()`` or ``.spike_density()``
+        methods.
+    groupby : str | False
+        Condition by which trials are grouped and averaged.
+    select : str | None
+        A query to perform on the SpikeEpochs object to select trials
+        fulfilling the query. For example ``'ifcorrect == True'`` will select
+        those trials where ifcorrect column (whether response was correct) is
+        True.
+    per_cell_query : dict | None
+        An xarray-compatible query to perform on the SpikeEpochs object
+        separately for each cell. These are often properties related to cell
+        selectivity, like whether the preferred stimulus is in memory etc.
+    zscore : bool | tuple | xarray.DataArray
+        Whether (and how) to zscore firing rate of each cell.  Defaults to
+        ``False``, which does not zscore cell firing rate timecourses.
+        If True, the whole array is used to calculate mean and standard
+        deviation for zscoring. If tuple, it is interpreted as time range to
+        use to calculate mean and standard deviation. If xarray.DataArray,
+        this xarray is used to calculate mean and standard deviation.
+    baseline : tuple | False
+        If not ``False`` (default) - ``(tmin, tmax)`` tuple specifying time
+        limits for baseline calculation. Baseline correction is performed
+        after zscoring.
+    per_cell : bool
+        Whether to perform selection and groupby operations on each cell
+        separately. This is much slower, but necessary when the selection is
+        cell-specific, e.g. when selecting only cells that are
+        stimulus-selective (then the preferred stimulus is cell-specific).
+
+    Returns
+    -------
+    frates : xarray.DataArray
+        Aggregated firing rate data.
+    """
+    import xarray as xr
+
+    if isinstance(frate, dict):
+        return _aggregate_dict(
+            frate, groupby=groupby, select=select,
+            per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
+            per_cell=per_cell
+        )
+    else:
+        msg = ('frate has to be an xarray.DataArray or dictionary of '
+               'xarray.DataArrays.')
+        assert isinstance(frate, xr.DataArray), msg
+
+        _validate_xarray_for_aggregation(frate, groupby, per_cell)
+
+    if per_cell_query is not None:
+        per_cell = True
+
+    if not per_cell:
+        # integrate with per_cell approach
+        frates = _aggregate_xarray(
+                frate, groupby, zscore, select, baseline
+            )
+        return frates
+    else:
+        frates = list()
+        n_cells = len(frate.cell)
+        for cell_idx in range(n_cells):
+            frate_cell = frate[cell_idx]
+
+            if per_cell_query is not None:
+                frate_cell = frate_cell.query(per_cell_query)
+
+            frate_cell = _aggregate_xarray(
+                frate_cell, groupby, zscore, select, baseline
+            )
+            frates.append(frate_cell)
+
+        if len(frates) > 0:
+            frates = xr.concat(frates, dim='cell')
+            return frates
+        else:
+            return None
+
+
+def _validate_xarray_for_aggregation(arr, groupby, per_cell):
+    if groupby is not None:
+        nested = xr_find_nested_dims(arr, ('cell', 'trial'))
+        if groupby in nested and per_cell is False:
+            raise ValueError(
+                'When using `per_cell=False`, the groupby coordinate cannot be'
+                ' cell x trial, it has to be a simple trial dimension '
+                'coordinate. Complex cell x trial coordinates often arise when'
+                ' the data is transformed from a dictionary of xarrays to one'
+                ' concatenated xarray (using `pylabianca.utils.dict_to_xarray`'
+                'or `xarray.concat()` directly) and the trial metadata is not '
+                'the same across sessions (e.g. the order of conditions is '
+                'different, which is common for non-pseudo-random experiments)'
+                '. Use pylabianca.utils.xarray_to_dict to convert the data to '
+                'a dictionary of xarrays and then perform the aggregation on '
+                'the dictionary. Alternatively, if the cell x trial '
+                'coordinates are inherent to each session (for example it'
+                'represents cell-specific properties that vary by trial, like'
+                ' whether the preferred stimulus was shown), you can perform '
+                'the aggregation using `per_cell=True`.')
+
+
+def _aggregate_xarray(frate, groupby, zscore, select, baseline):
+    """Aggregate xarray.DataArray with firing rate data.
+
+    The aggregation is performed within cells, i.e. the firing rate of each
+    cell is averaged across trials. Optionally, the data can be zscored
+    (separately for each cell) and baseline corrected.
+
+    Parameters
+    ----------
+    frate : xarray.DataArray
+        Firing rate data.
+    groupby : str | list | None
+        Dimension to groupby and average along.
+    zscore : bool | tuple | xarray.DataArray
+        Whether (and how) to zscore firing rate of each cell.  Defaults to
+        ``False``, which does not zscore cell firing rate time courses.
+        If True, the whole array is used to calculate mean and standard
+        deviation for zscoring. If tuple, it is interpreted as time range to
+        use to calculate mean and standard deviation. If xarray.DataArray,
+        this xarray is used to calculate mean and standard deviation.
+    select : str | None
+        A query to perform on the DataArray to select trials fulfilling the
+        query. For example ``'ifcorrect == True'`` will select those trials
+        where ifcorrect trial coord (whether response was correct) is True.
+    baseline : tuple | False
+        If not ``False`` - ``(tmin, tmax)`` tuple specifying time limits of
+        baseline correction. The baseline correction is performed after
+        zscoring.
+
+    Returns
+    -------
+    frate : xarray.DataArray
+        Aggregated firing rate data.
+    """
+
+    if zscore:
+        bsln = None if isinstance(zscore, bool) else zscore
+        frate = zscore_xarray(frate, baseline=bsln)
+
+    if select is not None:
+        frate = frate.query(trial=select)
+
+    if groupby:
+        if isinstance(groupby, list):
+            frate = nested_groupby_apply(frate, groupby)
+        else:
+            frate = frate.groupby(groupby).mean()
+    else:
+        # average all trials
+        frate = frate.mean(dim='trial')
+
+    if baseline:
+        time_range = slice(baseline[0], baseline[1])
+        bsln = frate.sel(time=time_range).mean(dim='time')
+        frate -= bsln
+
+    return frate
+
+
+# CONSIDER: use flox instead?
+def nested_groupby_apply(array, groupby, apply_fn=None):
+    """Apply function to nested groupby.
+
+    A hack from xarray github, posted by user https://github.com/hottwaj:
+    https://github.com/pydata/xarray/issues/324#issuecomment-265462343
+
+    Parameters
+    ----------
+    array : xarray.DataArray
+        DataArray to groupby and apply function to.
+    groupby : list
+        List of dimensions/variables to apply groupby operations to.
+    apply_fn : function
+        Function to apply to grouped DataArray. If ``None``, the mean along
+        'trial' dimension is used.
+
+    Returns
+    -------
+    array : xarray.DataArray
+        DataArray after groupby operations.
+    """
+
+    if apply_fn is None:
+        # average over trial by default
+        apply_fn = lambda arr: arr.mean(dim='trial')
+
+    if len(groupby) == 1:
+        return array.groupby(groupby[0]).apply(apply_fn)
+    else:
+        return array.groupby(groupby[0]).apply(
+            nested_groupby_apply, groupby=groupby[1:], apply_fn=apply_fn)
+
+
+# TODO: this could be changed and used with apply_dict / dict_apply
+#       the dict apply function could have output='xarray' option
+def _aggregate_dict(frates, groupby=None, select=None,
+                    per_cell_query=None, zscore=False, baseline=False,
+                    per_cell=False):
+    import xarray as xr
+
+    aggregated = list()
+    keys = list(frates.keys())
+
+    for key in keys:
+        frate = frates[key]
+        frate_agg = aggregate(
+            frate, groupby=groupby, select=select,
+            per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
+            per_cell=per_cell
+        )
+        if frate_agg is not None:
+            aggregated.append(frate_agg)
+            # TODO: assign subject / session information coordinate
+            #       - only if not already present ?
+
+    aggregated = xr.concat(aggregated, dim='cell')
+    return aggregated
+
+
+def zscore_xarray(arr, groupby='cell', baseline=None):
+    '''
+    Z-score an xarray.DataArray.
+
+    If the array contains `groupby` dimension (by default 'cell'), z-score
+    each element of this dimension (each cell) separately.
+
+    Parameters
+    ----------
+    arr : xarray.DataArray
+        Data to z-score.
+    groupby : str
+        Dimension name to z-score separately.
+    baseline : None | tuple | xarray.DataArray
+        If None, the whole array is used to calculate mean and standard
+        deviation. If tuple, the time range is used to calculate mean and
+        standard deviation. If xarray.DataArray, this xarray is used to
+        calculate mean and standard deviation.
+
+    Returns
+    -------
+    arr : xarray.DataArray
+        Z-scored data.
+    '''
+    import xarray as xr
+
+    if baseline is None:
+        baseline_arr = arr
+    elif isinstance(baseline, tuple):
+        assert len(baseline) == 2
+        time_range = slice(*baseline)
+        baseline_arr = arr.sel(time=time_range)
+    elif isinstance(baseline, xr.DataArray):
+        baseline_arr = baseline
+    else:
+        raise ValueError('baseline has to be None, tuple or xarray.DataArray.')
+
+    has_cell_dim = (groupby in baseline_arr.dims
+                    and len(baseline_arr.coords[groupby]) > 1)
+
+    if not has_cell_dim:
+        avg, std = baseline_arr.mean(), baseline_arr.std()
+    else:
+        dims = tuple(dim for dim in baseline_arr.dims if dim != groupby)
+        avg, std = baseline_arr.mean(dim=dims), baseline_arr.std(dim=dims)
+
+    arr = (arr - avg) / std
+    return arr
+
+
+def reset_trial_id(xarr_dict):
+    """Reset trial IDs in xarray dictionary."""
+    keys = list(xarr_dict.keys())
+    for key in keys:
+        this_arr = xarr_dict[key]
+        n_tri = len(this_arr.coords['trial'].values)
+        new_tri = np.arange(n_tri)
+        this_arr.coords['trial'].values[:] = new_tri[:]

@@ -5,7 +5,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import (download_test_data, get_data_path,
-                              create_random_spikes)
+                              create_random_spikes, has_numba)
 from pylabianca.testing import ft_data, spk_epochs
 
 
@@ -325,6 +325,77 @@ def test_epoching_vs_fieldtrip(spk_epochs):
 
         np.testing.assert_almost_equal(
             spk_epochs.time[ch_idx], spk_epo_test_ft.time[ch_idx])
+
+
+def test_epoching():
+    events = np.array(
+        [[3.5, 0, 1], [5.1, 0, 3], [12.3, 0, 1],
+         [15.7, 0, 1], [21.6, 0, 3], [28.9, 0, 1]]
+    )
+    delays = np.array([0.1, 0.35, 0.5])
+    timestamps = (events[:, [0]] + delays[None, :]).ravel()
+    spk = pln.Spikes([timestamps], sfreq=1.)
+
+    spk_epochs = spk.epoch(events, event_id=[1, 3], tmin=-0.25, tmax=0.6)
+    np.testing.assert_almost_equal(spk_epochs.time[0], np.tile(delays, 6))
+
+    # error when no events of the specified id are found
+    with pytest.raises(ValueError, match='No events of any '):
+        spk.epoch(events, event_id=[2, 4], tmin=-0.25, tmax=0.6)
+
+    # warning when some events are missing
+    with pytest.warns(UserWarning, match='Some event ids are missing'):
+        spk.epoch(events, event_id=[1, 2], tmin=-0.25, tmax=0.6)
+
+    if has_numba():
+        # numba backend also gives correct outcome
+        spk_epochs = spk.epoch(
+            events, event_id=[1, 3], tmin=-0.25, tmax=0.6, backend='numba')
+        np.testing.assert_almost_equal(spk_epochs.time[0], np.tile(delays, 6))
+
+        # keep_timestamps does not work with numba backend:
+        msg = 'Keeping timestamps is not supported'
+        with pytest.raises(ValueError, match=msg):
+            spk_epochs = spk.epoch(
+                events, event_id=[1, 3], backend='numba', keep_timestamps=True)
+
+        # epoching with waveforms is also not supported with numba backend:
+        spk.waveform = [np.random.rand(len(spk), 36)]
+        with pytest.raises(RuntimeError, match='Waveforms are not supported'):
+            spk_epochs = spk.epoch(
+                events, event_id=[1, 3], backend='numba')
+    else:
+        with pytest.raises(RuntimeError, match='Numba package is required'):
+            spk_epochs = spk.epoch(events, backend='numba')
+
+
+def test_epoching_overlapping():
+    '''Make sure epoching works with overlapping epochs'''
+
+    evnts = '  e     e           ee                    e'
+    stmps = '|  ||   |  |    |   | |      |   |  | ||    |   |'
+    tmin, tmax = -4, 9
+
+    exp_tri = [ 0, 0, 0, 0,  1, 1, 1, 1,  2, 2, 2,  3, 3, 3,  4,  4, 4, 4]
+    exp_tim = [-2, 1, 2, 6, -4, 0, 3, 8, -4, 0, 2, -1, 1, 8, -4, -3, 2, 6]
+
+    evnts = np.where(np.array(list(evnts)) == 'e')[0]
+    stmps = np.where(np.array(list(stmps)) == '|')[0]
+
+    n_events = evnts.shape[0]
+    events = np.zeros((n_events, 3), dtype=int)
+    events[:, 0] = evnts
+
+    spk = pln.Spikes([stmps], sfreq=1.)
+    spk_epo = spk.epoch(events, tmin=tmin, tmax=tmax)
+
+    assert (spk_epo.trial[0] == exp_tri).all()
+    assert (spk_epo.time[0] == exp_tim).all()
+
+    if has_numba():
+        spk_epo = spk.epoch(events, tmin=tmin, tmax=tmax, backend='numba')
+        assert (spk_epo.trial[0] == exp_tri).all()
+        assert (spk_epo.time[0] == exp_tim).all()
 
 
 def test_metadata():

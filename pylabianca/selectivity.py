@@ -1,7 +1,10 @@
+from numbers import Real
+
 import numpy as np
 import pandas as pd
 
-from .utils import xr_find_nested_dims, cellinfo_from_xarray
+from .utils import (xr_find_nested_dims, cellinfo_from_xarray,
+                    _inherit_metadata_from_xarray, assign_session_coord)
 
 
 # TODO: ! adapt for multiple cells
@@ -74,7 +77,7 @@ def explained_variance(frate, groupby, kind='omega'):
 
 
 # TODO: ! adapt for multiple cells
-def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
+def depth_of_selectivity(frate, groupby):
     '''Compute depth of selectivity for given category.
 
     Parameters
@@ -84,21 +87,12 @@ def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
     groupby : str
         Name of the dimension to group by and calculate depth of selectivity
         for.
-    ignore_below : float
-        Ignore values below this threshold. This is useful when spike density
-        is passed in ``frate`` - due to numerical errors, some values may be
-        very small or even negative but not exactly zero. Such values can lead
-        to depth of selectivity being far greater than 1. Default is ``1e-15``.
 
     Returns
     -------
     selectivity : xarray
         Xarray with depth of selectivity.
     '''
-    if ignore_below > 0:
-        frate = frate.copy()
-        msk = frate.values < ignore_below
-        frate.values[msk] = 0.
 
     avg_by_probe = frate.groupby(groupby).mean(dim='trial')
     n_categories = len(avg_by_probe.coords[groupby])
@@ -112,18 +106,14 @@ def depth_of_selectivity(frate, groupby, ignore_below=1e-15):
     selectivity = numerator / (n_categories - 1)
     selectivity.name = 'depth of selectivity'
 
-    if not singleton:
-        bad_selectivity = r_max < ignore_below
-        if (bad_selectivity).any():
-            selectivity[bad_selectivity] = 0
-
     return selectivity, avg_by_probe
 
 
 # CONSIDER: could add an attribute informing about condition order
 #           (important for t test interpretation for example)
+# TODO: change tail order to neg, pos?
 def compute_selectivity_continuous(frate, compare='image', n_perm=500,
-                                   n_jobs=1, min_Hz=False):
+                                   n_jobs=1):
     '''
     Compute population selectivity for specific experimental category.
 
@@ -141,9 +131,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     n_jobs : int
         Number of parallel jobs. No parallel computation is done when
         ``n_jobs=1`` (default).
-    min_Hz : 0.1 | bool
-        Minimum spiking rate threshold (in Hz). Cells below this threshold will
-        be ignored.
 
     Returns
     -------
@@ -166,12 +153,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     has_time = 'time' in frate.dims
 
-    # select cells
-    if min_Hz:
-        reduce_dims = 'trial' if not has_time else ('trial', 'time')
-        msk = frate.mean(dim=reduce_dims) >= min_Hz
-        frate = frate.sel(cell=msk)
-
     frate_dims = ['trial', 'cell']
     if has_time:
         frate_dims.append('time')
@@ -190,11 +171,6 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     # --------------
     cells = frate.cell.values
 
-    # TODO: this is not documented and not very clear, could be moved outside
-    if 'subject' in frate.attrs:
-        subj = frate.attrs['subject']
-        cells = ['_'.join([subj, x]) for x in cells]
-
     # perm
     dims = ['perm', 'cell']
     coords = {'perm': np.arange(n_perm) + 1,
@@ -203,39 +179,50 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         dims.append('time')
         coords['time'] = frate.time.values
 
-    results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
-                                   coords=coords, name=stat_name)
+    if n_perm > 0:
+        results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
+                                       coords=coords, name=stat_name)
+        use_data = results['stat']
+    else:
+        use_data = results
+        results = dict()
 
     # stat
     coords = {k: coords[k] for k in dims[1:]}
     results['stat'] = xr.DataArray(
-        data=results['stat'], dims=dims[1:], coords=coords, name=stat_name)
+        data=use_data, dims=dims[1:], coords=coords, name=stat_name)
 
     # thresh
-    if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
-        # two-tail thresholds
-        results['thresh'] = np.stack(results['thresh'], axis=0)
-        dims2 = ['tail'] + dims[1:]
-        coords.update({'tail': ['pos', 'neg']})
-    else:
-        dims2 = dims[1:]
+    if n_perm > 0:
+        if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
+            # two-tail thresholds
+            dims2 = ['tail'] + dims[1:]
+            results['thresh'] = np.stack(results['thresh'], axis=0)
+            coords.update({'tail': ['pos', 'neg']})
+        else:
+            dims2 = dims[1:]
+            coords.update({'tail': np.array('pos')})
 
-    results['thresh'] = xr.DataArray(
-        data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
+        results['thresh'] = xr.DataArray(
+            data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
 
     # copy unit information
+    # TODO: use a separate utility function
     for key in results.keys():
         results[key].attrs['unit'] = stat_unit
         if 'coord_units' in frate.attrs:
             results[key].attrs['coord_units'] = frate.attrs['coord_units']
 
     # add cell coords
+    # TODO: move after Dataset creation
     copy_coords = xr_find_nested_dims(frate, 'cell')
     if len(copy_coords) > 0:
         for key in results.keys():
-            coords = {coord: ('cell', frate.coords[coord].values)
-                      for coord in copy_coords}
-            results[key] = results[key].assign_coords(coords)
+            results[key] = _inherit_metadata_from_xarray(
+                frate, results[key], 'cell', copy_coords=copy_coords)
+
+    # transform to dataset:
+    results = xr.Dataset(results)
 
     return results
 
@@ -384,8 +371,10 @@ def _cluster_sel_process_cell(fr_cell, compare, cluster_entry_pval,
     return df_part
 
 
+# TODO: the df could have correct types from the start
 def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
                      baseline_window, cellinfo=None):
+    '''Initialize dataframe for storing cluster information.'''
     add_cols = ['pval', 'window', 'preferred', 'n_preferred', 'FR_preferred']
     cols = ['cell']
 
@@ -406,7 +395,9 @@ def _init_df_cluster(calculate_pev, calculate_dos, calculate_peak_pev,
     return df_cluster
 
 
+# CONSIDER: move to utils?
 def _which_copy_cellinfo(frate, copy_cellinfo):
+    '''Determine which cell information to copy to the results dataframe.'''
     do_copy_cellinfo = (
         (isinstance(copy_cellinfo, bool) and copy_cellinfo)
         or (isinstance(copy_cellinfo, list) and len(copy_cellinfo) > 0)
@@ -438,6 +429,7 @@ def _characterize_cluster(fr_cell, cluster_mask, cluster_pval, df_cluster,
                           correct_window, ord_idx, cellinfo_row, compare,
                           calculate_dos, calculate_pev, calculate_peak_pev,
                           baseline_window):
+    '''Characterize a single cluster.'''
     import xarray as xr
 
     # get cluster time window
@@ -521,6 +513,7 @@ def _characterize_clusters(fr_cell, clusters, pvals, min_cluster_pval,
                           df_cluster, correct_window, cellinfo_row,
                           compare, calculate_dos, calculate_pev,
                           calculate_peak_pev, baseline_window):
+    '''Characterize all clusters.'''
     df_clst = list()
     n_clusters = len(pvals)
     if n_clusters > 0:
@@ -558,31 +551,33 @@ def assess_selectivity(df_cluster, min_cluster_p=0.05,
     df_cluster : pandas.DataFrame
         Dataframe with cluster information.
     min_cluster_p : float
-        Minimum p value for a cluster to be considered selective.
+        Minimum p value for a cluster to be considered selective. The default
+        is ``0.05``.
     window_of_interest : tuple of float
-        Time window of interest.
+        Time window of interest. The default is ``(0.1, 1)``.
     min_time_in_window : float
-        Minimum time in the window of interest for a cluster to be considered
-        selective.
+        Minimum time spent in the window of interest for a cluster to be
+        considered selective. The default is ``0.2``.
     min_depth_of_selectivity : float
         Minimum depth of selectivity for a cluster to be considered selective.
     min_pev : float
-        Minimum percentage of explained variance for a cluster to be considered
-        selective.
-    min_peak_pev : float
-        Minimum peak percentage of explained variance for a cluster to be
+        Minimum percentage of explained variance (PEV) for a cluster to be
         considered selective.
+    min_peak_pev : float
+        Minimum peak PEV for a cluster to be considered selective.
     min_FR_vs_baseline : float
         Minimum firing rate vs baseline for a cluster to be considered
         selective.
     min_FR_preferred : float
-        Minimum firing rate of the preferred category for a cluster to be
+        Minimum firing rate for the preferred category for a cluster to be
         considered selective.
 
     Returns
     -------
     df_cluster : pandas.DataFrame
-        Dataframe with cluster information, including selectivity information.
+        Dataframe with cluster information, including a column ``'selective'``
+        that indicates whether the cluster is selective based on the specified
+        criteria.
     '''
     # skip if no clusters, adding empty columns
     n_rows = df_cluster.shape[0]
@@ -620,6 +615,7 @@ def assess_selectivity(df_cluster, min_cluster_p=0.05,
 
 
 def _compute_time_in_window(clst_window, window_of_interest):
+    '''Compute time spent in the window of interest for a cluster.'''
     # clst_limits = times[cluster_mask].values[[0, -1]]
     twin = [0., 0.]
     clst_limits = _parse_window(clst_window)
@@ -657,49 +653,173 @@ def compute_time_in_window(df_cluster, window_of_interest):
     return df_cluster
 
 
-# CONSIDER: selectivity as list of names / dict of lists of names ?
-def pick_selective(frate, selectivity, threshold=None, session_coord='sub'):
-    # one xarray and session_coord is None: assumes one subject
-    #    - if same order of cells -> simple bool selection
-    #    - if different order -> select by unique cell names
-    #    raise Warning that can be silenced with ``session_coord=False``
-    # one xarray and session_coord is not None: assumes multiple subjects
-    #    - ...
-    #    - ...
-    # dictionary of xarrays: assumes multiple subjects/sessions, one per key
+def threshold_selectivity(selectivity, threshold):
+    '''Threshold selectivity statistics generating boolean selectivity.
+
+    Parameters
+    ----------
+    selectivity : xarray.DataArray
+        Selectivity statistic.
+    threshold : float | xarray.DataArray
+        Threshold value. If a float, selectivity values above the threshold are
+        considered significant. If an xarray.DataArray, the threshold can be
+        different for positive and negative values.
+
+    Returns
+    -------
+    selected : xarray.DataArray
+        Boolean array indicating whether the selectivity is above the
+        threshold.
+    '''
     import xarray as xr
 
-    frate_xarr = isinstance(frate, xr.DataArray)
+    if isinstance(threshold, Real):
+        return np.abs(selectivity) > threshold
+    elif isinstance(threshold, xr.DataArray):
+        has_pos, has_neg = False, False
+        if 'pos' in threshold.coords['tail']:
+            has_pos = True
+            use_thresh = (threshold.sel(tail='pos')
+                          if 'tail' in threshold.dims else threshold)
+            above = selectivity > use_thresh
 
-    if frate_xarr:
-        has_session_coord = session_coord in frate.coords
-        same_cells = (frate.cell.values == selectivity.cell.values).all()
+        if 'neg' in threshold.coords['tail']:
+            has_neg = True
+            use_thresh = (threshold.sel(tail='neg')
+                          if 'tail' in threshold.dims else threshold)
+            below = selectivity < use_thresh
 
-        if not has_session_coord:
-            same_sessions = True
-        else:
-            same_sessions = (frate[session_coord].values
-                             == selectivity[session_coord].values).all()
-
-        if threshold is not None:
-            selectivity = np.abs(selectivity) > threshold
-
-        # if same_cells and same_sessions:
-        if same_cells and same_sessions:
-            fr_sel = frate.isel(cell=np.where(selectivity)[0])
-        else:
-            # TODO: check if same sessions but with different order (or maybe
-            #       that all sessions from frate are in selectivity)
-            # if has_session_coord but not same_sessions / cells:
-            fr_list = list()
-            for ses, fr in frate.groupby(session_coord):
-                stat_ses = s.query({'cell': f'{session_coord} == "{ses}"'})
-                sel_cell = stat_ses.cell.values[stat_ses.values > threshold]
-                fr_sel = fr.sel(cell=sel_cell)
-                fr_list.append(fr_sel)
-            fr_sel = xr.concat(fr_list, dim='cell')
+        has_both = has_pos and has_neg
+        selected = (
+            (above | below) if has_both else
+            above if has_pos else
+            below
+        )
+        return selected
     else:
-        raise NotImplementedError('Only xarray is supported for now')
+        raise ValueError('Threshold must be a float or xarray.DataArray.')
+
+
+def compute_percent_selective(selectivity, threshold=None, dist=None,
+                              percentile=None, tail='both', groupby=None):
+    '''
+    Selectivity can be:
+    * boolean xarray (already thresholded)
+    * xarray with the selectivity statistic (requires threshold argument)
+    * xarray.Dataset containing the selectivity statistic, the threshold and
+        the null distribution (will be thrsholded, unless percentile is
+        defined)
+
+    if percentiles is not defined (default None) and selectivity is not already
+    a boolean array, threshold must be defined. Either in the threshold keyword
+    argument or in the selectivity xarray.Dataset as 'thresh' variable.
+    '''
+    import xarray as xr
+
+    # selectivity has to be DataArray or Dataset
+    if not isinstance(selectivity, (xr.DataArray, xr.Dataset)):
+        raise TypeError('`selectivity` must be an xarray.DataArray or '
+                        f'xarray.Dataset. Got {type(selectivity)}.')
+
+    # test that dims are ['cell'] or ['cell', 'time']
+    bad_dim_msg = 'Selectivity must have "cell" as the first dimension'
+    if isinstance(selectivity, xr.DataArray):
+        if not selectivity.dims[0] == 'cell':
+            raise ValueError(bad_dim_msg)
+    elif isinstance(selectivity, xr.Dataset):
+        if not selectivity['stat'].dims[0] == 'cell':
+            raise ValueError(bad_dim_msg)
+
+    has_perc = percentile is not None
+    has_dist = dist is not None
+
+    if isinstance(selectivity, xr.Dataset):
+        if 'thresh' in selectivity and threshold is None and not has_perc:
+            threshold = selectivity['thresh']
+        if 'dist' in selectivity and dist is None:
+            has_dist = True
+            dist = selectivity['dist']
+
+        selectivity = selectivity['stat']
+
+    if has_perc:
+        assert has_dist, ('percentile threshold requires passing a null '
+                          'distribution in the "dist" argument or dist '
+                          'variable being present in the selectivity '
+                          'xarray.Dataset.')
+        from .stats import find_percentile_threshold
+        threshold = find_percentile_threshold(dist, percentile, tail=tail)
+
+    # if no threshold at this point - assume selectivity is already bool
+    if threshold is None:
+        assert selectivity.dtype == bool, ('If no threshold or percentile is '
+                                           'passed, the selectivity must be a '
+                                           'boolean array.')
+        sel = selectivity
+        perm_sel = None
+    else:
+        sel = threshold_selectivity(selectivity, threshold)
+        if has_dist:
+            # if we have a reference distribution (null), we can do the same
+            # for the permuted data
+            perm_sel = threshold_selectivity(dist, threshold)
+        else:
+            perm_sel = None
+
+    n_total = sel.copy()
+    n_total.values = np.ones(n_total.shape, dtype=int)
+
+    if groupby is not None:
+        n_tot = n_total.groupby(groupby).sum(dim='cell')
+        n_sig = sel.groupby(groupby).sum(dim='cell')
+        if has_dist and threshold is not None:
+            n_sig_perm = perm_sel.groupby(groupby).sum(dim='cell')
+    else:
+        n_tot = n_total.sum(dim='cell')
+        n_sig = sel.sum(dim='cell')
+        if has_dist and threshold is not None:
+            n_sig_perm = perm_sel.sum(dim='cell')
+
+    perc_sel = (n_sig / n_tot) * 100.
+
+    if has_dist and threshold is not None:
+        from .stats import find_percentile_threshold
+        perc_sel_perm = (n_sig_perm / n_tot) * 100.
+        perm_thresh = find_percentile_threshold(
+            perc_sel_perm, percentile=5, tail='pos', perm_dim=0
+        )
+
+        data_dict = dict(stat=perc_sel, thresh=perm_thresh, dist=perc_sel_perm)
+        return xr.Dataset(data_dict)
+    else:
+        return perc_sel
+
+
+# TODO: create apply_dict function (with out_type='dict' or 'xarray' etc.)
+def compute_selectivity_multisession(frate, compare=None, select=None,
+                                     n_perm=1_000, n_jobs=1):
+    import xarray as xr
+    assert isinstance(frate, dict)
+
+    all_results = list()
+    sessions = list(frate.keys())
+    for ses in sessions:
+        fr = frate[ses]
+
+        # trial selection
+        if select is not None:
+            fr = fr.query({'trial': select})
+
+        fr = assign_session_coord(fr, ses, dim_name='cell', ses_name='sub')
+
+        results = compute_selectivity_continuous(
+            fr, compare=compare, n_perm=n_perm, n_jobs=n_jobs)
+        all_results.append(results)
+
+    # concatenate
+    all_results = xr.concat(all_results, dim='cell')
+
+    return all_results
 
 
 # TODO: compare with time resolved selectivity
