@@ -331,8 +331,56 @@ def test_extract_data_and_aggregate():
 
 
 def test_aggregate_per_cell():
-    # TODO
-    pass
+    '''Test aggregation per cell.'''
+
+    # TODO: move out and use in other tests
+    def gen_random_xarr(n_cells, n_trials, n_times, per_cell_coord=False):
+        from string import ascii_lowercase
+
+        letters = np.array(list(ascii_lowercase))
+
+        dim_names = ['cell', 'trial', 'time']
+        time = np.linspace(-0.5, 1.5, num=n_times)
+        data = np.random.rand(n_cells, n_trials, n_times)
+
+        cell_names = [''.join(np.random.choice(letters, 5))
+                    for _ in range(n_cells)]
+
+        xarr = xr.DataArray(
+            data, dims=dim_names,
+            coords={'cell': cell_names,
+                    'trial': np.arange(n_trials),
+                    'time': time}
+        )
+
+        if per_cell_coord:
+            prefs = np.zeros((n_cells, n_trials), dtype=int)
+            for cell_idx in range(n_cells):
+                this_prefs = np.random.choice([0, 1, 2], size=n_trials)
+                prefs[cell_idx, :] = this_prefs
+
+            xarr = xarr.assign_coords(preferred=(('cell', 'trial'), prefs))
+
+        return xarr
+
+    n_cells = 10
+    n_trials = 50
+    arr = gen_random_xarr(n_cells, n_trials, 120, per_cell_coord=True)
+    arr_agg = pln.utils.aggregate(arr, groupby='preferred', per_cell=True)
+
+    # check that the aggregation per cell is correct:
+    cell_indices = np.random.randint(0, n_cells, size=min(5, n_trials))
+    cell_indices = np.unique(cell_indices)
+
+    for cell_idx in cell_indices:
+        frate_cell = arr_agg.isel(cell=cell_idx)
+
+        groups = arr.preferred.data[cell_idx]
+        for group_id in np.unique(groups):
+            agg_gave = frate_cell.sel(preferred=group_id)
+            mask = groups == group_id
+            avg = arr.data[cell_idx, mask].mean(axis=0)
+            assert np.allclose(avg, agg_gave.data)
 
 
 def test_zscore_xarray():
