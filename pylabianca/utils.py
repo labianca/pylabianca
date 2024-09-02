@@ -1106,15 +1106,16 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                 nested_coords = list()
 
             for coord in nested_coords:
-                one_cell = arr.coords[coord].isel(cell=0)
+                these_coords = arr.coords[coord].values
+                one_cell = these_coords[[0]]
                 if ensure_correct_reduction:
-                    cmp = one_cell == arr.coords[coord]
+                    cmp = one_cell == these_coords
                     if cmp.all():
                         drop_coords.append(coord)
-                        new_coords[coord] = ('trial', one_cell.values)
+                        new_coords[coord] = ('trial', one_cell[0])
                 else:
                     drop_coords.append(coord)
-                    new_coords[coord] = ('trial', one_cell.values)
+                    new_coords[coord] = ('trial', one_cell[0])
 
             if len(drop_coords) > 0:
                 arr = arr.drop_vars(drop_coords)
