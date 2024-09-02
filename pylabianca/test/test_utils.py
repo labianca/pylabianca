@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -188,7 +190,7 @@ def test_xarr_dct_conversion():
 
     letters = list(ascii_lowercase)
     n_cells1, n_cells2, n_trials, n_times = 10, 15, 20, 100
-    time = np.linspace(-0.5, 1.5, num=n_times)
+    time_dim = np.linspace(-0.5, 1.5, num=n_times)
     cell_names = ['cell_{}'.format(''.join(np.random.choice(letters, 10)))
                   for _ in range(max(n_cells1, n_cells2))]
 
@@ -197,12 +199,12 @@ def test_xarr_dct_conversion():
                          dims=dim_names,
                          coords={'cell': cell_names[:n_cells1],
                                  'trial': np.arange(n_trials),
-                                 'time': time})
+                                 'time': time_dim})
     xarr2 = xr.DataArray(np.random.rand(n_cells2, n_trials, n_times),
                          dims=dim_names,
                          coords={'cell': cell_names[:n_cells2],
                                  'trial': np.arange(n_trials),
-                                 'time': time})
+                                 'time': time_dim})
 
     load = np.concatenate([np.ones(10), np.ones(10) * 2])
     np.random.shuffle(load)
