@@ -1025,6 +1025,9 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
     different_coords = False
     for key, arr in data.items():
         if select is not None:
+            if select is not None and arr.name is None:
+                arr.name = 'data'
+
             arr = arr.query(select)
 
             # if trial was in select dict, then we should reset trial indices
@@ -1061,6 +1064,9 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                    ensure_correct_reduction=True):
     '''Convert multi-session xarray to dictionary of session -> xarray pairs.
 
+    Note, that it is assumed that each session is a contiguous block in the
+    xarray along the cell dimension.
+
     Parameters
     ----------
     xarr : xarray.DataArray
@@ -1089,14 +1095,16 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
         Dictionary with session names as keys and xarrays as values.
     '''
     xarr_dct = dict()
-    session_order = pd.unique(xarr.coords[ses_name].values)
 
-    # for some reason we need a name to perform query
-    if xarr.name is None:
-        xarr.name = 'data'
+    sessions, ses_idx = np.unique(xarr.coords[ses_name].values, return_index=True)
 
-    for ses in session_order:
-        arr = xarr.query(cell=f'{ses_name} == "{ses}"')
+    sort_idx = np.argsort(ses_idx)
+    sessions = sessions[sort_idx]
+    ses_idx = ses_idx[sort_idx]
+    ses_idx = np.append(ses_idx, xarr.cell.shape[0])
+
+    for idx, ses in enumerate(sessions):
+        arr = xarr.isel(cell=slice(ses_idx[idx], ses_idx[idx + 1]))
         if reduce_coords:
             new_coords = dict()
             drop_coords = list()
@@ -1106,15 +1114,16 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
                 nested_coords = list()
 
             for coord in nested_coords:
-                one_cell = arr.coords[coord].isel(cell=0)
+                these_coords = arr.coords[coord].values
+                one_cell = these_coords[[0]]
                 if ensure_correct_reduction:
-                    cmp = one_cell == arr.coords[coord]
+                    cmp = one_cell == these_coords
                     if cmp.all():
                         drop_coords.append(coord)
-                        new_coords[coord] = ('trial', one_cell.values)
+                        new_coords[coord] = ('trial', one_cell[0])
                 else:
                     drop_coords.append(coord)
-                    new_coords[coord] = ('trial', one_cell.values)
+                    new_coords[coord] = ('trial', one_cell[0])
 
             if len(drop_coords) > 0:
                 arr = arr.drop_vars(drop_coords)

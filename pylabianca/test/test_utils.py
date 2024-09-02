@@ -1,9 +1,12 @@
+import time
+
 import numpy as np
 import pandas as pd
 import xarray as xr
 import pytest
 
 import pylabianca as pln
+from pylabianca.testing import gen_random_xarr
 from pylabianca.utils import (_get_trial_boundaries, find_cells_by_cluster_id,
                               create_random_spikes, _inherit_metadata)
 
@@ -175,52 +178,45 @@ def test_xarr_dct_conversion():
     import xarray as xr
 
     def compare_dicts(x_dct1, x_dct2):
-        for key in x_dct1.keys():
+        keys1 = list(x_dct1.keys())
+        keys2 = list(x_dct2.keys())
+        assert keys1 == keys2
+
+        for key in keys1:
             assert (x_dct1[key].data == x_dct2[key].data).all()
             coord_list = list(x_dct1[key].coords)
             for coord in coord_list:
                 assert (x_dct1[key].coords[coord].values
                         == x_dct2[key].coords[coord].values).all()
 
-    letters = list(ascii_lowercase)
     n_cells1, n_cells2, n_trials, n_times = 10, 15, 20, 100
-    time = np.linspace(-0.5, 1.5, num=n_times)
-    cell_names = ['cell_{}'.format(''.join(np.random.choice(letters, 10)))
-                  for _ in range(max(n_cells1, n_cells2))]
+    xarr1 = gen_random_xarr(n_cells1, n_trials, n_times)
+    xarr2 = gen_random_xarr(n_cells2, n_trials, n_times)
 
-    dim_names = ['cell', 'trial', 'time']
-    xarr1 = xr.DataArray(np.random.rand(n_cells1, n_trials, n_times),
-                         dims=dim_names,
-                         coords={'cell': cell_names[:n_cells1],
-                                 'trial': np.arange(n_trials),
-                                 'time': time})
-    xarr2 = xr.DataArray(np.random.rand(n_cells2, n_trials, n_times),
-                         dims=dim_names,
-                         coords={'cell': cell_names[:n_cells2],
-                                 'trial': np.arange(n_trials),
-                                 'time': time})
-
+    # add load information
     load = np.concatenate([np.ones(10), np.ones(10) * 2])
     np.random.shuffle(load)
     xarr1 = xarr1.assign_coords({'load': ('trial', load)})
     load2 = load.copy()
     np.random.shuffle(load2)
     xarr2 = xarr2.assign_coords({'load': ('trial', load2)})
-    x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
 
+    x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
     xarr = pln.utils.dict_to_xarray(x_dct1)
-    x_dct2 = pln.utils.xarray_to_dict(xarr)
+    x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=False)
     compare_dicts(x_dct1, x_dct2)
 
     # test with non-sorted keys - this previously failed
     # because xarray sorts during groupby operation used in xarray_to_dict
     x_dct1 = {'C03': xarr1, 'A02': xarr2, 'W05': xarr1.copy()}
     xarr = pln.utils.dict_to_xarray(x_dct1)
-    x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=False)
-    compare_dicts(x_dct1, x_dct2)
 
-    # TODO: also add check for same key order
-    #       (compare_dicts does not check this)
+    t_start = time.time()
+    x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=True)
+    t_taken = time.time() - t_start
+    assert t_taken < 0.1
+
+    compare_dicts(x_dct1, x_dct2)
 
     xarr_2 = pln.utils.dict_to_xarray(x_dct2)
     assert (xarr == xarr_2).all().item()
@@ -238,8 +234,6 @@ def test_xarr_dct_conversion():
     xarr2 = xarr2.assign_coords(
         cnd2=('trial', np.random.choice(['A', 'B'], n_trials)))
 
-    xarr1.name = 'data'
-    xarr2.name = 'data'
     x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
     xarr = pln.utils.dict_to_xarray(x_dct1, select='load == 1')
     n_tri = xarr.shape[0]
@@ -334,37 +328,6 @@ def test_extract_data_and_aggregate():
 
 def test_aggregate_per_cell():
     '''Test aggregation per cell.'''
-
-    # TODO: move out and use in other tests
-    def gen_random_xarr(n_cells, n_trials, n_times, per_cell_coord=False):
-        from string import ascii_lowercase
-
-        letters = np.array(list(ascii_lowercase))
-
-        dim_names = ['cell', 'trial', 'time']
-        time = np.linspace(-0.5, 1.5, num=n_times)
-        data = np.random.rand(n_cells, n_trials, n_times)
-
-        cell_names = [''.join(np.random.choice(letters, 5))
-                    for _ in range(n_cells)]
-
-        xarr = xr.DataArray(
-            data, dims=dim_names,
-            coords={'cell': cell_names,
-                    'trial': np.arange(n_trials),
-                    'time': time}
-        )
-
-        if per_cell_coord:
-            prefs = np.zeros((n_cells, n_trials), dtype=int)
-            for cell_idx in range(n_cells):
-                this_prefs = np.random.choice([0, 1, 2], size=n_trials)
-                prefs[cell_idx, :] = this_prefs
-
-            xarr = xarr.assign_coords(preferred=(('cell', 'trial'), prefs))
-
-        return xarr
-
     n_cells = 10
     n_trials = 50
     arr = gen_random_xarr(n_cells, n_trials, 120, per_cell_coord=True)
