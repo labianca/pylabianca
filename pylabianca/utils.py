@@ -1025,6 +1025,9 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
     different_coords = False
     for key, arr in data.items():
         if select is not None:
+            if select is not None and arr.name is None:
+                arr.name = 'data'
+
             arr = arr.query(select)
 
             # if trial was in select dict, then we should reset trial indices
