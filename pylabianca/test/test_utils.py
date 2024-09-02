@@ -175,7 +175,11 @@ def test_xarr_dct_conversion():
     import xarray as xr
 
     def compare_dicts(x_dct1, x_dct2):
-        for key in x_dct1.keys():
+        keys1 = list(x_dct1.keys())
+        keys2 = list(x_dct2.keys())
+        assert keys1 == keys2
+
+        for key in keys1:
             assert (x_dct1[key].data == x_dct2[key].data).all()
             coord_list = list(x_dct1[key].coords)
             for coord in coord_list:
@@ -216,11 +220,13 @@ def test_xarr_dct_conversion():
     # because xarray sorts during groupby operation used in xarray_to_dict
     x_dct1 = {'C03': xarr1, 'A02': xarr2, 'W05': xarr1.copy()}
     xarr = pln.utils.dict_to_xarray(x_dct1)
-    x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=False)
-    compare_dicts(x_dct1, x_dct2)
 
-    # TODO: also add check for same key order
-    #       (compare_dicts does not check this)
+    t_start = time.time()
+    x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=True)
+    t_taken = time.time() - t_start
+    assert t_taken < 0.1
+
+    compare_dicts(x_dct1, x_dct2)
 
     xarr_2 = pln.utils.dict_to_xarray(x_dct2)
     assert (xarr == xarr_2).all().item()
@@ -238,8 +244,6 @@ def test_xarr_dct_conversion():
     xarr2 = xarr2.assign_coords(
         cnd2=('trial', np.random.choice(['A', 'B'], n_trials)))
 
-    xarr1.name = 'data'
-    xarr2.name = 'data'
     x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
     xarr = pln.utils.dict_to_xarray(x_dct1, select='load == 1')
     n_tri = xarr.shape[0]
