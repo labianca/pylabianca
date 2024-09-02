@@ -6,6 +6,7 @@ import xarray as xr
 import pytest
 
 import pylabianca as pln
+from pylabianca.testing import gen_random_xarr
 from pylabianca.utils import (_get_trial_boundaries, find_cells_by_cluster_id,
                               create_random_spikes, _inherit_metadata)
 
@@ -188,32 +189,19 @@ def test_xarr_dct_conversion():
                 assert (x_dct1[key].coords[coord].values
                         == x_dct2[key].coords[coord].values).all()
 
-    letters = list(ascii_lowercase)
     n_cells1, n_cells2, n_trials, n_times = 10, 15, 20, 100
-    time_dim = np.linspace(-0.5, 1.5, num=n_times)
-    cell_names = ['cell_{}'.format(''.join(np.random.choice(letters, 10)))
-                  for _ in range(max(n_cells1, n_cells2))]
+    xarr1 = gen_random_xarr(n_cells1, n_trials, n_times)
+    xarr2 = gen_random_xarr(n_cells2, n_trials, n_times)
 
-    dim_names = ['cell', 'trial', 'time']
-    xarr1 = xr.DataArray(np.random.rand(n_cells1, n_trials, n_times),
-                         dims=dim_names,
-                         coords={'cell': cell_names[:n_cells1],
-                                 'trial': np.arange(n_trials),
-                                 'time': time_dim})
-    xarr2 = xr.DataArray(np.random.rand(n_cells2, n_trials, n_times),
-                         dims=dim_names,
-                         coords={'cell': cell_names[:n_cells2],
-                                 'trial': np.arange(n_trials),
-                                 'time': time_dim})
-
+    # add load information
     load = np.concatenate([np.ones(10), np.ones(10) * 2])
     np.random.shuffle(load)
     xarr1 = xarr1.assign_coords({'load': ('trial', load)})
     load2 = load.copy()
     np.random.shuffle(load2)
     xarr2 = xarr2.assign_coords({'load': ('trial', load2)})
-    x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
 
+    x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
     xarr = pln.utils.dict_to_xarray(x_dct1)
     x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=False)
     compare_dicts(x_dct1, x_dct2)
@@ -340,37 +328,6 @@ def test_extract_data_and_aggregate():
 
 def test_aggregate_per_cell():
     '''Test aggregation per cell.'''
-
-    # TODO: move out and use in other tests
-    def gen_random_xarr(n_cells, n_trials, n_times, per_cell_coord=False):
-        from string import ascii_lowercase
-
-        letters = np.array(list(ascii_lowercase))
-
-        dim_names = ['cell', 'trial', 'time']
-        time = np.linspace(-0.5, 1.5, num=n_times)
-        data = np.random.rand(n_cells, n_trials, n_times)
-
-        cell_names = [''.join(np.random.choice(letters, 5))
-                    for _ in range(n_cells)]
-
-        xarr = xr.DataArray(
-            data, dims=dim_names,
-            coords={'cell': cell_names,
-                    'trial': np.arange(n_trials),
-                    'time': time}
-        )
-
-        if per_cell_coord:
-            prefs = np.zeros((n_cells, n_trials), dtype=int)
-            for cell_idx in range(n_cells):
-                this_prefs = np.random.choice([0, 1, 2], size=n_trials)
-                prefs[cell_idx, :] = this_prefs
-
-            xarr = xarr.assign_coords(preferred=(('cell', 'trial'), prefs))
-
-        return xarr
-
     n_cells = 10
     n_trials = 50
     arr = gen_random_xarr(n_cells, n_trials, 120, per_cell_coord=True)
