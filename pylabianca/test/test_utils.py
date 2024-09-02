@@ -215,7 +215,7 @@ def test_xarr_dct_conversion():
     x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
 
     xarr = pln.utils.dict_to_xarray(x_dct1)
-    x_dct2 = pln.utils.xarray_to_dict(xarr)
+    x_dct2 = pln.utils.xarray_to_dict(xarr, ensure_correct_reduction=False)
     compare_dicts(x_dct1, x_dct2)
 
     # test with non-sorted keys - this previously failed
