@@ -301,7 +301,8 @@ def compute_pvalues(real_abs_max, perm_abs_max, significance='gumbel'):
         perm_std = np.std(perm_abs_max, axis=-1)
         z_scores, p_values_gumbel = gumbel(perm_mean, perm_std, real_abs_max)
     if significance in ['empirical', 'both']:
-        p_values_empirical = (perm_abs_max >= real_abs_max[:, None]).mean()
+        p_values_empirical = (perm_abs_max >= real_abs_max[:, None]
+            ).mean(axis=-1)
 
     if significance == 'gumbel':
         p_values = p_values_gumbel
