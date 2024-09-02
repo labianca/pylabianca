@@ -159,9 +159,9 @@ def _inherit_metadata(coords, metadata, dimname, tri=None):
     if metadata is not None:
         for col in metadata.columns:
             if tri is None:
-                coords[col] = (dimname, metadata[col])
+                coords[col] = (dimname, metadata[col].values)
             else:
-                coords[col] = (dimname, metadata[col].iloc[tri])
+                coords[col] = (dimname, metadata[col].iloc[tri].values)
     return coords
 
 
