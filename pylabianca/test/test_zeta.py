@@ -10,6 +10,7 @@ import pylabianca as pln
 def test_against_zetapy():
     from zetapy import zetatest2
 
+    numba_available = pln.utils.has_numba()
     fpath = pln.utils.get_zeta_example_data()
     data = loadmat(fpath, squeeze_me=True)
 
@@ -71,8 +72,7 @@ def test_against_zetapy():
     assert np.abs(zeta_info['dblZETA'] - z_val[0]) < 0.25
 
     # if has_numba
-    has_numba = pln.utils.has_numba()
-    if has_numba:
+    if numba_available:
         z_val_numba, p_val_numba, dist_numba = pln.selectivity.zeta_test(
             spk_epochs_sel, compare='orientation', n_permutations=500,
             tmax=1., return_dist=True, backend='numba', picks=0)
@@ -88,10 +88,10 @@ def test_against_zetapy():
     stim_ori_str = np.array([str(ori) for ori in stim_ori], dtype='object')
     spk_epochs.metadata = pd.DataFrame({'orientation': stim_ori_str})
 
-    backend = 'numba' if has_numba else 'numpy'
+    backend = 'numba' if numba_available else 'numpy'
     z_val_n1, p_val_n1 = pln.selectivity.zeta_test(
         spk_epochs, compare='orientation', n_permutations=100,
-        backend='numpy', picks=0, significance='empirical')
+        backend=backend, picks=0, significance='empirical')
     z_val_n2, p_val_n2 = pln.selectivity.zeta_test(
         spk_epochs, compare='orientation', n_permutations=100,
         backend=backend, picks=0, significance='both')
