@@ -18,6 +18,7 @@ def test_monotonic_unique_counts():
     assert (out[1] == np.array([3, 5, 2, 8, 4], dtype='int64')).all()
 
 
+@pytest.mark.skipif(not has_numba(), reason="requires numba")
 def test_numba_select_spikes():
     from pylabianca._numba import _select_spikes_numba
 
@@ -34,6 +35,7 @@ def test_numba_select_spikes():
     assert (out == expected).all()
 
 
+@pytest.mark.skipif(not has_numba(), reason="requires numba")
 def test_trial_boundaries():
     from pylabianca.utils import has_numba
     from pylabianca.utils import _get_trial_boundaries
@@ -84,6 +86,7 @@ def test_trial_boundaries():
         assert (tri_bnd == tri_bnd_numba).all()
 
 
+@pytest.mark.skipif(not has_numba(), reason="requires numba")
 def test_find_first():
     from pylabianca._numba import _monotonic_find_first
 
