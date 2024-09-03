@@ -752,7 +752,7 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
 
     # prepare random states for the permutations
     # (so that every cell gets the same permutation sequence)
-    max_val = np.iinfo(int).max
+    max_val = 2**32 - 1  # np.iinfo(int).max
     rnd = np.random.randint(0, high=max_val + 1, size=n_permutations)
 
     # TODO: add joblib parallelization if necessary
