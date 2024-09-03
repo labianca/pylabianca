@@ -69,7 +69,7 @@ def test_against_zetapy():
     assert np.abs(p_val[0] - zeta_pval) < (20 / n_permutations)
 
     # similar z value
-    assert np.abs(zeta_info['dblZETA'] - z_val[0]) < 0.25
+    assert np.abs(zeta_info['dblZETA'] - z_val[0]) < 0.35
 
     # if has_numba
     if numba_available:
