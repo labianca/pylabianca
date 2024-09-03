@@ -751,7 +751,7 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     perm_abs_max = np.zeros((n_cells, n_permutations))
 
     # prepare random states for the permutations
-    # (so that every cells gets the same permutations)
+    # (so that every cell gets the same permutation sequence)
     max_val = np.iinfo(int).max
     rnd = np.random.randint(0, high=max_val + 1, size=n_permutations)
 
