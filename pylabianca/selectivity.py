@@ -750,6 +750,11 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     real_abs_max = np.zeros(n_cells)
     perm_abs_max = np.zeros((n_cells, n_permutations))
 
+    # prepare random states for the permutations
+    # (so that every cells gets the same permutations)
+    max_val = np.iinfo(int).max
+    rnd = np.random.randint(0, high=max_val + 1, size=n_permutations)
+
     # TODO: add joblib parallelization if necessary
     for pick_idx, pick in enumerate(picks):
         times, trials, reference_time = _get_times_and_trials(
@@ -759,12 +764,12 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         if backend == 'numba':
             fraction_diff, permutations = numba_func(
                 times, trials, reference_time, n_trials_max,
-                n_trials_per_cond, condition_idx, n_cnd, n_permutations,
+                n_trials_per_cond, condition_idx, n_cnd, rnd,
                 n_samples)
         elif backend == 'numpy':
             fraction_diff, permutations = ZETA_numpy(
                 times, reference_time, condition_idx, n_cnd,
-                n_permutations, n_samples, reduction=reduction)
+                rnd, n_samples, reduction=reduction)
 
         # center the cumulative diffs and find max(abs) values
         # TODO: could be done earlier (so for numba - within the

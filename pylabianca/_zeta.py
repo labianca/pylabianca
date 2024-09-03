@@ -68,7 +68,7 @@ def cumulative_n_conditions(spikes, n_trials, reference_time,
 
 
 def ZETA_numpy(times, reference_time, condition_idx, n_cnd,
-               n_permutations, n_samples, reduction=diff_func):
+               rnd, n_samples, reduction=diff_func):
     # CONSIDER turning to list of arrays - one array per trial
     fraction_diff = _zeta_numpy(
         times, reference_time, condition_idx, n_cnd,
@@ -76,7 +76,7 @@ def ZETA_numpy(times, reference_time, condition_idx, n_cnd,
     )
 
     permutations = _permute_zeta_numpy(
-        n_permutations, n_samples, times, condition_idx, n_cnd,
+        rnd, n_samples, times, condition_idx, n_cnd,
         reference_time, reduction=reduction
     )
 
@@ -94,12 +94,14 @@ def _zeta_numpy(times, reference_time, cnd_values, n_cnd,
 
 
 def _permute_zeta_numpy(
-        n_permutations, n_samples, times, condition_idx, n_cnd,
+        rnd, n_samples, times, condition_idx, n_cnd,
         reference_time, reduction=diff_func):
+    n_permutations = rnd.shape[0]
     permutations = np.zeros((n_permutations, n_samples), dtype=times.dtype)
-    condition_idx_perm = condition_idx.copy()
+
     for perm_idx in range(n_permutations):
-        np.random.shuffle(condition_idx_perm)
+        np.random.seed(rnd[perm_idx])
+        condition_idx_perm = np.random.permutation(condition_idx)
         permutations[perm_idx] = _zeta_numpy(
             times, reference_time, condition_idx_perm, n_cnd,
             reduction=reduction)
