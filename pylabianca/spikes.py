@@ -773,6 +773,7 @@ class Spikes(object):
         '''
         # event_id support
         if event_id is not None:
+
             use_events = np.in1d(events[:, -1], event_id)
             if not np.any(use_events):
                 raise ValueError(
@@ -780,6 +781,9 @@ class Spikes(object):
                         event_id)
                 )
             events = events[use_events, :]
+
+            if not isinstance(event_id, (list, np.ndarray)):
+                event_id = [event_id]
 
             # test if some events are missing
             unique_events = np.unique(events[:, -1])
