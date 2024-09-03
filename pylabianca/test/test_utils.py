@@ -80,7 +80,7 @@ def test_find_cells_by_cluster_id():
     channel = (np.tile(np.arange(5)[:, None], [1, 2]) + 1).ravel()
 
     has_unique = False
-    while has_unique:
+    while not has_unique:
         cluster_id = np.random.randint(50, 1000, size=10)
         has_unique = len(np.unique(cluster_id)) == 10
 
