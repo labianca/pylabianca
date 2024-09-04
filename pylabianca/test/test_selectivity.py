@@ -247,3 +247,32 @@ def test_compute_percent_selective():
 
     assert (perc3.sel(anat='AMY').data == expected_amy).all()
     assert (perc3.sel(anat='HIP').data == expected_hip).all()
+
+    # error when no 'cell' dimension
+    sel_data2 = np.random.randn(n_cells, n_times)
+    sel2 = xr.DataArray(sel_data2, dims=['channel', 'time'],
+                        coords={'time': times})
+    with pytest.raises(ValueError, match='must contain "cell" dimension'):
+        pln.selectivity.compute_percent_selective(sel2, thresh1)
+
+    # passing permutation distribution
+    n_perm = 250
+    perm = np.random.randn(n_perm, n_cells, n_times) * 0.75
+    perm = xr.DataArray(perm, dims=['perm', 'cell', 'time'],
+                        coords={'time': times})
+
+    perc = pln.selectivity.compute_percent_selective(
+            sel, threshold=thresh1, dist=perm)
+    assert (perc.stat > perc.thresh).mean(dim='time').item() > 0.035
+
+    ds = xr.Dataset({'stat': sel, 'dist': perm})
+    perc_ds = pln.selectivity.compute_percent_selective(
+            ds, threshold=thresh1)
+    are_same = (perc_ds == perc).all()
+    for key in ['stat', 'thresh', 'dist']:
+        assert are_same[key].item()
+
+    perc_ds = pln.selectivity.compute_percent_selective(
+        ds, percentile=5)
+
+    assert (perc_ds.stat > perc_ds.thresh).mean(dim='time').item() > 0.05
