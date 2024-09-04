@@ -264,3 +264,15 @@ def test_compute_percent_selective():
     perc = pln.selectivity.compute_percent_selective(
             sel, threshold=thresh1, dist=perm)
     assert (perc.stat > perc.thresh).mean(dim='time').item() > 0.035
+
+    ds = xr.Dataset({'sel': sel, 'dist': perm})
+    perc_ds = pln.selectivity.compute_percent_selective(
+            ds, threshold=thresh1)
+    are_same = (perc_ds == perc).all()
+    for key in ['stat', 'thresh', 'dist']:
+        assert are_same[key].item()
+
+    perc_ds = pln.selectivity.compute_percent_selective(
+        ds, percentile=5)
+
+    assert (perc_ds.stat > perc_ds.thresh).mean(dim='time').item() > 0.05
