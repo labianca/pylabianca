@@ -189,7 +189,8 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
 
         assert len(colors) == n_groups
         if isinstance(colors, (list, tuple, np.ndarray)):
-            assert all(isinstance(x, (list, np.ndarray)) for x in colors)
+            assert all(isinstance(x, (list, np.ndarray, tuple, str))
+                       for x in colors)
             colors = {group: color for group, color in zip(group_names, colors)}
         else:
             assert all(name in colors.keys() for name in group_names)
