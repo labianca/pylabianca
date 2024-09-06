@@ -513,11 +513,14 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
                             dpi=300)
                 plt.close(fig)
 
-    print('Saving dataframe to figures location...')
-    df = pd.concat(df_list).reset_index(drop=True)
-    df = df.loc[:, df_columns]
-    df.loc[:, 'n_spikes'] = df.n_spikes.astype('int')
-    df.to_csv(op.join(fig_dir, 'table.tsv'), sep='\t')
+    if len(df_list) > 0:
+        print('Saving dataframe to figures location...')
+        df = pd.concat(df_list).reset_index(drop=True)
+        df = df.loc[:, df_columns]
+        df.loc[:, 'n_spikes'] = df.n_spikes.astype('int')
+        df.to_csv(op.join(fig_dir, 'table.tsv'), sep='\t')
+    else:
+        print('No coincidence clusters found.')
 
     print('All done.')
 
