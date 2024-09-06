@@ -1,18 +1,16 @@
-# pylabianca
+# pylabianca: Python tools for spike analysis
 
 [![labianca](https://circleci.com/gh/labianca/pylabianca.svg?style=svg)](https://app.circleci.com/pipelines/github/labianca/pylabianca)
 [![codecov](https://codecov.io/gh/labianca/pylabianca/graph/badge.svg?token=HQ7KN5FWL5)](https://codecov.io/gh/labianca/pylabianca)
 
-Python tools for spike analysis.
+pylabianca offers a simple and efficient way to read, analyze, and statistically compare spike data in just a few steps. Key features include:
 
-pylabianca:
-* allows to read, analyse spike rate and statistically compare conditions in just a few steps
-* follows the convenient API of mne-python
-* provides two straightforward objects for storing spiking data: `Spikes` and `SpikeEpochs`
-* allow storing trial-level metadata in these object (just like mne-python) and selecting trials based on these metadata
-* returns xarrays (arrays with labeled dimensions and coordinates) as output from operations like cross-correlation, spiking rate calculation or decoding analysis
-* these xarrays inherit all the trial-level metadata and can be visualised splitting by conditions using `pylabianca.viz.plot_shaded` or native xarray plotting
-* the xarrays can be statistically tested with cluster based permutation test comparing condition metadata
+* A familiar API inspired by [mne-python](https://mne.tools/stable/index.html), ensuring ease of use for experienced users.
+* Two intuitive data structures - `Spikes` and `SpikeEpochs` - for organizing and storing spike data.
+* Integrated support for storing trial-level metadata, enabling easy trial selection based on conditions, similar to mne-python.
+* Outputs in the form of [xarray](https://docs.xarray.dev/en/stable/) DataArrays, which come with labeled dimensions and coordinates.
+* Seamless metadata inheritance in xarrays, allowing for visualizations by condition using `pylabianca.viz.plot_shaded` or native xarray plotting functions.
+* Built-in support for statistical testing via cluster-based permutation tests, facilitating comparisons between different conditions based on trial metadata.
 
 ## installation
 `pylabianca` can be installed using `pip`:
