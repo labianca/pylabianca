@@ -21,8 +21,8 @@ The data variable is a structure with the follwing fields:
 ```
 * `label` - just like in LFP (channel or cell names)
 * `timestamp` - `1 x n_neurons` cell array where each cell contains `1 x n_spikes` vector of timesamples when spike occured
-* `waveforem` - `1 x n_neurons` cell array where each cell contains `n_leads x n_samples x n_spikes` matrix of spike waveforms (`n_samples` is usually low, for example 32, but it depends on sampling rate). A cell can be empty if there are no waveforms.
-* `unit` - not sure, but it seems it can be ignored or 1 x n_neurons cell with 1 x n_spikes vector of nan  [FIX - better description of the `unit` field]
+* `waveform` - `1 x n_neurons` cell array where each cell contains `n_leads x n_samples x n_spikes` matrix of spike waveforms (`n_samples` is usually low, for the example fieldtrip data it is 32, but it depends on the sampling rate). A cell of the array can be empty - this means that there are no waveforms for given neuron.
+* `unit` - 1 x n_neurons cell array with 1 x n_spikes vector of what seems to be unit cluster ID's (in the example data it is all nan)
 * `hdr` - file header information
 
 This format can be read by `pylabianca.io.read_fieldtrip(path_to_file, kind='raw')`.
