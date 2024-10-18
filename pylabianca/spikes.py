@@ -423,6 +423,18 @@ class SpikeEpochs():
         from .io import to_spiketools
         return to_spiketools(self, picks)
 
+    def to_fieldtrip(self, filename):
+        """
+        Saves spike data to FieldTrip-compatible .mat file.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the output .mat file.
+        """
+        from .io import _write_filedtrip_trials
+        _write_filedtrip_trials(self, filename)
+
     def __getitem__(self, selection):
         '''Select trials using an array of int / bool or metadata query.'''
         if isinstance(selection, str):

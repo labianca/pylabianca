@@ -10,7 +10,6 @@ from .spikes import SpikeEpochs, Spikes
 from .utils import _deal_with_picks, _get_trial_boundaries
 
 
-# TODO - trialinfo columns ...
 # CONSIDER - autodetect the correct var name
 def read_fieldtrip(fname, data_name='spike', kind='raw', waveform=True):
     '''Read fieldtrip SpikeTrials format.
@@ -50,23 +49,11 @@ def read_fieldtrip(fname, data_name='spike', kind='raw', waveform=True):
     else:
         waveform, waveform_time = None, None
 
-    if 'trialinfo' in data.dtype.names:
-        trialinfo = data['trialinfo'].item()
-        trialinfo = pd.DataFrame(trialinfo)
-    else:
-        trialinfo = None
-
-    if 'cellinfo' in data.dtype.names:
-        data_dct = dict()
-        fields = data['cellinfo'].item().dtype.names
-        for fld in fields:
-            data_dct[fld] = data['cellinfo'].item()[fld].item()
-        cellinfo = pd.DataFrame(data_dct)
-    else:
-        cellinfo = None
+    trial_info = _get_ft_trial_info(data)
+    cellinfo = _get_ft_cellinfo(data)
 
     if kind in ['trials', 'epochs']:
-        spk = _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo,
+        spk = _read_ft_spikes_tri(data, cell_names, trial_info, cellinfo,
                                   waveform, waveform_time)
     elif kind == 'raw':
         spk = _read_ft_spikes_raw(data, cell_names, cellinfo,
@@ -76,7 +63,7 @@ def read_fieldtrip(fname, data_name='spike', kind='raw', waveform=True):
     return spk
 
 
-def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
+def _read_ft_spikes_tri(data, cell_names, trial_info, cellinfo, waveform,
                         waveform_time):
     '''Read fieldtrip SpikeTrials format.
 
@@ -88,7 +75,7 @@ def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
 
     time = data['time'].item()
     trial = data['trial'].item() - 1
-    trialtime = data['trialtime'].item()
+    trial_time = data['trialtime'].item()
 
     if 'timestamp' in data.dtype.names:
         timestamps = data['timestamp'].item()
@@ -96,14 +83,14 @@ def _read_ft_spikes_tri(data, cell_names, trialinfo, cellinfo, waveform,
         timestamps = None
 
     msg = 'All trials have to be of the same length'
-    assert (trialtime == trialtime[[0]]).all(), msg
+    assert (trial_time == trial_time[[0]]).all(), msg
 
-    n_trials = trialtime.shape[0]
-    time_limits = trialtime[0]
+    n_trials = trial_time.shape[0]
+    time_limits = tuple(trial_time[0])
 
     # create SpikeEpochs
     spk = SpikeEpochs(time, trial, time_limits, n_trials=n_trials,
-                      metadata=trialinfo, cell_names=cell_names,
+                      metadata=trial_info, cell_names=cell_names,
                       cellinfo=cellinfo, waveform=waveform,
                       waveform_time=waveform_time, timestamps=timestamps)
 
@@ -188,7 +175,150 @@ def _get_waveforms(data):
     else:
         waveforms, waveform_time = None, None
 
-    return new_waveforms, waveform_time
+    return waveforms, waveform_time
+
+
+def _get_ft_trial_info(data):
+    if 'trialinfo' in data.dtype.names:
+        trial_info = data['trialinfo'].item()
+        if 'trialinfo_columns' in data.dtype.names:
+            columns = data['trialinfo_columns'].item()
+            columns = [col.rstrip() for col in columns]
+        else:
+            columns=None
+        trial_info = pd.DataFrame(trial_info, columns=columns)
+        trial_info = trial_info.infer_objects()
+    else:
+        trial_info = None
+
+    return trial_info
+
+
+def _get_ft_cellinfo(data):
+    if 'cellinfo' in data.dtype.names:
+        data_dct = dict()
+        fields = data['cellinfo'].item().dtype.names
+
+        for fld in fields:
+            data_extr = data['cellinfo'].item()[fld]
+            try:
+                data_extr = data_extr.item()
+            except ValueError:
+                pass
+            data_dct[fld] = data_extr
+
+        cellinfo = pd.DataFrame(data_dct)
+    else:
+        cellinfo = None
+
+    return cellinfo
+
+
+# - [ ] full_ft_compat (or sth similar) to only save trialinfo columns that
+#       are compatible with fieldtrip?
+# - [ ] consider saving sampling frequency if available:
+#       data['hdr'].item()['FileHeader'].item()['Frequency'].item()
+#       (what if waveform_time and timestamp sfreq are different ?
+#        first check if waveform_time is present ?)
+def _write_filedtrip_trials(spk, filename):
+    """
+    Saves spike data to FieldTrip-compatible .mat file.
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        SpikeEpochs object to save.
+    filename : str
+        The name of the output .mat file.
+    """
+    from scipy.io import savemat
+
+    # Initialize structure for FieldTrip format
+    spikeTrials = {'trial': [], 'time': [], 'label': []}
+    spikeTrials['dimord'] = '{chan}_lead_time_spike'
+    has_metadata = spk.metadata is not None
+
+    # Loop over cells
+    n_units = spk.n_units()
+    for cell_idx in range(n_units):
+        spikeTrials['trial'].append(spk.trial[cell_idx] + 1)  # py -> mat idx
+        spikeTrials['time'].append(spk.time[cell_idx])
+        spikeTrials['label'].append(spk.cell_names[cell_idx])
+
+    spikeTrials['trialtime'] = np.tile(spk.time_limits, (spk.n_trials, 1))
+
+    spikeTrials = _waveform_to_ft(spk, spikeTrials)
+    spikeTrials = _cellinfo_to_ft(spk, spikeTrials)
+
+    if has_metadata:
+        spikeTrials['trialinfo'] = spk.metadata.values
+        spikeTrials['trialinfo_columns'] = spk.metadata.columns.tolist()
+
+    # Save to a .mat file using scipy.io.savemat
+    savemat(filename, {'spike': spikeTrials})
+    # use some logging later: print(f"Spike trials saved to {filename}")
+
+
+def _write_filedtrip_raw(spk, filename):
+    """
+    Saves spike data to FieldTrip-compatible .mat file.
+
+    Parameters
+    ----------
+    spk : Spikes
+        Spikes object to save.
+    filename : str
+        The name of the output .mat file.
+    """
+    from scipy.io import savemat
+
+    # Initialize structure for FieldTrip format
+    spikes = {'timestamp': [], 'label': []}
+    spikes['dimord'] = '{chan}_lead_time_spike'
+
+    # Loop over cells
+    n_units = spk.n_units()
+    for cell_idx in range(n_units):
+        spikes['timestamp'].append(spk.timestamp[cell_idx])
+        spikes['label'].append(spk.cell_names[cell_idx])
+
+    spikes = _waveform_to_ft(spk, spikes)
+    spikes = _cellinfo_to_ft(spk, spikes)
+
+    # Save to a .mat file using scipy.io.savemat
+    savemat(filename, {'spike': spikes})
+
+
+def _waveform_to_ft(spk, spikeTrials):
+    has_waveform = spk.waveform is not None
+    has_waveform_time = spk.waveform_time is not None
+
+    if has_waveform:
+        n_units = spk.n_units()
+        spikeTrials['waveform'] = np.empty(n_units, dtype='object')
+        for cell_idx in range(n_units):
+            # add "leads" dimention
+            this_waveform = spk.waveform[cell_idx]
+            if this_waveform is not None:
+                this_waveform = this_waveform.T[None, :]
+            else:
+                this_waveform = np.array([])
+            spikeTrials['waveform'][cell_idx] = this_waveform
+
+    # save waveform_time if present
+    if has_waveform_time:
+        spikeTrials['waveform_time'] = spk.waveform_time
+
+    return spikeTrials
+
+
+def _cellinfo_to_ft(spk, spikeTrials):
+    has_cellinfo = spk.cellinfo is not None
+    if has_cellinfo:
+        cellinfo = spk.cellinfo.to_records(index=False)
+        spikeTrials['cellinfo'] = cellinfo
+
+    return spikeTrials
 
 
 # TODO: add progressbar?
