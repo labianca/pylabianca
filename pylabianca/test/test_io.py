@@ -1,5 +1,6 @@
 import os.path as op
 import numpy as np
+import pandas as pd
 import pytest
 
 import pylabianca as pln
@@ -91,3 +92,97 @@ def test_read_events_neuralynx():
 
     with pytest.raises(ValueError, match='Unknown format'):
         pln.io.read_events_neuralynx(lynx_dir, format='lieber_biber')
+
+
+def make_sure_identical(spk, spk2):
+    # time_limits are tuple, but are read as array ...
+    assert isinstance(spk.time_limits, tuple)
+    assert isinstance(spk2.time_limits, tuple)
+
+    assert spk.time_limits == spk2.time_limits
+    n_units = spk.n_units()
+
+    assert (spk.cell_names == spk2.cell_names).all()
+    assert n_units == spk2.n_units()
+
+    for cell_idx in range(n_units):
+        assert (spk.time[cell_idx] == spk2.time[cell_idx]).all()
+        assert (spk.trial[cell_idx] == spk2.trial[cell_idx]).all()
+
+    has_waveform = spk.waveform is not None
+    has_waveform2 = spk2.waveform is not None
+    assert has_waveform == has_waveform2
+
+    # compare waveform data:
+    if has_waveform:
+        for cell_idx in range(n_units):
+            assert (spk.waveform[cell_idx] == spk2.waveform[cell_idx]).all()
+
+    has_wave_time = spk.waveform_time is not None
+    has_wave_time2 = spk2.waveform_time is not None
+    assert has_wave_time == has_wave_time2
+
+    if has_wave_time:
+        assert (spk.waveform_time == spk2.waveform_time).all()
+
+    has_meta = spk.metadata is not None
+    has_meta2 = spk2.metadata is not None
+    assert has_meta == has_meta2
+
+    if has_meta:
+        assert (spk.metadata == spk2.metadata).all().all()
+
+    has_cellinfo = spk.cellinfo is not None
+    has_cellinfo2 = spk2.cellinfo is not None
+    assert has_cellinfo == has_cellinfo2
+
+    if has_cellinfo:
+        assert (spk.cellinfo == spk2.cellinfo).all().all()
+
+
+def test_read_write_fieldtrip(tmp_path):
+    import random
+    from string import ascii_lowercase
+
+    # random spikes
+    spk = pln.utils.create_random_spikes()
+    n_spk = spk.n_spikes()
+    n_tri = spk.n_trials
+    n_uni = len(n_spk)
+
+    # create waveforms
+    n_smp = 32
+    shape = np.sin(np.arange(n_smp) / (n_smp / 4))
+    spk.waveform = [
+        np.random.normal(scale=0.1, size=(n_spk[idx], n_smp)) + shape
+        for idx in range(n_uni)
+    ]
+
+    # create cellinfo
+    letters = list(ascii_lowercase)
+    names = [
+        ''.join(
+            np.random.choice(letters, size=n_uni).tolist()
+        ) for _ in range(n_uni)
+    ]
+    cellinfo = pd.DataFrame(
+        {'cell_name': names,
+         'cluster_id': np.random.randint(0, 5000, size=n_uni),
+         'area': np.random.choice(['AMY', 'HIP'], size=n_uni)
+        }
+    )
+    spk.cellinfo = cellinfo
+
+    # create metadata
+    condition_int = np.random.choice([1, 2, 3], size=n_tri)
+    condition_flt = np.random.normal(size=n_tri)
+    condition_str = np.random.choice(['A', 'B'], size=n_tri)
+    df = pd.DataFrame({'cond': condition_str, 'load': condition_int,
+                    'RT': condition_flt})
+    spk.metadata = df
+
+    # check io roundtrip
+    filepath = op.join(tmp_path, 'spikeTrials.mat')
+    spk.to_fieldtrip(filepath)
+    spk2 = pln.io.read_fieldtrip(filepath, kind='trials')
+    make_sure_identical(spk, spk2)
