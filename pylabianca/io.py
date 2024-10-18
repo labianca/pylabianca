@@ -144,14 +144,18 @@ def _check_timestamps(timestamps):
 
 def _get_waveforms(data):
     '''Get waveforms from a FieldTrip file.'''
-    sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
+    try:
+        sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
+    except ValueError:
+        # no field
+        sfreq = None
 
     if 'waveform' in data.dtype.names:
-        waveforms = data['waveform'].item()
-        new_waveforms = list()
-        n_units = len(waveforms)
+        waveform_data = data['waveform'].item()
+        waveforms = list()
+        n_units = len(waveform_data)
         for ix in range(n_units):
-            this_waveform = waveforms[ix]
+            this_waveform = waveform_data[ix]
 
             if (isinstance(this_waveform, np.ndarray)
                 and len(this_waveform) > 0):
@@ -162,17 +166,20 @@ def _get_waveforms(data):
                 elif this_waveform.ndim == 1:
                     # only one waveform, squeezed
                     this_waveform = this_waveform[:, None]
-                new_waveforms.append(this_waveform.T)
+                waveforms.append(this_waveform.T)
             else:
-                new_waveforms.append(None)
+                waveforms.append(None)
 
-        waveform_length = [x.shape[1] for x in new_waveforms if x is not None]
+        waveform_length = [x.shape[1] for x in waveforms if x is not None]
         same_lengths = all(waveform_length[0] == x
                            for x in waveform_length[1:])
 
         if same_lengths:
             # waveform time in ms
-            waveform_time = np.arange(waveform_length[0]) / (sfreq / 1000)
+            if sfreq is None:
+                waveform_time = None
+            else:
+                waveform_time = np.arange(waveform_length[0]) / (sfreq / 1000)
         else:
             warn('Not all waveforms have the same number of samples, '
                  'waveforms are therefore ignored. Got the following waveform'
