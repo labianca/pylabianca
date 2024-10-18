@@ -275,11 +275,12 @@ def _write_filedtrip_raw(spk, filename):
     # Initialize structure for FieldTrip format
     spikes = {'timestamp': [], 'label': []}
     spikes['dimord'] = '{chan}_lead_time_spike'
+    spikes['hdr'] = dict(FileHeader=dict(Frequency=spk.sfreq))
 
     # Loop over cells
     n_units = spk.n_units()
     for cell_idx in range(n_units):
-        spikes['timestamp'].append(spk.timestamp[cell_idx])
+        spikes['timestamp'].append(spk.timestamps[cell_idx])
         spikes['label'].append(spk.cell_names[cell_idx])
 
     spikes = _waveform_to_ft(spk, spikes)
