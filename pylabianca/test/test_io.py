@@ -95,19 +95,34 @@ def test_read_events_neuralynx():
 
 
 def make_sure_identical(spk, spk2):
-    # time_limits are tuple, but are read as array ...
-    assert isinstance(spk.time_limits, tuple)
-    assert isinstance(spk2.time_limits, tuple)
-
-    assert spk.time_limits == spk2.time_limits
     n_units = spk.n_units()
-
     assert (spk.cell_names == spk2.cell_names).all()
     assert n_units == spk2.n_units()
 
-    for cell_idx in range(n_units):
-        assert (spk.time[cell_idx] == spk2.time[cell_idx]).all()
-        assert (spk.trial[cell_idx] == spk2.trial[cell_idx]).all()
+    is_epochs = isinstance(spk, pln.SpikeEpochs)
+    is_epochs2 = isinstance(spk2, pln.SpikeEpochs)
+
+    if is_epochs:
+        assert is_epochs2
+    else:
+        is_raw = isinstance(spk, pln.Spikes)
+        is_raw2 = isinstance(spk2, pln.Spikes)
+        assert is_raw and is_raw2
+
+    # time_limits are tuple, but are read as array ...
+    if is_epochs:
+        assert isinstance(spk.time_limits, tuple)
+        assert isinstance(spk2.time_limits, tuple)
+
+        assert spk.time_limits == spk2.time_limits
+
+        for cell_idx in range(n_units):
+            assert (spk.time[cell_idx] == spk2.time[cell_idx]).all()
+            assert (spk.trial[cell_idx] == spk2.trial[cell_idx]).all()
+    else:
+        for cell_idx in range(n_units):
+            assert (spk.timestamps[cell_idx] == spk2.timestamps[cell_idx]).all()
+
 
     has_waveform = spk.waveform is not None
     has_waveform2 = spk2.waveform is not None
@@ -125,12 +140,13 @@ def make_sure_identical(spk, spk2):
     if has_wave_time:
         assert (spk.waveform_time == spk2.waveform_time).all()
 
-    has_meta = spk.metadata is not None
-    has_meta2 = spk2.metadata is not None
-    assert has_meta == has_meta2
+    if is_epochs:
+        has_meta = spk.metadata is not None
+        has_meta2 = spk2.metadata is not None
+        assert has_meta == has_meta2
 
-    if has_meta:
-        assert (spk.metadata == spk2.metadata).all().all()
+        if has_meta:
+            assert (spk.metadata == spk2.metadata).all().all()
 
     has_cellinfo = spk.cellinfo is not None
     has_cellinfo2 = spk2.cellinfo is not None
@@ -186,3 +202,12 @@ def test_read_write_fieldtrip(tmp_path):
     spk.to_fieldtrip(filepath)
     spk2 = pln.io.read_fieldtrip(filepath, kind='trials')
     make_sure_identical(spk, spk2)
+
+    # io roundtrip for Spikes
+    filepath = op.join(tmp_path, 'spikeRaw.mat')
+    spk_raw = pln.utils.create_random_spikes(
+        n_cells=3, n_trials=0, n_spikes=(23, 55))
+    spk_raw.cellinfo = cellinfo.iloc[:-1, :]
+    spk_raw.to_fieldtrip(filepath)
+    spk_raw2 = pln.io.read_fieldtrip(filepath, kind='raw')
+    make_sure_identical(spk_raw, spk_raw2)
