@@ -1050,6 +1050,18 @@ class Spikes(object):
             cell_names=cell_names, cellinfo=cellinfo)
         return spk_epochs
 
+    def to_fieldtrip(self, fpath):
+        """
+        Saves spike data to FieldTrip-compatible .mat file.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the output .mat file.
+        """
+        from pylabianca.io import _write_filedtrip_raw
+        _write_filedtrip_raw(self, fpath)
+
     def merge(self, picks):
         '''Merge spikes from multiple cells into one. Operates in-place.
 
