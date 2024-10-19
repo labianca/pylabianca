@@ -123,7 +123,6 @@ def make_sure_identical(spk, spk2):
         for cell_idx in range(n_units):
             assert (spk.timestamps[cell_idx] == spk2.timestamps[cell_idx]).all()
 
-
     has_waveform = spk.waveform is not None
     has_waveform2 = spk2.waveform is not None
     assert has_waveform == has_waveform2
@@ -131,7 +130,12 @@ def make_sure_identical(spk, spk2):
     # compare waveform data:
     if has_waveform:
         for cell_idx in range(n_units):
-            assert (spk.waveform[cell_idx] == spk2.waveform[cell_idx]).all()
+            wave1 = spk.waveform[cell_idx]
+            wave2 = spk2.waveform[cell_idx]
+            is_none = [x is None for x in [wave1, wave2]]
+            assert is_none[0] == is_none[1]
+            if not is_none[0]:
+                assert (wave1 == wave2).all()
 
     has_wave_time = spk.waveform_time is not None
     has_wave_time2 = spk2.waveform_time is not None
@@ -159,6 +163,12 @@ def make_sure_identical(spk, spk2):
 def test_read_write_fieldtrip(tmp_path):
     import random
     from string import ascii_lowercase
+
+    def io_roundtrip(spk, filepath, kind='trials'):
+        spk.to_fieldtrip(filepath)
+        spk2 = pln.io.read_fieldtrip(filepath, kind=kind)
+        make_sure_identical(spk, spk2)
+        return spk2
 
     # random spikes
     spk = pln.utils.create_random_spikes()
@@ -199,15 +209,34 @@ def test_read_write_fieldtrip(tmp_path):
 
     # check io roundtrip
     filepath = op.join(tmp_path, 'spikeTrials.mat')
-    spk.to_fieldtrip(filepath)
-    spk2 = pln.io.read_fieldtrip(filepath, kind='trials')
-    make_sure_identical(spk, spk2)
+    io_roundtrip(spk, filepath, kind='trials')
+
+    # when waveform_time is present
+    spk.waveform_time = np.linspace(-0.5, 1.5, num=n_smp)
+    io_roundtrip(spk, filepath, kind='trials')
+
+    # when one of the cells does not have waveforms
+    spk_no_wave = spk.copy()
+    spk_no_wave.waveform[2] = None
+    io_roundtrip(spk_no_wave, filepath, kind='trials')
+
+    # waveform number of samples does not match
+    msg = 'Not all waveforms have the same number of samples'
+    spk_no_wave.waveform[1] = spk_no_wave.waveform[1][:, :n_smp - 6]
+    spk_no_wave.to_fieldtrip(filepath)
+
+    with pytest.warns(match=msg):
+        spk_no_wave2 = pln.io.read_fieldtrip(filepath, kind='trials')
+    assert spk_no_wave2.waveform is None
+
+    # no waveforms
+    spk_no_wave.waveform = None
+    spk_no_wave.waveform_time = None
+    io_roundtrip(spk_no_wave, filepath, kind='trials')
 
     # io roundtrip for Spikes
     filepath = op.join(tmp_path, 'spikeRaw.mat')
     spk_raw = pln.utils.create_random_spikes(
         n_cells=3, n_trials=0, n_spikes=(23, 55))
     spk_raw.cellinfo = cellinfo.iloc[:-1, :]
-    spk_raw.to_fieldtrip(filepath)
-    spk_raw2 = pln.io.read_fieldtrip(filepath, kind='raw')
-    make_sure_identical(spk_raw, spk_raw2)
+    io_roundtrip(spk_raw, filepath, kind='raw')
