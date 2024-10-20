@@ -233,16 +233,16 @@ def _get_ft_cellinfo(data):
 #       data['hdr'].item()['FileHeader'].item()['Frequency'].item()
 #       (what if waveform_time and timestamp sfreq are different ?
 #        first check if waveform_time is present ?)
-def _write_filedtrip_trials(spk, filename):
+def _write_filedtrip_trials(spk, filepath):
     """
-    Saves spike data to FieldTrip-compatible .mat file.
+    Saves SpikeEpochs data to FieldTrip-compatible .mat file.
 
     Parameters
     ----------
     spk : SpikeEpochs
         SpikeEpochs object to save.
-    filename : str
-        The name of the output .mat file.
+    filepath : str
+        Path to the output .mat file.
     """
     from scipy.io import savemat
 
@@ -268,20 +268,20 @@ def _write_filedtrip_trials(spk, filename):
         spikeTrials['trialinfo_columns'] = spk.metadata.columns.tolist()
 
     # Save to a .mat file using scipy.io.savemat
-    savemat(filename, {'spike': spikeTrials})
-    # use some logging later: print(f"Spike trials saved to {filename}")
+    savemat(filepath, {'spike': spikeTrials})
+    # use some logging later: print(f"Spike trials saved to {filepath}")
 
 
-def _write_filedtrip_raw(spk, filename):
+def _write_filedtrip_raw(spk, filepath):
     """
-    Saves spike data to FieldTrip-compatible .mat file.
+    Saves Spikes data to FieldTrip-compatible .mat file.
 
     Parameters
     ----------
     spk : Spikes
         Spikes object to save.
-    filename : str
-        The name of the output .mat file.
+    filepath : str
+        Path to the output .mat file.
     """
     from scipy.io import savemat
 
@@ -300,7 +300,7 @@ def _write_filedtrip_raw(spk, filename):
     spikes = _cellinfo_to_ft(spk, spikes)
 
     # Save to a .mat file using scipy.io.savemat
-    savemat(filename, {'spike': spikes})
+    savemat(filepath, {'spike': spikes})
 
 
 def _waveform_to_ft(spk, spikeTrials):

@@ -423,17 +423,17 @@ class SpikeEpochs():
         from .io import to_spiketools
         return to_spiketools(self, picks)
 
-    def to_fieldtrip(self, filename):
+    def to_fieldtrip(self, filepath):
         """
-        Saves spike data to FieldTrip-compatible .mat file.
+        Saves SpikeEpochs data to FieldTrip-compatible .mat file.
 
         Parameters
         ----------
-        filename : str
-            The name of the output .mat file.
+        filepath : str
+            Path to the output .mat file.
         """
         from .io import _write_filedtrip_trials
-        _write_filedtrip_trials(self, filename)
+        _write_filedtrip_trials(self, filepath)
 
     def __getitem__(self, selection):
         '''Select trials using an array of int / bool or metadata query.'''
@@ -1050,17 +1050,17 @@ class Spikes(object):
             cell_names=cell_names, cellinfo=cellinfo)
         return spk_epochs
 
-    def to_fieldtrip(self, fpath):
+    def to_fieldtrip(self, filepath):
         """
-        Saves spike data to FieldTrip-compatible .mat file.
+        Saves Spikes data to FieldTrip-compatible .mat file.
 
         Parameters
         ----------
-        filename : str
-            The name of the output .mat file.
+        filepath : str
+            Path to the output .mat file.
         """
         from pylabianca.io import _write_filedtrip_raw
-        _write_filedtrip_raw(self, fpath)
+        _write_filedtrip_raw(self, filepath)
 
     def merge(self, picks):
         '''Merge spikes from multiple cells into one. Operates in-place.
