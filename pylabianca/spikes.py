@@ -423,6 +423,18 @@ class SpikeEpochs():
         from .io import to_spiketools
         return to_spiketools(self, picks)
 
+    def to_fieldtrip(self, filepath):
+        """
+        Saves SpikeEpochs data to FieldTrip-compatible .mat file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the output .mat file.
+        """
+        from .io import _write_filedtrip_trials
+        _write_filedtrip_trials(self, filepath)
+
     def __getitem__(self, selection):
         '''Select trials using an array of int / bool or metadata query.'''
         if isinstance(selection, str):
@@ -1037,6 +1049,18 @@ class Spikes(object):
             waveform=waveform, waveform_time=waveform_time,
             cell_names=cell_names, cellinfo=cellinfo)
         return spk_epochs
+
+    def to_fieldtrip(self, filepath):
+        """
+        Saves Spikes data to FieldTrip-compatible .mat file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the output .mat file.
+        """
+        from pylabianca.io import _write_filedtrip_raw
+        _write_filedtrip_raw(self, filepath)
 
     def merge(self, picks):
         '''Merge spikes from multiple cells into one. Operates in-place.

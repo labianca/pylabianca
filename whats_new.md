@@ -13,6 +13,7 @@
 
 <br/>
 
+* ENH: `Spikes` and `SpikeEpochs` can now be saved to FieldTrip data format. To maintain the input-output roundtrip (data saved and then read are identical) additional non-standard fields are added to the file when `.metadata` or `.cellinfo` are used. These additional fields should not conflict with using the file in FieldTrip.
 * ENH: add `pylabianca.utils._inherit_from_xarray()` to allow inheriting metadata (cell or trial-level additional information) from xarray DataArray to new xarray DataArray.
 * ENH: `pylabianca.utils.dict_to_xarray()` now allows to pass dictionary of `xarray.Dataset` as input.
 * ENH: `pylabianca.utils.xarray_to_dict()` has been sped up considerably. It relies on sessions being concatenated along the cell dimension (so each session being a contiguous block of cells).
@@ -41,6 +42,7 @@
 <br/>
 
 * DOC: add docstring to `pylabianca.selectivity.assess_selectivity()`
+* DOC: improve data format docs about FieldTrip data format.
 
 <br/><br/>
 
