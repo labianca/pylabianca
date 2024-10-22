@@ -631,7 +631,7 @@ def _get_cellinfo(inst):
     return cellinfo
 
 
-def find_cells(inst, **features, not_found='error'):
+def find_cells(inst, not_found='error', **features):
     '''Find cell indices that create given clusters on specific channel.'''
     from numbers import Number
 

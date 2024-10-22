@@ -7,7 +7,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.testing import gen_random_xarr
-from pylabianca.utils import (_get_trial_boundaries, find_cells_by_cluster_id,
+from pylabianca.utils import (_get_trial_boundaries, find_cells,
                               create_random_spikes, _inherit_metadata)
 
 
@@ -75,7 +75,7 @@ def test_cellinfo_from_xarray():
     assert cellinfo_reconstructed.equals(cellinfo)
 
 
-def test_find_cells_by_cluster_id():
+def test_find_cells():
     spk = create_random_spikes(n_trials=10, n_cells=10)
     channel = (np.tile(np.arange(5)[:, None], [1, 2]) + 1).ravel()
     cluster_id = np.random.randint(50, 1000, size=10)
@@ -83,25 +83,25 @@ def test_find_cells_by_cluster_id():
 
     cell_idx = 3
     cluster = cluster_id[cell_idx]
-    idx = find_cells_by_cluster_id(spk, [cluster])
+    idx = find_cells(spk, cluster=cluster)
     len(idx) == 1
     assert idx[0] == cell_idx
     assert (spk.cellinfo.loc[idx, 'cluster'] == cluster).all()
 
     # multiple clusters matching
     spk.cellinfo.loc[cell_idx + 1, 'cluster'] = cluster
-    with pytest.raises(ValueError, match='Found 0 or > 1 cluster IDs.'):
-        find_cells_by_cluster_id(spk, [cluster])
+    with pytest.raises(ValueError, match='Found more than one match'):
+        find_cells(spk, cluster=cluster)
 
     chan = channel[cell_idx + 1]
-    idx = find_cells_by_cluster_id(spk, [cluster], channel=chan)
+    idx = find_cells(spk, cluster=cluster, channel=chan)
     len(idx) == 1
     assert idx[0] == cell_idx + 1
 
     # no such cluster
     cluster = cluster_id.max() + 1
-    with pytest.raises(ValueError, match='Found 0 or > 1 cluster IDs.'):
-        find_cells_by_cluster_id(spk, [cluster])
+    with pytest.raises(ValueError, match='Could not find any match'):
+        find_cells(spk, cluster=cluster)
 
 
 def test_spike_centered_windows():
