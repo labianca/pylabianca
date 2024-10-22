@@ -630,33 +630,57 @@ def find_cells_by_cluster_id(cellinfo_source, cluster_ids, channel=None):
     if cellinfo is None:
         raise ValueError('No cellinfo found in the provided object.')
 
+    return cellinfo
+
+
+def find_cells(inst, **features, not_found='error'):
+    '''Find cell indices that create given clusters on specific channel.'''
+    from numbers import Number
+
+    cellinfo = _get_cellinfo(inst)
+    feature_names = features.keys()
+    n_features = len(feature_names)
+
+    # make sure is feature is present in cellinfo
+    cellinfo_columns = cellinfo.columns.tolist()
+    for name in feature_names:
+        if name not in cellinfo_columns:
+            raise ValueError('Feature "{name}" is not present in the cellinfo '
+                             'DataFrame')
+
+        if isinstance(features[name], (Number, str)):
+            features[name] = np.array([features[name]])
+        elif isinstance(features[name], (list, tuple)):
+            features[name] = np.array(features[name])
+
     cell_idx = list()
-    if isinstance(cluster_ids, int):
-        cluster_ids = [cluster_ids]
+    n_comparisons = np.array([len(val) for val in features.values()])
+    if n_features > 1:
+        comp_match = (n_comparisons[0] == n_comparisons[1:]).all()
 
-    n_clusters = len(cluster_ids)
-    if isinstance(channel, str):
-        channel = [channel] * n_clusters
-    elif isinstance(channel, (list, np.ndarray)):
-        if len(channel) != n_clusters:
-            raise ValueError('Number of channels has to match the number of '
-                             'cluster IDs.')
+        # TODO: if some are length-1, tile them to the correct length
+        if not comp_match:
+            raise ValueError('Number of elements per search feature has to be the '
+                             'same across all search features.')
 
-    for idx, cl in enumerate(cluster_ids):
-        is_cluster = cellinfo.cluster == cl
-        if channel is not None:
-            this_channel = channel[idx]
-            is_channel = cellinfo.channel == this_channel
-            idxs = np.where(is_cluster & is_channel)[0]
-        else:
-            idxs = np.where(is_cluster)[0]
+    masks = list()
+    for key, val in features.items():
+        msk = cellinfo[key].values[:, None] == val[None, :]
+        masks.append(msk)
+    masks = np.stack(masks, axis=2)
+    match_all = masks.all(axis=2)
+    row_idx, col_idx = np.where(match_all)
 
-        if len(idxs) == 1:
-            cell_idx.append(idxs[0])
-        else:
-            raise ValueError('Found 0 or > 1 cluster IDs.')
+    if len(col_idx) > n_comparisons[0]:
+        raise ValueError('Found more than one match for some search elements.')
+    elif len(col_idx) < n_comparisons[0]:
+        if not_found == 'error':
+            raise ValueError('Could not find any match for some search elements.')
+        elif not_found == 'warn':
+            from warning import warn
+            warn('Could not find any match for some search elements.')
 
-    return np.array(cell_idx)
+    return row_idx
 
 
 def read_drop_info(path):
