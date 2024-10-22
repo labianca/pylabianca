@@ -605,23 +605,21 @@ def _get_trial_boundaries(spk, cell_idx):
     return trial_boundaries, tri_num
 
 
-# TODO: first ~18 lines could be put in get_cellinfo function
-def find_cells_by_cluster_id(cellinfo_source, cluster_ids, channel=None):
-    '''Find cell indices that create given clusters on specific channel.'''
+def _get_cellinfo(inst):
     from .spikes import Spikes, SpikeEpochs
     spike_objects = (Spikes, SpikeEpochs)
 
-    if isinstance(cellinfo_source, spike_objects):
-        cellinfo = cellinfo_source.cellinfo
-    elif isinstance(cellinfo_source, pd.DataFrame):
-        cellinfo = cellinfo_source
+    if isinstance(inst, spike_objects):
+        cellinfo = inst.cellinfo
+    elif isinstance(inst, pd.DataFrame):
+        cellinfo = inst
     else:
-        msg = ('``cellinfo_source`` has to be a Spikes, SpikeEpochs, xarray '
+        msg = ('``inst`` has to be a Spikes, SpikeEpochs, xarray, '
                'DataArray or a pandas DataFrame object.')
         try:
             import xarray as xr
-            if isinstance(cellinfo_source, xr.DataArray):
-                cellinfo = cellinfo_from_xarray(cellinfo_source)
+            if isinstance(inst, xr.DataArray):
+                cellinfo = cellinfo_from_xarray(inst)
             else:
                 raise ValueError(msg)
         except ImportError:
