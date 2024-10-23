@@ -643,8 +643,8 @@ def find_cells(inst, not_found='error', **features):
     cellinfo_columns = cellinfo.columns.tolist()
     for name in feature_names:
         if name not in cellinfo_columns:
-            raise ValueError('Feature "{name}" is not present in the cellinfo '
-                             'DataFrame')
+            raise ValueError(f'Feature "{name}" is not present in the '
+                             'cellinfo DataFrame')
 
         if isinstance(features[name], (Number, str)):
             features[name] = np.array([features[name]])
