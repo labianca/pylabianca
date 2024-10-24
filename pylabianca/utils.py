@@ -645,7 +645,12 @@ def find_cells(inst, not_found='error', **features):
     **features:
         Keyword argument with search criteria. Keys refer to column names in
         the cellinfo dataframe and values are the values to search for.
-        '''
+
+    Returns
+    -------
+    cell_idx: np.ndarray
+        Array of cell indices that match the search criteria.
+    '''
     from numbers import Number
 
     cellinfo = _get_cellinfo(inst)
