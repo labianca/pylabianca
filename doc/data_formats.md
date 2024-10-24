@@ -51,20 +51,20 @@ Format used as output by the Osort sorter.
 This format uses matlab files (`*.mat`).
 
 ### standard format
-The data variable is a structure with the follwing fields:
+The data variable is a structure with the following fields:
 * `assignedNegative` - a vector of cluster id per each spike
 * `newSpikesNegative` - waveforms, one per spike
 * `newTimestampsNegative` - timestamps for all the spikes
 * allSpikesCorrFree - also waveforms, but different from newSpikesNegative (FIX - more info needed here)
 * scalingFactor - scaling factor for the waveforms (?), currently not used because it frequently is NaN and the read scaling factor has to be read from Neuralynx file header.  (FIX - more info needed here)
 
-This format uses one file per lead (microelectrode), so a path to folder (not file) is needed to read multiple channels.
+This format uses one file per lead (micro-electrode), so a path to folder (not file) is needed to read multiple channels.
 This format can be read by `pylabianca.io.read_osort(path_to_folder, format='standard')`.
 This function can be used to read only some of the channels, reading vs not reading waveforms etc. - for more details see the docstring.
 
 ### "mm" format
 Slightly modified and cleaned up variant of the Osort output format.
-The data variable is a structure with the follwing fields:
+The data variable is a structure with the following fields:
 * `cluster_id` - vector of cluster ids, one per cell (not one per spike as in "standard" format)
 * `timestamp` - cell array, where each cell contains vector of timestamps for respective neuron (so `data.timestamp{1}` contains timestamps for the unit formed by the first cluster in `data.cluster_id`)
 * `waveform` - cell array, where each cell contains `n_spikes x n_samples` matrix of waveforms for respective neuron
@@ -72,7 +72,7 @@ The data variable is a structure with the follwing fields:
 * `threshold` - vector of spike SD thresholds used for spike detection
 * `channel` - cell array of channel names (one channel name per
 
-This format uses only one file per sorting (not one per lead/microchannel as in Osort "standard" format).
+This format uses only one file per sorting (not one per lead/micro-channel as in Osort "standard" format).
 This format can be read by `pylabianca.io.read_osort(path_to_file, format='mm')`.
 This function can be used to read only some of the channels, reading vs not reading waveforms etc. - for more details see the docstring.
 
