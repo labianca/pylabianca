@@ -606,6 +606,7 @@ def _get_trial_boundaries(spk, cell_idx):
 
 
 def _get_cellinfo(inst):
+    '''Obtain the cellinfo dataframe from multiple input types.'''
     from .spikes import Spikes, SpikeEpochs
     spike_objects = (Spikes, SpikeEpochs)
 
@@ -632,7 +633,19 @@ def _get_cellinfo(inst):
 
 
 def find_cells(inst, not_found='error', **features):
-    '''Find cell indices that create given clusters on specific channel.'''
+    '''Find cell indices that fullfil search criteria.
+
+    Parameters
+    ----------
+    inst: pylabianca.Spikes | pylabianca.SpikeEpochs | xarray.DataArray | pandas.DataFrame
+        Object containing cellinfo dataframe.
+    not_found: str
+        Whether to error (``'error'``, default) or warn (``'warn'``) when
+        some search items were not found.
+    **features:
+        Keyword argument with search criteria. Keys refer to column names in
+        the cellinfo dataframe and values are the values to search for.
+        '''
     from numbers import Number
 
     cellinfo = _get_cellinfo(inst)
