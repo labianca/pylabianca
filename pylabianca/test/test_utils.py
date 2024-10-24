@@ -129,6 +129,13 @@ def test_find_cells():
     with pytest.raises(ValueError, match=msg):
         find_cells(spk, numpy=[1, 2, 3])
 
+    # tiling length one search features:
+    spk.cellinfo.loc[0:1, 'cluster'] = [17, 23]
+    spk.cellinfo.loc[2:3, 'cluster'] = [17, 23]
+
+    row_idx = find_cells(spk, channel=2, cluster=[17, 23])
+    assert (row_idx == [2, 3]).all()
+
 
 def test_spike_centered_windows():
     # simple case - one spike per trial
