@@ -649,7 +649,7 @@ def find_cells(inst, not_found='error', **features):
     from numbers import Number
 
     cellinfo = _get_cellinfo(inst)
-    feature_names = features.keys()
+    feature_names = list(features.keys())
     n_features = len(feature_names)
 
     # make sure is feature is present in cellinfo
@@ -666,13 +666,22 @@ def find_cells(inst, not_found='error', **features):
 
     cell_idx = list()
     n_comparisons = np.array([len(val) for val in features.values()])
+    max_comp = n_comparisons.max()
     if n_features > 1:
-        comp_match = (n_comparisons[0] == n_comparisons[1:]).all()
+        # ignore length-1 features when comparing number of search elements
+        length_one_mask = n_comparisons == 1
+        comp_match = (n_comparisons[~length_one_mask] == max_comp).all()
 
-        # TODO: if some are length-1, tile them to the correct length
         if not comp_match:
-            raise ValueError('Number of elements per search feature has to be the '
-                             'same across all search features.')
+            raise ValueError('Number of elements per search feature has to be '
+                             'the same across all search features (with the '
+                             'exception of length one features, which can be '
+                             'easily tiled to match the rest).')
+
+        # if some search elements are length-1, tile them to the correct length
+        one_len_features = np.array(feature_names)[length_one_mask]
+        for key in one_len_features:
+            features[key] = np.tile(features[key], max_comp)
 
     masks = list()
     for key, val in features.items():
@@ -682,14 +691,15 @@ def find_cells(inst, not_found='error', **features):
     match_all = masks.all(axis=2)
     row_idx, col_idx = np.where(match_all)
 
-    if len(col_idx) > n_comparisons[0]:
+    if len(col_idx) > max_comp:
         raise ValueError('Found more than one match for some search elements.')
     elif len(col_idx) < n_comparisons[0]:
+        msg = 'Could not find any match for some search elements.'
         if not_found == 'error':
-            raise ValueError('Could not find any match for some search elements.')
+            raise ValueError(msg)
         elif not_found == 'warn':
             from warning import warn
-            warn('Could not find any match for some search elements.')
+            warn(msg)
 
     return row_idx
 
