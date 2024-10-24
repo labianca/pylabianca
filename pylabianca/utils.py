@@ -656,8 +656,8 @@ def find_cells(inst, not_found='error', **features):
     cellinfo_columns = cellinfo.columns.tolist()
     for name in feature_names:
         if name not in cellinfo_columns:
-            raise ValueError('Feature "{name}" is not present in the cellinfo '
-                             'DataFrame')
+            raise ValueError(f'Feature "{name}" is not present in the '
+                             'cellinfo DataFrame')
 
         if isinstance(features[name], (Number, str)):
             features[name] = np.array([features[name]])
@@ -742,9 +742,8 @@ def drop_cells_by_channel_and_cluster_id(spk, to_drop):
     '''Works in place!'''
     # find cell idx by channel + cluster ID
     cell_idx = list()
-    for channel, cluster in to_drop:
-        this_idx = find_cells_by_cluster_id(spk, cluster, channel=channel)[0]
-        cell_idx.append(this_idx)
+    clusters, channels = zip(*to_drop)
+    cell_idx = find_cells(spk, cluster=clusters, channel=channels)
     spk.drop_cells(cell_idx)
 
 

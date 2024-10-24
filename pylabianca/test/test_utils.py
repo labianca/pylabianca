@@ -81,6 +81,27 @@ def test_find_cells():
     cluster_id = np.random.randint(50, 1000, size=10)
     spk.cellinfo = pd.DataFrame({'channel': channel, 'cluster': cluster_id})
 
+    # test _get_cellinfo
+    info = pln.utils._get_cellinfo(spk)
+    assert (info == spk.cellinfo).all().all()
+
+    fr = spk.spike_rate()
+    info = pln.utils._get_cellinfo(fr)
+    assert (info == spk.cellinfo).all().all()
+
+    info = pln.utils._get_cellinfo(spk.cellinfo)
+    assert (info == spk.cellinfo).all().all()
+
+    msg = 'has to be a Spikes, SpikeEpochs, xarray'
+    with pytest.raises(ValueError, match=msg):
+        info = pln.utils._get_cellinfo(list('abcd'))
+
+    spk2 = spk.copy()
+    spk2.cellinfo = None
+    msg = 'No cellinfo found in the provided object.'
+    with pytest.raises(ValueError, match=msg):
+        info = pln.utils._get_cellinfo(spk2)
+
     cell_idx = 3
     cluster = cluster_id[cell_idx]
     idx = find_cells(spk, cluster=cluster)
@@ -102,6 +123,11 @@ def test_find_cells():
     cluster = cluster_id.max() + 1
     with pytest.raises(ValueError, match='Could not find any match'):
         find_cells(spk, cluster=cluster)
+
+    # no such feature
+    msg = 'Feature "numpy" is not present in the cellinfo'
+    with pytest.raises(ValueError, match=msg):
+        find_cells(spk, numpy=[1, 2, 3])
 
 
 def test_spike_centered_windows():
