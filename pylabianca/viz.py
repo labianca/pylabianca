@@ -107,10 +107,10 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
 
     if labels:
         xlabel = x_dim.capitalize()
-        if 'coord_units' in arr.attrs:
-            if x_dim in arr.attrs['coord_units']:
-                this_unit = arr.attrs['coord_units'][x_dim]
-                xlabel += f' ({this_unit})'
+        dim_unit = x_dim + '_unit'
+        if dim_unit in arr.attrs:
+            this_unit = arr.attrs[dim_unit]
+            xlabel += f' ({this_unit})'
         ax.set_xlabel(xlabel, fontsize=14)
 
         if arr.name is not None:

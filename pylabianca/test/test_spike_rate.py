@@ -1,3 +1,5 @@
+import os.path as op
+
 import numpy as np
 import pytest
 
@@ -63,3 +65,16 @@ def test_firing_rate_against_elephant(spk_epochs):
     # test a case where times vector and n_steps did not align (lead to error)
     this_spk = spk_epochs.copy().crop(tmin=-1., tmax=2.)
     this_spk.spike_rate(winlen=0.35, step=0.05)
+
+
+def test_frate_writes_to_netcdf4(spk_epochs, tmp_path):
+    import xarray as xr
+
+    fr = spk_epochs.spike_rate(winlen=0.25, step=0.05)
+
+    fname = 'test_spike_rate.nc'
+    fpath = op.join(tmp_path, fname)
+    fr.to_netcdf(fpath)
+    fr2 = xr.load_dataarray(fpath)
+
+    assert fr.equals(fr2)
