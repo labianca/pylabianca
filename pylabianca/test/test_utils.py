@@ -122,6 +122,12 @@ def test_find_cells():
     with pytest.raises(ValueError, match='Found more than one match'):
         find_cells(spk, cluster=cluster)
 
+    with pytest.warns(UserWarning):
+        find_cells(spk, cluster=cluster, more_found='warn')
+
+    idx = find_cells(spk, cluster=cluster, more_found='ignore')
+    assert len(idx) == 2
+
     chan = channel[cell_idx + 1]
     idx = find_cells(spk, cluster=cluster, channel=chan)
     len(idx) == 1
@@ -137,12 +143,38 @@ def test_find_cells():
     with pytest.raises(ValueError, match=msg):
         find_cells(spk, numpy=[1, 2, 3])
 
+    # wrong more_found or not_found argument:
+    msg = '"{}" has to be one of:'
+    with pytest.raises(ValueError, match=msg.format('more_found')):
+        find_cells(spk, cluster=cluster, more_found='wrong_arg')
+
+    with pytest.raises(ValueError, match=msg.format('not_found')):
+        find_cells(spk, cluster=cluster, not_found='wrong_arg')
+
     # tiling length one search features:
     spk.cellinfo.loc[0:1, 'cluster'] = [17, 23]
     spk.cellinfo.loc[2:3, 'cluster'] = [17, 23]
 
     row_idx = find_cells(spk, channel=2, cluster=[17, 23])
     assert (row_idx == [2, 3]).all()
+
+    # when search features of different lengths are provided
+    # (except the length one case) we should get a ValueError
+    msg = ('Number of elements per search feature has to be '
+           'the same across all search features')
+    with pytest.raises(ValueError, match=msg):
+        idx = pln.utils.find_cells(
+            info, channel=[0, 2], cluster=[10, 25, 30])
+
+    # test dropping with drop_cells_by_channel_and_cluster_id
+    should_drop = [3, 7]
+    drop_cells = [spk.cell_names[idx] for idx in should_drop]
+    to_drop = [(x['cluster'], x['channel'])
+               for _, x in spk.cellinfo.loc[should_drop, :].iterrows()]
+    pln.utils.drop_cells_by_channel_and_cluster_id(spk, to_drop)
+
+    for cell in drop_cells:
+        assert cell not in spk.cell_names
 
 
 def test_spike_centered_windows():

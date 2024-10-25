@@ -632,7 +632,7 @@ def _get_cellinfo(inst):
     return cellinfo
 
 
-def find_cells(inst, not_found='error', **features):
+def find_cells(inst, not_found='error', more_found='error', **features):
     '''Find cell indices that fullfil search criteria.
 
     Parameters
@@ -640,8 +640,11 @@ def find_cells(inst, not_found='error', **features):
     inst: pylabianca.Spikes | pylabianca.SpikeEpochs | xarray.DataArray | pandas.DataFrame
         Object containing cellinfo dataframe.
     not_found: str
-        Whether to error (``'error'``, default) or warn (``'warn'``) when
-        some search items were not found.
+        Whether to error (``'error'``, default), warn (``'warn'``) or ignore
+        (``'ignore'``) when some search items were not found.
+    more_found: str
+        Whether to error (``'error'``, default), warn (``'warn'``) or ignore
+        (``'ignore'``) when some search items were found multiple times.
     **features:
         Keyword argument with search criteria. Keys refer to column names in
         the cellinfo dataframe and values are the values to search for.
@@ -652,6 +655,8 @@ def find_cells(inst, not_found='error', **features):
         Array of cell indices that match the search criteria.
     '''
     from numbers import Number
+    _check_str_options(not_found, 'not_found')
+    _check_str_options(more_found, 'more_found')
 
     cellinfo = _get_cellinfo(inst)
     feature_names = list(features.keys())
@@ -697,16 +702,29 @@ def find_cells(inst, not_found='error', **features):
     row_idx, col_idx = np.where(match_all)
 
     if len(col_idx) > max_comp:
-        raise ValueError('Found more than one match for some search elements.')
+        msg = 'Found more than one match for some search elements.'
+        _raise_error_warn_or_ignore(msg, more_found)
     elif len(col_idx) < n_comparisons[0]:
         msg = 'Could not find any match for some search elements.'
-        if not_found == 'error':
-            raise ValueError(msg)
-        elif not_found == 'warn':
-            from warning import warn
-            warn(msg)
+        _raise_error_warn_or_ignore(msg, not_found)
 
     return row_idx
+
+
+def _check_str_options(arg_val, arg_name,
+                       good_values=('error', 'warn', 'ignore')):
+    if not isinstance(arg_val, str) or arg_val not in good_values:
+        raise ValueError(f'"{arg_name}" has to be one of: {good_values}. '
+                         f'Got: {arg_val}.')
+
+
+def _raise_error_warn_or_ignore(msg, action):
+    if action == 'ignore':
+        pass
+    elif action == 'error':
+        raise ValueError(msg)
+    elif action == 'warn':
+        warn(msg)
 
 
 def read_drop_info(path):
