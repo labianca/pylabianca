@@ -67,3 +67,18 @@ def test_plot_raster():
         time_real = spk.time[0][tri_msk]
         time_plot = ax.collections[idx].get_positions()
         assert (time_real == time_plot).all()
+
+
+def test_plot_isi():
+    # currently a smoke test
+    spk = pln.utils.create_random_spikes(
+        n_cells=7, n_trials=0, n_spikes=(35, 153))
+    ax = spk.plot_isi(min_spikes=20, max_isi=1000)
+
+    assert ax.shape == (2, 4)
+    for this_ax in ax.ravel():
+        bars = this_ax.findobj(plt.Rectangle)
+        assert len(bars) >= 10
+
+    ax = spk.plot_isi(picks=np.arange(6), min_spikes=20, max_isi=500)
+    assert ax.shape == (2, 3)
