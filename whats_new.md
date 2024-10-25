@@ -10,6 +10,7 @@
 * API: `pylabianca.selectivity.compute_selectivity_continuous()` now returns an `xarray.Dataset` instead of dictionary of `xarray.DataArray` objects. This makes the output more convenient to work with (for example using `.sel()` to select elements of all items at the same time; or ability to use both `['key_name']` and `.key_name` to access items).
 * API: removed, now unnecessary, `ignore_below` argument of `pylabianca.selectivity.depth_of_selectivity()` function. It was used to ignore firing rate values below a certain threshold, but the issue of very small non-zero values was previously fixed (numerical error likely stemming from the fact convolution used fft under the hood).
 * API: removed `min_Hz` argument of `pylabianca.selectivity.compute_selectivity_continuous()`. It was used to ignore average firing rate values below a certain threshold, but such selection should be done by the user before calling the function.
+* API: removed `pylabianca.utils.find_cells_by_cluster_id()` in favor of a more universal `pylabianca.utils.find_cells()`. Instead of doing `pln.utils.find_cells_by_cluster_id([254], channel='A15')` and then `pln.utils.find_cells_by_cluster_id([1854], channel='A23')` one can use `pln.utils.find_cells(cluster=[254, 1854], channel=['A15', 'A23'])`.
 
 <br/>
 
