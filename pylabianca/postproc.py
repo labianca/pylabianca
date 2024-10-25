@@ -257,7 +257,7 @@ def mark_duplicates(spike_data_dir, first_channel, fig_dir=None,
         packs.append(this_pack)
         current_ch_idx += 8
 
-    units_in_pack = [np.where(np.in1d(unit_channel, pack))[0]
+    units_in_pack = [np.where(np.isin(unit_channel, pack))[0]
                      for pack in packs]
 
     # calculate measures

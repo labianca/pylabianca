@@ -476,7 +476,7 @@ class SpikeEpochs():
         # for each cell select relevant trials:
         for cell_idx in range(len(self.trial)):
             cell_tri = self.trial[cell_idx]
-            sel = np.in1d(cell_tri, tri_idx)
+            sel = np.isin(cell_tri, tri_idx)
             new_time.append(self.time[cell_idx][sel])
 
             this_tri = (cell_tri[sel, None] == tri_idx[None, :]).argmax(axis=1)
@@ -785,7 +785,7 @@ class Spikes(object):
         '''
         # event_id support
         if event_id is not None:
-            use_events = np.in1d(events[:, -1], event_id)
+            use_events = np.isin(events[:, -1], event_id)
             if not np.any(use_events):
                 raise ValueError(
                     'No events of any of the types ({}) found.'.format(
@@ -1272,7 +1272,7 @@ def _drop_cells(spk, drop):
     # invert drop to pick and use pick_cells
     all_idx = np.arange(spk.n_units())
     drop = _deal_with_picks(spk, drop)
-    is_dropped = np.in1d(all_idx, drop)
+    is_dropped = np.isin(all_idx, drop)
     retain_idx = np.where(~is_dropped)[0]
     return spk.pick_cells(retain_idx)
 

@@ -7,7 +7,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.testing import gen_random_xarr
-from pylabianca.utils import (_get_trial_boundaries, find_cells_by_cluster_id,
+from pylabianca.utils import (_get_trial_boundaries, find_cells,
                               create_random_spikes, _inherit_metadata)
 
 
@@ -75,33 +75,106 @@ def test_cellinfo_from_xarray():
     assert cellinfo_reconstructed.equals(cellinfo)
 
 
-def test_find_cells_by_cluster_id():
+def test_find_cells():
     spk = create_random_spikes(n_trials=10, n_cells=10)
     channel = (np.tile(np.arange(5)[:, None], [1, 2]) + 1).ravel()
-    cluster_id = np.random.randint(50, 1000, size=10)
+
+    # generate unique cluster ids
+    is_unique = False
+    while not is_unique:
+        cluster_id = np.random.randint(50, 1000, size=10)
+        is_unique = len(np.unique(cluster_id)) == 10
+
+    # create and assign cellinfo
     spk.cellinfo = pd.DataFrame({'channel': channel, 'cluster': cluster_id})
 
+    # test _get_cellinfo
+    info = pln.utils._get_cellinfo(spk)
+    assert (info == spk.cellinfo).all().all()
+
+    fr = spk.spike_rate()
+    info = pln.utils._get_cellinfo(fr)
+    assert (info == spk.cellinfo).all().all()
+
+    info = pln.utils._get_cellinfo(spk.cellinfo)
+    assert (info == spk.cellinfo).all().all()
+
+    msg = 'has to be a Spikes, SpikeEpochs, xarray'
+    with pytest.raises(ValueError, match=msg):
+        info = pln.utils._get_cellinfo(list('abcd'))
+
+    spk2 = spk.copy()
+    spk2.cellinfo = None
+    msg = 'No cellinfo found in the provided object.'
+    with pytest.raises(ValueError, match=msg):
+        info = pln.utils._get_cellinfo(spk2)
+
+    # test find_cells
     cell_idx = 3
     cluster = cluster_id[cell_idx]
-    idx = find_cells_by_cluster_id(spk, [cluster])
+    idx = find_cells(spk, cluster=cluster)
     len(idx) == 1
     assert idx[0] == cell_idx
     assert (spk.cellinfo.loc[idx, 'cluster'] == cluster).all()
 
     # multiple clusters matching
     spk.cellinfo.loc[cell_idx + 1, 'cluster'] = cluster
-    with pytest.raises(ValueError, match='Found 0 or > 1 cluster IDs.'):
-        find_cells_by_cluster_id(spk, [cluster])
+    with pytest.raises(ValueError, match='Found more than one match'):
+        find_cells(spk, cluster=cluster)
+
+    with pytest.warns(UserWarning):
+        find_cells(spk, cluster=cluster, more_found='warn')
+
+    idx = find_cells(spk, cluster=cluster, more_found='ignore')
+    assert len(idx) == 2
 
     chan = channel[cell_idx + 1]
-    idx = find_cells_by_cluster_id(spk, [cluster], channel=chan)
+    idx = find_cells(spk, cluster=cluster, channel=chan)
     len(idx) == 1
     assert idx[0] == cell_idx + 1
 
     # no such cluster
     cluster = cluster_id.max() + 1
-    with pytest.raises(ValueError, match='Found 0 or > 1 cluster IDs.'):
-        find_cells_by_cluster_id(spk, [cluster])
+    with pytest.raises(ValueError, match='Could not find any match'):
+        find_cells(spk, cluster=cluster)
+
+    # no such feature
+    msg = 'Feature "numpy" is not present in the cellinfo'
+    with pytest.raises(ValueError, match=msg):
+        find_cells(spk, numpy=[1, 2, 3])
+
+    # wrong more_found or not_found argument:
+    msg = '"{}" has to be one of:'
+    with pytest.raises(ValueError, match=msg.format('more_found')):
+        find_cells(spk, cluster=cluster, more_found='wrong_arg')
+
+    with pytest.raises(ValueError, match=msg.format('not_found')):
+        find_cells(spk, cluster=cluster, not_found='wrong_arg')
+
+    # tiling length one search features:
+    spk.cellinfo.loc[0:1, 'cluster'] = [17, 23]
+    spk.cellinfo.loc[2:3, 'cluster'] = [17, 23]
+
+    row_idx = find_cells(spk, channel=2, cluster=[17, 23])
+    assert (row_idx == [2, 3]).all()
+
+    # when search features of different lengths are provided
+    # (except the length one case) we should get a ValueError
+    msg = ('Number of elements per search feature has to be '
+           'the same across all search features')
+    with pytest.raises(ValueError, match=msg):
+        idx = pln.utils.find_cells(
+            info, channel=[0, 2], cluster=[10, 25, 30])
+
+    # test dropping with drop_cells_by_channel_and_cluster_id
+    should_drop = [3, 7]
+    drop_cells = [spk.cell_names[idx] for idx in should_drop]
+    to_drop = [(x['cluster'], x['channel'])
+               for _, x in spk.cellinfo.loc[should_drop, :].iterrows()]
+    pln.utils.drop_cells_by_channel_and_cluster_id(spk, to_drop)
+
+    for cell in drop_cells:
+        assert cell not in spk.cell_names
 
 
 def test_spike_centered_windows():

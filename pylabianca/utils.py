@@ -582,7 +582,7 @@ def realign_waveforms(spk, picks=None, min_spikes=10, reject=True):
             # TODO: could be made a separate function one day
             n_reject = len(reject_idx)
             if n_reject > 0:
-                msg = (f'Removing {n_reject} bad waveforms for cell'
+                msg = (f'Removing {n_reject} bad waveforms for cell '
                        f'{spk.cell_names[cell_idx]}.')
                 print(msg)
 
@@ -605,27 +605,126 @@ def _get_trial_boundaries(spk, cell_idx):
     return trial_boundaries, tri_num
 
 
-# TODO - this can be made more universal
-def find_cells_by_cluster_id(spk, cluster_ids, channel=None):
-    '''Find cell indices that create given clusters on specific channel.'''
+def _get_cellinfo(inst):
+    '''Obtain the cellinfo dataframe from multiple input types.'''
+    from .spikes import Spikes, SpikeEpochs
+    spike_objects = (Spikes, SpikeEpochs)
+
+    if isinstance(inst, spike_objects):
+        cellinfo = inst.cellinfo
+    elif isinstance(inst, pd.DataFrame):
+        cellinfo = inst
+    else:
+        msg = ('``inst`` has to be a Spikes, SpikeEpochs, xarray, '
+               'DataArray or a pandas DataFrame object.')
+        try:
+            import xarray as xr
+            if isinstance(inst, xr.DataArray):
+                cellinfo = cellinfo_from_xarray(inst)
+            else:
+                raise ValueError(msg)
+        except ImportError:
+            raise ValueError(msg)
+
+    if cellinfo is None:
+        raise ValueError('No cellinfo found in the provided object.')
+
+    return cellinfo
+
+
+def find_cells(inst, not_found='error', more_found='error', **features):
+    '''Find cell indices that fullfil search criteria.
+
+    Parameters
+    ----------
+    inst: pylabianca.Spikes | pylabianca.SpikeEpochs | xarray.DataArray | pandas.DataFrame
+        Object containing cellinfo dataframe.
+    not_found: str
+        Whether to error (``'error'``, default), warn (``'warn'``) or ignore
+        (``'ignore'``) when some search items were not found.
+    more_found: str
+        Whether to error (``'error'``, default), warn (``'warn'``) or ignore
+        (``'ignore'``) when some search items were found multiple times.
+    **features:
+        Keyword argument with search criteria. Keys refer to column names in
+        the cellinfo dataframe and values are the values to search for.
+
+    Returns
+    -------
+    cell_idx: np.ndarray
+        Array of cell indices that match the search criteria.
+    '''
+    from numbers import Number
+    _check_str_options(not_found, 'not_found')
+    _check_str_options(more_found, 'more_found')
+
+    cellinfo = _get_cellinfo(inst)
+    feature_names = list(features.keys())
+    n_features = len(feature_names)
+
+    # make sure is feature is present in cellinfo
+    cellinfo_columns = cellinfo.columns.tolist()
+    for name in feature_names:
+        if name not in cellinfo_columns:
+            raise ValueError(f'Feature "{name}" is not present in the '
+                             'cellinfo DataFrame')
+
+        if isinstance(features[name], (Number, str)):
+            features[name] = np.array([features[name]])
+        elif isinstance(features[name], (list, tuple)):
+            features[name] = np.array(features[name])
+
     cell_idx = list()
-    if isinstance(cluster_ids, int):
-        cluster_ids = [cluster_ids]
+    n_comparisons = np.array([len(val) for val in features.values()])
+    max_comp = n_comparisons.max()
+    if n_features > 1:
+        # ignore length-1 features when comparing number of search elements
+        length_one_mask = n_comparisons == 1
+        comp_match = (n_comparisons[~length_one_mask] == max_comp).all()
 
-    for cl in cluster_ids:
-        is_cluster = spk.cellinfo.cluster == cl
-        if channel is not None:
-            is_channel = spk.cellinfo.channel == channel
-            idxs = np.where(is_cluster & is_channel)[0]
-        else:
-            idxs = np.where(is_cluster)[0]
+        if not comp_match:
+            raise ValueError('Number of elements per search feature has to be '
+                             'the same across all search features (with the '
+                             'exception of length one features, which can be '
+                             'easily tiled to match the rest).')
 
-        if len(idxs) == 1:
-            cell_idx.append(idxs[0])
-        else:
-            raise ValueError('Found 0 or > 1 cluster IDs.')
+        # if some search elements are length-1, tile them to the correct length
+        one_len_features = np.array(feature_names)[length_one_mask]
+        for key in one_len_features:
+            features[key] = np.tile(features[key], max_comp)
 
-    return cell_idx
+    masks = list()
+    for key, val in features.items():
+        msk = cellinfo[key].values[:, None] == val[None, :]
+        masks.append(msk)
+    masks = np.stack(masks, axis=2)
+    match_all = masks.all(axis=2)
+    row_idx, col_idx = np.where(match_all)
+
+    if len(col_idx) > max_comp:
+        msg = 'Found more than one match for some search elements.'
+        _raise_error_warn_or_ignore(msg, more_found)
+    elif len(col_idx) < n_comparisons[0]:
+        msg = 'Could not find any match for some search elements.'
+        _raise_error_warn_or_ignore(msg, not_found)
+
+    return row_idx
+
+
+def _check_str_options(arg_val, arg_name,
+                       good_values=('error', 'warn', 'ignore')):
+    if not isinstance(arg_val, str) or arg_val not in good_values:
+        raise ValueError(f'"{arg_name}" has to be one of: {good_values}. '
+                         f'Got: {arg_val}.')
+
+
+def _raise_error_warn_or_ignore(msg, action):
+    if action == 'ignore':
+        pass
+    elif action == 'error':
+        raise ValueError(msg)
+    elif action == 'warn':
+        warn(msg)
 
 
 def read_drop_info(path):
@@ -666,9 +765,8 @@ def drop_cells_by_channel_and_cluster_id(spk, to_drop):
     '''Works in place!'''
     # find cell idx by channel + cluster ID
     cell_idx = list()
-    for channel, cluster in to_drop:
-        this_idx = find_cells_by_cluster_id(spk, cluster, channel=channel)[0]
-        cell_idx.append(this_idx)
+    clusters, channels = zip(*to_drop)
+    cell_idx = find_cells(spk, cluster=clusters, channel=channels)
     spk.drop_cells(cell_idx)
 
 

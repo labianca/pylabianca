@@ -410,7 +410,7 @@ def read_combinato(path, label=None, alignment='both'):
 
                 types = np.asarray(sorting_file['types'])
                 # find SUs (or SUs and MUs)
-                is_SU = np.in1d(types[:, -1], types_oi)
+                is_SU = np.isin(types[:, -1], types_oi)
 
                 if not is_SU.any():
                     continue
@@ -421,7 +421,7 @@ def read_combinato(path, label=None, alignment='both'):
                 has_content = True
                 groups_oi = types[is_SU, 0]
                 groups = np.asarray(sorting_file['groups'])
-                groups_sel = np.in1d(groups[:, 1], groups_oi)
+                groups_sel = np.insin(groups[:, 1], groups_oi)
                 groups = groups[groups_sel, :]
 
                 spike_classes = np.asarray(sorting_file['classes'])
@@ -435,7 +435,7 @@ def read_combinato(path, label=None, alignment='both'):
                 for grp in groups_oi:
                     msk = groups[:, 1] == grp
                     this_classes = groups[msk, 0]
-                    class_msk = np.in1d(spike_classes, this_classes)
+                    class_msk = np.isin(spike_classes, this_classes)
 
                     idx = spike_indices[class_msk]
                     # some groups can be empty with label that was not updated
@@ -618,7 +618,7 @@ def read_osort(path, waveform=True, channels='all', format='mm',
             # find cluster ids
             if not use_usenegative:
                 cluster_ids = np.unique(this_cluster_id)
-                msk = np.in1d(cluster_ids, ignore_cluster)
+                msk = np.isin(cluster_ids, ignore_cluster)
                 if msk.any():
                     cluster_ids = cluster_ids[~msk]
             else:
