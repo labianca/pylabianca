@@ -78,7 +78,14 @@ def test_cellinfo_from_xarray():
 def test_find_cells():
     spk = create_random_spikes(n_trials=10, n_cells=10)
     channel = (np.tile(np.arange(5)[:, None], [1, 2]) + 1).ravel()
-    cluster_id = np.random.randint(50, 1000, size=10)
+
+    # generate unique cluster ids
+    is_unique = False
+    while not is_unique:
+        cluster_id = np.random.randint(50, 1000, size=10)
+        is_unique = len(np.unique(cluster_id)) == 10
+
+    # create and assign cellinfo
     spk.cellinfo = pd.DataFrame({'channel': channel, 'cluster': cluster_id})
 
     # test _get_cellinfo
@@ -102,6 +109,7 @@ def test_find_cells():
     with pytest.raises(ValueError, match=msg):
         info = pln.utils._get_cellinfo(spk2)
 
+    # test find_cells
     cell_idx = 3
     cluster = cluster_id[cell_idx]
     idx = find_cells(spk, cluster=cluster)
