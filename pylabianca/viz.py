@@ -970,7 +970,7 @@ def _simplify_axes(ax):
     return axes
 
 
-def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
+def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=20,
              max_isi=None, ax=None):
     '''Plot inter-spike intervals (ISIs).
 
@@ -1023,7 +1023,7 @@ def plot_isi(spk, picks=None, unit='ms', bins=None, min_spikes=100,
             isi = isi[isi < max_isi]
             n_isi = len(isi)
             use_bins = (bins if bins is not None
-                        else min(250, int(n_isi / 100)))
+                        else max(min(250, int(n_isi / 100)), 10))
             axes[idx].hist(isi, bins=use_bins)
             axes[idx].set_ylabel('Count', fontsize=12)
             axes[idx].set_xlabel(f'ISI ({unit})', fontsize=12)
