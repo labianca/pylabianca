@@ -168,7 +168,7 @@ def compare_box_ranges(ax, ranges):
     return checks
 
 
-def test_add_highlight():
+def test_add_highlights():
     # prepare data
     spk = pln.utils.create_random_spikes(
     n_cells=2, n_trials=50, n_spikes=(20, 50))
