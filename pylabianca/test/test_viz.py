@@ -62,12 +62,21 @@ def test_plot_shaded():
     # ------
     # plot_shaded does not accept list of str as colors
     # BTW colors='red' should also be accepted
+    df = pd.DataFrame({'condition': ['A'] * 13 + ['B'] * 12})
     spk = pln.utils.create_random_spikes(
-        n_cells=2, n_trials=25, n_spikes=(15, 35))
+        n_cells=2, n_trials=25, n_spikes=(15, 35), metadata=df)
     fr = spk.spike_density(fwhm=0.2)
-    crms = plt.cm.colors.to_rgb('crimson')
-    ax = pln.viz.plot_shaded(fr.isel(cell=0), colors=[crms])
-    assert ax.lines[0].get_color() == crms
+
+    color_rgb = plt.cm.colors.to_rgb('crimson')
+    ax = pln.viz.plot_shaded(fr.isel(cell=0), colors=[color_rgb])
+    assert ax.lines[0].get_color() == color_rgb
+
+    colors_str = ['crimson', 'cornflowerblue']
+    colors_rgb = [plt.cm.colors.to_rgb(color) for color in colors_str]
+    ax = pln.viz.plot_shaded(fr.isel(cell=0), groupby='condition',
+                             colors=colors_rgb)
+    assert ax.lines[0].get_color() == colors_rgb[0]
+    assert ax.lines[1].get_color() == colors_rgb[1]
 
 
 def test_plot_raster():
