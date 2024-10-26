@@ -85,3 +85,61 @@ def test_plot_isi():
 
     ax = spk.plot_isi(picks=np.arange(6), min_spikes=20, max_isi=500)
     assert ax.shape == (2, 3)
+
+
+def check_if_same_limits(axes):
+    '''Helper function to test if axes have the same limits.'''
+    if len(axes) == 1:
+        return True, True
+
+    y_lims = list()
+    x_lims = list()
+    for ax in axes:
+        y_lims.append(ax.get_ylim())
+        x_lims.append(ax.get_xlim())
+
+    same_x = list()
+    same_y = list()
+
+    for xlm, ylm in zip(x_lims[1:], y_lims[1:]):
+        same_x.append(x_lims[0] == xlm)
+        same_y.append(y_lims[0] == ylm)
+
+    same_x = all(same_x)
+    same_y = all(same_y)
+    return same_x, same_y
+
+
+def test_axis_helpers():
+    # axis size in pixels
+    fig, ax = plt.subplots(figsize=(10, 4))
+    pix_w, pix_h = pln.viz.get_axis_size_pix(ax)
+    assert np.abs((pix_w / pix_h) - (10 / 4)) < 0.1
+
+    # normalizing axis limits
+    # -----------------------
+    fig, ax = plt.subplots(ncols=4, nrows=2)
+    axs = ax.ravel()
+
+    # set random x and y limits
+    rnd_x = np.random.random(8)
+    rnd_y = np.random.random(8)
+    for idx, ax in enumerate(axs):
+        ax.set_xlim(0, rnd_x[idx])
+        ax.set_ylim(0, rnd_y[idx])
+
+    # check that all axes have different limits
+    same_x, same_y = check_if_same_limits(axs)
+    assert not same_x
+    assert not same_y
+
+    # align y axes limits (default)
+    pln.viz.align_axes_limits(axs)
+    same_x, same_y = check_if_same_limits(axs)
+    assert not same_x
+    assert same_y
+
+    # align x axes limits
+    pln.viz.align_axes_limits(axs, ylim=False, xlim=True)
+    same_x, same_y = check_if_same_limits(axs)
+    assert same_x

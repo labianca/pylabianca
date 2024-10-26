@@ -460,7 +460,7 @@ def get_axis_size_pix(ax):
     Returns
     -------
     size : tuple
-        Size of the axis in pixels.
+        Size of the axis in pixels as ``(width, height)`` tuple.
     '''
     fig = ax.figure
     bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
