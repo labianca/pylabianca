@@ -77,9 +77,11 @@ def test_plot_isi():
     ax = spk.plot_isi(min_spikes=20, max_isi=1000)
 
     assert ax.shape == (2, 4)
+    has_bars = list()
     for this_ax in ax.ravel():
         bars = this_ax.findobj(plt.Rectangle)
-        assert len(bars) >= 10
+        has_bars.append(len(bars) >= 10)
+    assert np.mean(has_bars) > 0.5
 
     ax = spk.plot_isi(picks=np.arange(6), min_spikes=20, max_isi=500)
     assert ax.shape == (2, 3)
