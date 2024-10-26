@@ -71,7 +71,7 @@ def test_plot_raster():
 
 
 def test_plot_isi():
-    # currently a smoke test
+    # currently mostly a smoke test
     spk = pln.utils.create_random_spikes(
         n_cells=7, n_trials=0, n_spikes=(35, 153))
     ax = spk.plot_isi(min_spikes=20, max_isi=1000)
@@ -85,6 +85,8 @@ def test_plot_isi():
 
     ax = spk.plot_isi(picks=np.arange(6), min_spikes=20, max_isi=500)
     assert ax.shape == (2, 3)
+
+    ax = spk.plot_isi(min_spikes=5)
 
 
 def check_if_same_limits(axes):
@@ -143,3 +145,60 @@ def test_axis_helpers():
     pln.viz.align_axes_limits(axs, ylim=False, xlim=True)
     same_x, same_y = check_if_same_limits(axs)
     assert same_x
+
+
+def compare_box_ranges(ax, ranges):
+    ranges_test = [np.array(rng) for rng in ranges]
+    tol = 0.01
+
+    n_check = len(ranges)
+    rct = ax.findobj(plt.Rectangle)
+
+    checks = [list() for _ in range(n_check)]
+    for r in rct:
+        bbx = r.get_bbox()
+        box_range = np.array([bbx.x0, bbx.x1])
+        for idx, rng in enumerate(ranges_test):
+            same_range = (np.abs(rng - box_range) <= tol).all()
+            checks[idx].append(same_range)
+            if same_range:
+                break
+
+    checks = [np.array(x) for x in checks]
+    return checks
+
+
+def test_add_highlight():
+    # prepare data
+    spk = pln.utils.create_random_spikes(
+    n_cells=2, n_trials=50, n_spikes=(20, 50))
+    fr = spk.spike_density(fwhm=0.2)
+
+    # prepare cluster masks and p-values
+    time = fr.time.values
+    clst1_msk = (time > 0.45) & (time < 0.7)
+    clst2_msk = (time > 0.82) & (time < 1.)
+    clusters = [clst1_msk, clst2_msk]
+    pvals = np.array([0.012, 0.085])
+
+    # test with default values (p threshold is 0.05)
+    ax = pln.viz.plot_shaded(fr.isel(cell=0))
+    pln.viz.add_highlights(fr, clusters, pvals)
+
+    ttl = ax.get_title()
+    assert ttl == 'cell = cell000'
+
+    ranges = ((0.45, 0.7),)
+    checks = compare_box_ranges(ax, ranges)
+    assert len(checks) == 1
+    assert checks[0].sum() == 2
+
+    # test with custom p_threshold
+    ax = pln.viz.plot_shaded(fr.isel(cell=0))
+    pln.viz.add_highlights(fr, clusters, pvals, p_threshold=0.1)
+
+    ranges = ((0.45, 0.7), (0.82, 1.))
+    checks = compare_box_ranges(ax, ranges)
+    assert len(checks) == 2
+    assert checks[0].sum() == 2
+    assert checks[1].sum() == 2
