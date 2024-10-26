@@ -58,6 +58,17 @@ def test_plot_shaded():
         assert (line1.get_xdata() == line2.get_xdata()).all()
         assert (line1.get_ydata() == line2.get_ydata()).all()
 
+    # colors
+    # ------
+    # plot_shaded does not accept list of str as colors
+    # BTW colors='red' should also be accepted
+    spk = pln.utils.create_random_spikes(
+        n_cells=2, n_trials=25, n_spikes=(15, 35))
+    fr = spk.spike_density(fwhm=0.2)
+    crms = plt.cm.colors.to_rgb('crimson')
+    ax = pln.viz.plot_shaded(fr.isel(cell=0), colors=[crms])
+    assert ax.lines[0].get_color() == crms
+
 
 def test_plot_raster():
     spk = pln.utils.create_random_spikes(n_cells=1)
@@ -171,7 +182,7 @@ def compare_box_ranges(ax, ranges):
 def test_add_highlights():
     # prepare data
     spk = pln.utils.create_random_spikes(
-    n_cells=2, n_trials=50, n_spikes=(20, 50))
+        n_cells=2, n_trials=50, n_spikes=(20, 50))
     fr = spk.spike_density(fwhm=0.2)
 
     # prepare cluster masks and p-values
