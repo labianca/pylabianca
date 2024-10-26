@@ -370,7 +370,7 @@ def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
         bin_centers, xcorrs, spk, cell_names=cell, x_dim_name='lag')
     xcorrs.name = 'count'
     xcorrs.attrs['unit'] = 'n'
-    xcorrs.attrs['coord_units'] = {'lag': 's'}
+    xcorrs.attrs['lag_unit'] = 's'
 
     # add cell1_idx etc.
     xcorrs = xcorrs.assign_coords(

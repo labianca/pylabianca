@@ -86,7 +86,7 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
 def _add_frate_info(arr, dep='rate'):
     arr.name = f'firing {dep}'
     arr.attrs['unit'] = "Hz"
-    arr.attrs['coord_units'] = {'time': 's'}
+    arr.attrs['time_unit'] = 's'
     return arr
 
 
