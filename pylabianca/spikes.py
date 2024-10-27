@@ -5,9 +5,11 @@ import numpy as np
 import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
-                    _get_trial_boundaries, _validate_spike_epochs_input,
-                    _validate_spikes_input, _validate_cellinfo,
-                    _handle_cell_names)
+                    _get_trial_boundaries)
+from .utils.validate import (
+    _validate_spike_epochs_input, _validate_spikes_input, _validate_cellinfo,
+    _handle_cell_names
+)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import xcorr_hist
 

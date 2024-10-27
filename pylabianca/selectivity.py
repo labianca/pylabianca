@@ -3,9 +3,9 @@ from numbers import Real
 import numpy as np
 import pandas as pd
 
+from .analysis import nested_groupby_apply
 from .utils import (xr_find_nested_dims, cellinfo_from_xarray,
-                    _inherit_metadata_from_xarray, assign_session_coord,
-                    nested_groupby_apply)
+                    _inherit_metadata_from_xarray, assign_session_coord)
 
 
 # TODO: ! adapt for multiple cells

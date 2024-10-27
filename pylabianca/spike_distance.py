@@ -2,9 +2,10 @@ import itertools
 import numpy as np
 
 from . import utils, viz
+from .analysis import (spike_centered_windows, _symmetric_window_samples,
+                       _gauss_kernel_samples)
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
-                    _symmetric_window_samples, _gauss_kernel_samples,
-                    spike_centered_windows, has_numba)
+                    has_numba)
 
 
 # TODO: ``tol=None`` could return the distances without thresholding
