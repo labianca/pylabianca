@@ -1,3 +1,4 @@
+import os.path as op
 import time
 import numpy as np
 import pandas as pd
@@ -5,8 +6,14 @@ import xarray as xr
 
 import pytest
 import pylabianca as pln
-from pylabianca.testing import gen_random_xarr
-from pylabianca.utils import create_random_spikes
+from pylabianca.testing import gen_random_xarr, ft_data
+from pylabianca.utils import (
+    create_random_spikes, get_fieldtrip_data, get_data_path)
+
+
+get_fieldtrip_data()
+data_dir = get_data_path()
+
 
 def test_spike_centered_windows():
     # simple case - one spike per trial
@@ -49,6 +56,74 @@ def test_spike_centered_windows():
     with pytest.raises(ValueError, match=msg):
         pln.analysis.spike_centered_windows(
             spk, xarr, time='emit', winlen=0.01)
+
+
+def test_spike_centered_windows_against_fieldtrip(ft_data):
+    import mne
+
+    # read raw signal and events
+    fname = 'p029_sort_final_01.nex'
+    raw = pln.io.read_signal_plexon_nex(op.join(data_dir, fname))
+    events = pln.io.read_events_plexon_nex(
+        op.join(data_dir, fname), format='mne')
+
+    # select cells with waveforms and epoch
+    has_waveforms = [wave is not None for wave in ft_data.waveform]
+    ft_data.pick_cells(has_waveforms)
+    spk_epochs = ft_data.epoch(events, event_id=10030, tmin=0., tmax=2.75)
+
+    # epoch raw cnt data
+    downsample = ft_data.sfreq / raw.info['sfreq']
+    events_smp = events.copy()
+    samples = np.round(events[:, 0] / downsample).astype(int)
+    events_smp[:, 0] = samples - 1
+    lfp_epochs = mne.Epochs(
+        raw, events_smp, event_id=10030, tmin=0., tmax=2.75,
+        baseline=None, preload=True
+    )
+
+    metadata = pd.read_csv(op.join(data_dir, 'monkey_stim.csv'))
+    metadata = metadata.query('has_stimon == True')
+    spk_epochs.metadata = metadata
+    lfp_epochs.metadata = metadata
+
+    # select only correct trials
+    spk_epochs = spk_epochs['correct == True']
+    lfp_epochs = lfp_epochs['correct == True']
+
+    channels = ['AD01', 'AD02', 'AD03', 'AD04']
+    lfp_poststim = (
+        lfp_epochs.copy()
+        .crop(tmin=0.3)
+        .pick(channels)
+    )
+    spk_poststim = spk_epochs.copy().crop(tmin=0.3)
+
+    lfp_trig = pln.analysis.spike_centered_windows(
+        spk_poststim, lfp_poststim,
+        pick='sig002a_wf', winlen=0.4)
+    lfp_trig -= lfp_trig.mean(dim='time')
+
+    psd, freq = mne.time_frequency.psd_array_multitaper(
+        lfp_trig.sel(channel='AD03').mean(dim='spike'),
+        sfreq=raw.info['sfreq'], bandwidth=7, fmin=10, fmax=100
+    )
+
+    # now on shuffled data
+    new_spk = pln.analysis.shuffle_trials(spk_poststim)
+    lfp_trig_shuffled = pln.analysis.spike_centered_windows(
+        new_spk, lfp_poststim,
+        pick='sig002a_wf', winlen=0.4)
+    lfp_trig_shuffled -= lfp_trig_shuffled.mean(dim='time')
+
+    psd_shuffled, freq = mne.time_frequency.psd_array_multitaper(
+        lfp_trig_shuffled.sel(channel='AD03').mean(dim='spike'),
+        raw.info['sfreq'], bandwidth=7, fmin=10, fmax=100
+    )
+
+    # make sure that real psd has higher power in 50 - 60 Hz range
+    freq_mask = (freq >= 50) & (freq <= 60)
+    assert psd[freq_mask].mean() > psd_shuffled[freq_mask].mean()
 
 
 def test_xarr_dct_conversion():
