@@ -50,7 +50,7 @@ def test_inherit_metadata():
     # just _inherit_metadata function
     metadata = pd.DataFrame({'a': [1, 2, 3], 'b': list('ABC')})
     coords = {'time': np.linspace(-0.2, 0.5, num=25),
-            'trial': np.arange(1, 4)}
+              'trial': np.arange(1, 4)}
 
     _inherit_metadata(coords, metadata, 'trial')
 
@@ -71,6 +71,12 @@ def test_cellinfo_from_xarray():
     frate = spk.spike_rate(winlen=0.5, step=0.1)
     cellinfo_reconstructed = pln.utils.cellinfo_from_xarray(frate)
     assert cellinfo_reconstructed.equals(cellinfo)
+
+    # when no cellinfo it should return None:
+    spk.cellinfo = None
+    frate = spk.spike_rate(winlen=0.5, step=0.1)
+    cellinfo_reconstructed = pln.utils.cellinfo_from_xarray(frate)
+    assert cellinfo_reconstructed is None
 
 
 def test_find_cells():
@@ -199,3 +205,44 @@ def test_sub_ses_parsing():
     )
     assert sub == 'sub-switch001'
     assert ses == 'ses-stim1'
+
+
+def test_turn_spike_rate_to_xarray():
+    # test 1: 2d array, cell_names None
+    # then it is trials x times
+    times = np.linspace(0.1, 0.8, num=20)
+    spk = create_random_spikes(n_trials=10, n_cells=2)
+    spk.metadata = pd.DataFrame({'a': np.arange(10), 'b': list('ABCDEFGHIJ')})
+    arr = np.random.rand(10, 20)
+    xr = pln.utils._turn_spike_rate_to_xarray(times, arr, spk)
+
+    assert xr.dims == ('trial', 'time')
+    assert (xr.time.values == times).all()
+    assert (xr.trial.values == np.arange(10)).all()
+
+    # make sure that metadata is inherited
+    trial_dims = pln.utils.xr_find_nested_dims(xr, 'trial')
+    assert len(trial_dims) == 2
+    assert 'a' in trial_dims
+    assert 'b' in trial_dims
+
+    # test 2: ndim = 2, cell_names not None, and times str
+    # then it is cells x times
+    times = '0.1 - 0.8 s'
+    arr = np.random.rand(2, 10)
+    xr = pln.utils._turn_spike_rate_to_xarray(
+        times, arr, spk, cell_names=spk.cell_names)
+
+    assert xr.dims == ('cell', 'trial')
+    assert (xr.cell.values == spk.cell_names).all()
+    assert (xr.trial.values == np.arange(10)).all()
+
+    # test 3: ndim = 2, cell_names not None, and times array
+    # then it is cells x times
+    times = np.linspace(0.1, 0.8, num=10)
+    xr = pln.utils._turn_spike_rate_to_xarray(
+        times, arr, spk, cell_names=spk.cell_names)
+
+    assert xr.dims == ('cell', 'time')
+    assert (xr.cell.values == spk.cell_names).all()
+    assert (xr.time.values == times).all()

@@ -2,8 +2,7 @@ import numpy as np
 from .base import _deal_with_picks
 
 
-# CONSIDER: changing the array dim order to: trials, cells, times
-#           (mne-python-like)
+# CONSIDER: spike_epochs and times could be optional arguments
 # CHANGE name to something more general - it is now used for xarray and decoding
 #        results (and more in the future)
 # spike_epochs is used only when n_trials > 0 to inherit metadata
@@ -25,7 +24,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         * 3d ``n_cells x n_trials x n_times`` (``cell_names`` has to be not
           None)
         * 2d ``n_cells x n_trials`` (``cell_names`` not None and ``times``
-          as string)
+          is a string indicating time window or None)
         * 2d ``n_trials x n_times`` (``cell_names`` is None and ``times``
           is an array)
         * 2d ``n_cells x n_times`` (``cell_names`` is not None and ``times``
