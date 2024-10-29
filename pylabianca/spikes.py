@@ -796,8 +796,10 @@ class Spikes(object):
             events = events[use_events, :]
 
             # test if some events are missing
+            iter_types = (list, tuple, np.ndarray)
+            n_events = len(event_id) if isinstance(event_id, iter_types) else 1
             unique_events = np.unique(events[:, -1])
-            if len(event_id) != len(unique_events):
+            if n_events != len(unique_events):
                 missing = np.setdiff1d(event_id, unique_events)
                 warnings.warn(
                     'Some event ids are missing in the events array: '
