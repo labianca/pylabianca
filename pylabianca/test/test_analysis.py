@@ -51,6 +51,14 @@ def test_spike_centered_windows():
 
     assert (spk_cent == spk_cent2).all().item()
 
+    # make sure that using pln.utils version raises warning,
+    # but gives the same result
+    with pytest.warns(DeprecationWarning):
+        spk_cent3 = pln.utils.spike_centered_windows(
+            spk, xarr, winlen=0.01)
+
+    assert (spk_cent2 == spk_cent3).all().item()
+
     # but not when we specify incorrect time dim
     msg = 'Coordinate named "emit" not found'
     with pytest.raises(ValueError, match=msg):
@@ -158,6 +166,14 @@ def test_xarr_dct_conversion():
     xarr = pln.dict_to_xarray(x_dct1)
     x_dct2 = pln.xarray_to_dict(xarr, ensure_correct_reduction=False)
     compare_dicts(x_dct1, x_dct2)
+
+    # make sure we can do the same via pln.utils,
+    # but with a deprecation warning
+    with pytest.warns(DeprecationWarning):
+        xarr3 = pln.dict_to_xarray(x_dct1)
+        x_dct3 = pln.utils.xarray_to_dict(xarr3)
+
+    compare_dicts(x_dct2, x_dct3)
 
     # test with non-sorted keys - this previously failed
     # because xarray sorts during groupby operation used in xarray_to_dict

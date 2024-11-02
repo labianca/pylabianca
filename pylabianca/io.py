@@ -812,7 +812,7 @@ def read_events_neo(reader, format='mne'):
 
     n_elements = len(event_times)
     if n_elements == 0:
-        # no events to return - rasie error
+        # no events to return - raise error
         raise RuntimeError('No events in the file.')
     elif n_elements == 1:
         event_times = event_times[0]

@@ -105,7 +105,7 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
             if metadata is None:
                 metadata = arr.metadata
 
-            arr = arr.get_data()
+            arr = arr.get_data(copy=False)
         else:
             raise ValueError('``arr`` has to be either an xarray, numpy array '
                              f'or mne.Epochs, got {type(arr)}.')
