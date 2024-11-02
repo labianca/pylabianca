@@ -16,4 +16,4 @@ from .xarr import (
     _turn_spike_rate_to_xarray, _inherit_metadata, assign_session_coord,
     _inherit_metadata_from_xarray, xr_find_nested_dims, cellinfo_from_xarray)
 from ._compat import (xarray_to_dict, dict_to_xarray, spike_centered_windows,
-                      shuffle_trials)
+                      shuffle_trials, read_drop_info)

@@ -65,6 +65,25 @@ def test_spike_centered_windows():
         pln.analysis.spike_centered_windows(
             spk, xarr, time='emit', winlen=0.01)
 
+    # unless that is the correct name
+    xarr = xarr.rename({'time': 'emit'})
+    spk_cent4 = pln.analysis.spike_centered_windows(
+        spk, xarr, time='emit', winlen=0.01)
+    assert (spk_cent2 == spk_cent4).all().item()
+
+    # but then we can't leave time arg to its default value
+    msg = ('When ``time=None`` the ``arr`` xarray has to contain '
+           'a coordinate named "time".')
+    with pytest.raises(ValueError, match=msg):
+        pln.analysis.spike_centered_windows(spk, xarr, winlen=0.01)
+
+    # time argument has to be correct
+    msg = ("When ``arr`` is an xarray ``time`` input argument has to "
+           "be either ``None`` or a string, got <class 'list'>.")
+    with pytest.raises(ValueError, match=msg):
+        pln.analysis.spike_centered_windows(
+            spk, xarr, time=list('emit'), winlen=0.01)
+
 
 def test_spike_centered_windows_against_fieldtrip(ft_data):
     import mne
@@ -170,7 +189,7 @@ def test_xarr_dct_conversion():
     # make sure we can do the same via pln.utils,
     # but with a deprecation warning
     with pytest.warns(DeprecationWarning):
-        xarr3 = pln.dict_to_xarray(x_dct1)
+        xarr3 = pln.utils.dict_to_xarray(x_dct1)
         x_dct3 = pln.utils.xarray_to_dict(xarr3)
 
     compare_dicts(x_dct2, x_dct3)

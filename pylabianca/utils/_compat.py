@@ -47,3 +47,14 @@ def shuffle_trials(*args, **kwargs):
 
     from ..analysis import shuffle_trials as _shuffle_trials
     return _shuffle_trials(*args, **kwargs)
+
+
+def read_drop_info(*args, **kwargs):
+    '''This function has moved. Use ``pylabianca.io.read_drop_info`` instead.'''
+
+    # raise deprecation warning
+    warnings.warn('This function has moved. Use `pylabianca.io.read_drop_'
+                  'info` instead.', DeprecationWarning)
+
+    from ..io import read_drop_info as _read_drop_info
+    return _read_drop_info(*args, **kwargs)
