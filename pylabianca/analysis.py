@@ -104,7 +104,11 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
             if metadata is None:
                 metadata = arr.metadata
 
-            arr = arr.get_data(copy=False)
+            # VERSION: copy argument introduced in mne 1.6
+            try:
+                arr = arr.get_data(copy=False)
+            except TypeError:
+                arr = arr.get_data()
         else:
             raise ValueError('``arr`` has to be either an xarray, numpy array '
                              f'or mne.Epochs, got {type(arr)}.')
