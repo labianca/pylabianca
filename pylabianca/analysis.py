@@ -145,6 +145,7 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
         for twin in twins:
             sig_part = arr[tri_idx, :, twin[0]:twin[1]]
             spike_centered[window_idx] = sig_part
+            window_idx += 1
 
     # prepare coordinates
     spike_idx = np.where(tri_is_ok)[0]
