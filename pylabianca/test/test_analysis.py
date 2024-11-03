@@ -314,6 +314,78 @@ def test_extract_data_and_aggregate():
     assert (frates_agg_one.data == frates_agg[:n_cells_one].data).all()
 
 
+def group_by_hand(xarr):
+    arr_list = list()
+    labels1 = list()
+    for label, arr in xarr.groupby('cnd1'):
+        arr_list_in = list()
+        labels1.append(label)
+        labels2 = list()
+        for label2, arr2 in arr.groupby('cnd2'):
+            out = arr2.mean(dim='trial')
+            arr_list_in.append(out)
+            labels2.append(label2)
+        arr_list_in = xr.concat(arr_list_in, dim='cnd2')
+        arr_list_in = arr_list_in.assign_coords(cnd2=labels2)
+        arr_list.append(arr_list_in)
+    arr_list = xr.concat(arr_list, dim='cnd1')
+    arr_out = arr_list.assign_coords(cnd1=labels1)
+    return arr_out
+
+
+
+def test_aggregate_options():
+    from pylabianca.analysis import _aggregate_xarray
+
+    n_cells, n_trials, n_times = 4, 50, 100
+    xarr = gen_random_xarr(n_cells, n_trials, n_times)
+
+    # create metadata
+    cnd1 = np.array(['A'] * 25 + ['B'] * 25)
+    cnd1 = np.random.permutation(cnd1)
+    cnd2 = np.zeros(n_trials, dtype=int)
+    for cnd1_val in ['A', 'B']:
+        cnd2[cnd1 == cnd1_val] = np.random.choice([2, 3], size=25)
+
+    xarr = xarr.assign_coords({'cnd1': ('trial', cnd1),
+                               'cnd2': ('trial', cnd2)})
+
+    # default aggregation
+    xarr_agg = _aggregate_xarray(
+        xarr, ['cnd1', 'cnd2'], zscore=False, select=None, baseline=None
+    )
+    xarr_agg_hand = group_by_hand(xarr)
+    xarr_agg_hand = xarr_agg_hand.transpose(*xarr_agg.dims)
+    assert (xarr_agg.data == xarr_agg_hand).all()
+
+    # zscore
+    xarr_agg = _aggregate_xarray(
+        xarr, ['cnd1', 'cnd2'], zscore=(-0.5, 0.), select=None, baseline=None
+    )
+    baseline_arr = xarr.sel(time=slice(-0.5, 0.))
+    xarr_z = pln.analysis.zscore_xarray(xarr, baseline=baseline_arr)
+    xarr_agg_hand = group_by_hand(xarr_z)
+    xarr_agg_hand = xarr_agg_hand.transpose(*xarr_agg.dims)
+    assert (xarr_agg.data == xarr_agg_hand).all()
+
+    # select and baseline
+    xarr.name = 'data'
+    xarr_agg = _aggregate_xarray(
+        xarr, 'cnd2', zscore=(-0.5, 0.), select='cnd1 == "A"',
+        baseline=(0., 0.25)
+    )
+
+    baseline_arr = xarr.sel(time=slice(-0.5, 0.))
+    xarr_z = pln.analysis.zscore_xarray(xarr, baseline=baseline_arr)
+    xarr_sel = xarr_z.query(trial='cnd1 == "A"')
+    xarr_agg_hand = group_by_hand(xarr_sel).squeeze('cnd1')
+
+    bsln = xarr_agg_hand.sel(time=slice(0., 0.25)).mean(dim='time')
+    xarr_agg_hand -= bsln
+    xarr_agg_hand = xarr_agg_hand.transpose(*xarr_agg.dims)
+    assert (xarr_agg.data == xarr_agg_hand).all()
+
+
 def test_aggregate_per_cell():
     '''Test aggregation per cell.'''
     n_cells = 10
