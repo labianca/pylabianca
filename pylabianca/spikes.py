@@ -614,6 +614,11 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax, return_idx=False):
 
     t_idx = 0
     n_spikes = len(timestamps)
+    
+    if n_spikes == 0:
+        empty = np.array([])
+        return empty, empty.copy(), empty.copy()
+    
     n_epochs = event_times.shape[0]
     this_epo = (timestamps[t_idx] < (event_times + tmax)).argmax()
 
