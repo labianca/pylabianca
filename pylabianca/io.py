@@ -812,7 +812,7 @@ def read_events_neo(reader, format='mne'):
 
     n_elements = len(event_times)
     if n_elements == 0:
-        # no events to return - rasie error
+        # no events to return - raise error
         raise RuntimeError('No events in the file.')
     elif n_elements == 1:
         event_times = event_times[0]
@@ -1147,3 +1147,37 @@ def add_region_from_channel_ranges(spk, channel_info, source_column='area',
 
         cell_msk = spk.cellinfo.channel == chan
         spk.cellinfo.loc[cell_msk, target_column] = region
+
+
+def read_drop_info(path):
+    '''Reads (channels, cluster id) pairs to drop from a text file.
+
+    The text file should follow a structure:
+    channel_name1: [cluster_id1, cluster_id2, ...]
+    channel_name2: [cluster_id1, cluster_id2, ...]
+
+    Parameters
+    ----------
+    path : str
+        Path to the text file.
+
+    Returns
+    -------
+    to_drop : list
+        List of (channel, cluster_id) tuples representing all such pairs
+        read from the text file.
+    '''
+    # read merge info
+    with open(path) as file:
+        text = file.readlines()
+
+    # drop info is organized into channels / cluster ids
+    to_drop = list()
+    for line in text:
+        channel = line.split(', ')[0]
+        idx1, idx2 = line.find('['), line.find(']') + 1
+        clusters = eval(line[idx1:idx2])
+        for cluster in clusters:
+            to_drop.append((channel, cluster))
+
+    return to_drop

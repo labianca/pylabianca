@@ -23,8 +23,7 @@ def _gauss_kernel_samples(window, gauss_sd):
     return kernel
 
 
-# ENH: change `sel` var creation to use trial boundaries
-# ENH: test speed and consider numba
+# ENH: speed up with numba sometime
 # ENH: allow for asymmetric windows (like in fieldtrip)
 def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
                            winlen=0.1):
@@ -105,7 +104,11 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
             if metadata is None:
                 metadata = arr.metadata
 
-            arr = arr.get_data()
+            # VERSION: copy argument introduced in mne 1.6
+            try:
+                arr = arr.get_data(copy=False)
+            except TypeError:
+                arr = arr.get_data()
         else:
             raise ValueError('``arr`` has to be either an xarray, numpy array '
                              f'or mne.Epochs, got {type(arr)}.')
@@ -122,25 +125,27 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
     winlims = np.array([-half_win, half_win + 1])[None, :]
     lims = [0, len(time)]
     tri_is_ok = np.zeros(len(spk.trial[cell_idx]), dtype='bool')
+    all_windows = list()
 
-    n_tri = max(spk.trial[cell_idx]) + 1
-    for tri_idx in range(n_tri):
-        sel = spk.trial[cell_idx] == tri_idx
-        if sel.any():
-            tms = spk.time[cell_idx][sel]
+    boundaries, trials = _get_trial_boundaries(spk, picks[0])
+    for idx, tri_idx in enumerate(trials):
+        sel = slice(boundaries[idx], boundaries[idx + 1])
+        tms = spk.time[cell_idx][sel]
 
-            closest_smp = find_index(time, tms)
-            twins = closest_smp[:, None] + winlims
-            good = ((twins >= lims[0]) & (twins <= lims[1])).all(axis=1)
-            twins = twins[good]
-            tri_is_ok[sel] = good
+        closest_smp = find_index(time, tms)
+        twins = closest_smp[:, None] + winlims
+        good = ((twins >= lims[0]) & (twins <= lims[1])).all(axis=1)
+        all_windows.append(twins[good])
+        tri_is_ok[sel] = good
 
-            for twin in twins:
-                sig_part = arr[tri_idx, :, twin[0]:twin[1]]
-                spike_centered.append(sig_part)
-
-    # stack windows
-    spike_centered = np.stack(spike_centered, axis=0)
+    window_idx = 0
+    n_epochs = tri_is_ok.sum()
+    spike_centered = np.zeros((n_epochs, len(ch_names), len(window_time)))
+    for tri_idx, twins in zip(trials, all_windows):
+        for twin in twins:
+            sig_part = arr[tri_idx, :, twin[0]:twin[1]]
+            spike_centered[window_idx] = sig_part
+            window_idx += 1
 
     # prepare coordinates
     spike_idx = np.where(tri_is_ok)[0]

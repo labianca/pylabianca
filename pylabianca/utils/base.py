@@ -180,40 +180,6 @@ def _raise_error_warn_or_ignore(msg, action):
         warn(msg)
 
 
-def read_drop_info(path):
-    '''Reads (channels, cluster id) pairs to drop from a text file.
-
-    The text file should follow a structure:
-    channel_name1: [cluster_id1, cluster_id2, ...]
-    channel_name2: [cluster_id1, cluster_id2, ...]
-
-    Parameters
-    ----------
-    path : str
-        Path to the text file.
-
-    Returns
-    -------
-    to_drop : list
-        List of (channel, cluster_id) tuples representing all such pairs
-        read from the text file.
-    '''
-    # read merge info
-    with open(path) as file:
-        text = file.readlines()
-
-    # drop info is organized into channels / cluster ids
-    to_drop = list()
-    for line in text:
-        channel = line.split(', ')[0]
-        idx1, idx2 = line.find('['), line.find(']') + 1
-        clusters = eval(line[idx1:idx2])
-        for cluster in clusters:
-            to_drop.append((channel, cluster))
-
-    return to_drop
-
-
 def drop_cells_by_channel_and_cluster_id(spk, to_drop):
     '''Works in place!'''
     # find cell idx by channel + cluster ID
