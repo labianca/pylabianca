@@ -5,9 +5,11 @@ import numpy as np
 import pandas as pd
 
 from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
-                    _get_trial_boundaries, _validate_spike_epochs_input,
-                    _validate_spikes_input, _validate_cellinfo,
-                    _handle_cell_names)
+                    _get_trial_boundaries)
+from .utils.validate import (
+    _validate_spike_epochs_input, _validate_spikes_input, _validate_cellinfo,
+    _handle_cell_names
+)
 from .spike_rate import compute_spike_rate, _spike_density, _add_frate_info
 from .spike_distance import xcorr_hist
 
@@ -612,6 +614,11 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax, return_idx=False):
 
     t_idx = 0
     n_spikes = len(timestamps)
+    
+    if n_spikes == 0:
+        empty = np.array([])
+        return empty, empty.copy(), empty.copy()
+    
     n_epochs = event_times.shape[0]
     this_epo = (timestamps[t_idx] < (event_times + tmax)).argmax()
 
@@ -794,8 +801,10 @@ class Spikes(object):
             events = events[use_events, :]
 
             # test if some events are missing
+            iter_types = (list, tuple, np.ndarray)
+            n_events = len(event_id) if isinstance(event_id, iter_types) else 1
             unique_events = np.unique(events[:, -1])
-            if len(event_id) != len(unique_events):
+            if n_events != len(unique_events):
                 missing = np.setdiff1d(event_id, unique_events)
                 warnings.warn(
                     'Some event ids are missing in the events array: '

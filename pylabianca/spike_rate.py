@@ -1,7 +1,7 @@
 import numpy as np
-from .utils import (_deal_with_picks, _turn_spike_rate_to_xarray,
-                    _gauss_kernel_samples, _symmetric_window_samples)
 
+from .analysis import _symmetric_window_samples, _gauss_kernel_samples
+from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 
 
 # TODO: add n_jobs?

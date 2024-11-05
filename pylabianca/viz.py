@@ -777,9 +777,10 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         y_rng = np.diff(ylm)[0]
 
         # TODO: better estimate text y pos from textbox?
-        y_step = 0.075 * y_rng
-        text_y = ylm[1] - y_step
-        ax.set_ylim([ylm[0], ylm[1] + 2 * y_step])
+        if pval_text:
+            y_step = 0.075 * y_rng
+            text_y = ylm[1] - y_step
+            ax.set_ylim([ylm[0], ylm[1] + 2 * y_step])
 
         sig_idx = np.where(pvals_significant)[0]
         sig_clusters = [clusters[ix] for ix in sig_idx]
@@ -789,42 +790,44 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
             bottom_bar=True, bottom_extend=bottom_extend
         )
 
-        texts = list()
-        for ix in clusters_x_sorting:
-            if not pvals_significant[ix]:
-                continue
+        # FIXME: put this into a separate function
+        if pval_text:
+            texts = list()
+            for ix in clusters_x_sorting:
+                if not pvals_significant[ix]:
+                    continue
 
-            this_pval = pvals[ix]
-            text_x = np.mean(x_coords[clusters[ix]])
+                this_pval = pvals[ix]
+                text_x = np.mean(x_coords[clusters[ix]])
 
-            if this_pval < min_pval:
-                p_txt = 'p < {:.3f}'.format(min_pval)
-            else:
-                p_txt = format_pvalue(this_pval)
+                if this_pval < min_pval:
+                    p_txt = 'p < {:.3f}'.format(min_pval)
+                else:
+                    p_txt = format_pvalue(this_pval)
 
-            this_text = ax.text(
-                text_x, text_y, p_txt,
-                bbox=text_props, horizontalalignment='center'
-            )
-            try:
-                textbox = this_text.get_window_extent()
-            except RuntimeError:
-                ax.figure.canvas.draw()
-                textbox = this_text.get_window_extent()
-
-            textbox.set_points(
-                np.array([
-                    [textbox.x0 - extend_textbox_x, textbox.y0],
-                    [textbox.x1 + extend_textbox_x, textbox.y1]
-                ])
-            )
-
-            if len(texts) > 0:
-                while textbox.count_overlaps(texts):
-                    x, y = this_text.get_position()
-                    this_text.set_position((x, y - y_step))
+                this_text = ax.text(
+                    text_x, text_y, p_txt,
+                    bbox=text_props, horizontalalignment='center'
+                )
+                try:
                     textbox = this_text.get_window_extent()
-            texts.append(textbox)
+                except RuntimeError:
+                    ax.figure.canvas.draw()
+                    textbox = this_text.get_window_extent()
+
+                textbox.set_points(
+                    np.array([
+                        [textbox.x0 - extend_textbox_x, textbox.y0],
+                        [textbox.x1 + extend_textbox_x, textbox.y1]
+                    ])
+                )
+
+                if len(texts) > 0:
+                    while textbox.count_overlaps(texts):
+                        x, y = this_text.get_position()
+                        this_text.set_position((x, y - y_step))
+                        textbox = this_text.get_window_extent()
+                texts.append(textbox)
 
     return ax
 

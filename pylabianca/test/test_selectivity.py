@@ -3,8 +3,9 @@ import pandas as pd
 import xarray as xr
 
 import pylabianca as pln
-from pylabianca.utils import (create_random_spikes, _symmetric_window_samples,
-                              _gauss_kernel_samples)
+from pylabianca.analysis import (
+    _symmetric_window_samples, _gauss_kernel_samples)
+from pylabianca.utils import create_random_spikes
 from pylabianca.selectivity import compute_selectivity_continuous
 
 import pytest

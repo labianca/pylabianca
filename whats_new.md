@@ -6,6 +6,7 @@
 
 <br/>
 
+* API: new module `pylabianca.analysis` has been created. `pylabianca.utils.spike_centered_windows()`, `pylabianca.utils.shuffle_trials`, `pylabianca.utils.xarray_to_dict()` and `pylabianca.utils.dict_to_xarray()` have been moved there. These functions are still available in the `pylabianca.utils` namespace, but will now raise a deprecation warning when used from there. The functions will be removed from `pylabianca.utils` in the next major release (0.5).
 * API: `pylabianca.viz.plot_waveform()` `y_bins` argument was renamed to `n_y_bins` to better reflect its meaning.
 * API: `pylabianca.selectivity.compute_selectivity_continuous()` now returns an `xarray.Dataset` instead of dictionary of `xarray.DataArray` objects. This makes the output more convenient to work with (for example using `.sel()` to select elements of all items at the same time; or ability to use both `['key_name']` and `.key_name` to access items).
 * API: removed, now unnecessary, `ignore_below` argument of `pylabianca.selectivity.depth_of_selectivity()` function. It was used to ignore firing rate values below a certain threshold, but the issue of very small non-zero values was previously fixed (numerical error likely stemming from the fact convolution used fft under the hood).
@@ -16,22 +17,27 @@
 
 * ENH: `Spikes` and `SpikeEpochs` can now be saved to FieldTrip data format. To maintain the input-output roundtrip (data saved and then read are identical) additional non-standard fields are added to the file when `.metadata` or `.cellinfo` are used. These additional fields should not conflict with using the file in FieldTrip.
 * ENH: add `pylabianca.utils._inherit_from_xarray()` to allow inheriting metadata (cell or trial-level additional information) from xarray DataArray to new xarray DataArray.
-* ENH: `pylabianca.utils.dict_to_xarray()` now allows to pass dictionary of `xarray.Dataset` as input.
-* ENH: `pylabianca.utils.xarray_to_dict()` has been sped up considerably. It relies on sessions being concatenated along the cell dimension (so each session being a contiguous block of cells).
+* ENH: `pylabianca.analysis.dict_to_xarray()` now allows to pass dictionary of `xarray.Dataset` as input.
+* ENH: `pylabianca.analysis.xarray_to_dict()` has been sped up considerably. It relies on sessions being concatenated along the cell dimension (so each session being a contiguous block of cells).
+* ENH: `pylabianca.analysis.spike_centered_windows()` (previously `pylabianca.utils.spike_centered_windows()`) has been sped up twofold.
 * ENH: added `pylabianca.selectivity.compute_percent_selective()` - function to use on the results of `pylabianca.selectivity.compute_selectivity_continuous()` to calculate the percentage of selective cells. Allows to split the calculations according to `groupby` argument value, specify selectivity threshold (single value or percentile of the permutation distribution). It also performs the percentage calculations on the permutation distribution - this is useful when calculating time-resolved selectivity and using the permutation distribution of percentages in cluster-based permutation test.
 * ENH: added `pylabianca.selectivity.threshold_selectivity()` to transform selectivity statistics xarray into binary selective / non-selective mask based on a given threshold (single value or percentile of the permutation distribution).
-* ENH: added `pylabianca.utils.aggregate()` to aggregate firing rate data. The aggregation is done by averaging the firing rate data over the trials dimension with optional grouping by one or more trial coordinates (conditions). The firing rate data can be optionally z-scored per-cell before aggregation. The function returns an xarray DataArray with aggregated firing rate data and accepts xarray DataArray or dictionary of xarray DataArray as input.
-* ENH: added `pylabianca.utils.zscore_xarray()` to z-score firing rate data in xarray DataArray. The z-scoring is done separately for each level of coordinate specified in `groupby` argument. Additional argument `baseline` allows to z-score the data using a baseline period (specified as a time range tuple or a separate xarray DataArray).
-* ENH: added `pylabianca.utils.compute_selectivity_multisession()` to compute selectivity on a multisession dictionary (session name -> xarray). The output is an xarray.Dataset with concatenated session selectivity results (the order of the sessions in the output xarray.Dataset is the same as in the input dictionary).
+* ENH: added `pylabianca.analysis.aggregate()` to aggregate firing rate data. The aggregation is done by averaging the firing rate data over the trials dimension with optional grouping by one or more trial coordinates (conditions). The firing rate data can be optionally z-scored per-cell before aggregation. The function returns an xarray DataArray with aggregated firing rate data and accepts xarray DataArray or dictionary of xarray DataArray as input.
+* ENH: added `pylabianca.analysis.zscore_xarray()` to z-score firing rate data in xarray DataArray. The z-scoring is done separately for each level of coordinate specified in `groupby` argument. Additional argument `baseline` allows to z-score the data using a baseline period (specified as a time range tuple or a separate xarray DataArray).
+* ENH: added `pylabianca.selectivity.compute_selectivity_multisession()` to compute selectivity on a multisession dictionary (session name -> xarray). The output is an xarray.Dataset with concatenated session selectivity results (the order of the sessions in the output xarray.Dataset is the same as in the input dictionary).
 * ENH: added `pylabianca.stats.find_percentile_threshold()` used to calculate significance threshold for given statistic based on percentile of the permutation distribution.
 * ENH: `pylabianca.selectivity.compute_selectivity_continuous()` now can be also run with `n_perm=0`, returning only the selectivity statistics, without the permutation distribution or permutation-based threshold. Also `pylabianca.stats.permutation_test()` can now be run with `n_perm=0`, returning only the statistic values without the permutation distribution or permutation-based threshold.
 
 <br/>
 
-* FIX: `pylabianca.utils.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if session order was not alphabetical in the concatenated xarray. Now `pylabianca.utils.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
-* FIX: make `pylabianca.utils.xarray_to_dict()` work also on arrays without cell x trial multi-dim coords (e.g. `('cell', 'trial')`), which are common after concatenating multiple sessions.
+* FIX: `pylabianca.analysis.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if session order was not alphabetical in the concatenated xarray. Now `pylabianca.analysis.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
+* FIX: make `pylabianca.analysis.xarray_to_dict()` work also on arrays without cell x trial multi-dim coords (e.g. `('cell', 'trial')`), which are common after concatenating multiple sessions.
+* FIX: saving pylabianca created xarrays like firing rate to NetCDF now works without the need to clear attributes (previously a dictionary of coord units was stored in the attributes, which caused an error when writing the file).
 * FIX: `SpikeEpochs.n_spikes(per_epoch=True)` used spike rate calculation to count spikes in each epoch. This was unnecessary (and possibly slow) and in rare cases could lead to wrong results (probably numerical error when multiplying spike rate by window duration and immediately turning to int, without rounding). Now `SpikeEpochs.n_spikes(per_epoch=True)` counts spikes directly using `pylabianca.utils._get_trial_boundaries`.
+* FIX: mne compatibility - use the `copy=False` argument in `.get_data()` method (introduced in newer mne versions)
 * FIX: made `Spikes.epoch()` raise a more informative error when no `event_id` values were found in the provided `events` array. When some of the `event_id` values are missing, a warning is raised and the function proceeds with the available values.
+* FIX: fixed error when passing a single integer to `event_id` in `Spikes.epoch()`.
+* FIX: fixed error when trying to epoch cells with no spikes
 * FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes.
 * FIX: dataframe returned by `pylabianca.selectivity.cluster_based_selectivity()` had two unused columns (`'pev'` and `'peak_pev'`), where correct names should have been `'PEV'` and `'peak_PEV'`. Now corrected.
 * FIX: make `pylabianca.selectivity.assess_selectivity()` work when empty DataFrame is passed (no clusters found in `pylabianca.selectivity.cluster_based_selectivity()`).
@@ -39,6 +45,7 @@
 * FIX: `pylabianca.viz.plot_shaded()` now produces a clearer error when too many dimensional DataArray is used.
 * FIX: `pylabianca.utils._handle_cell_names()` (used internally in a few places) now works with NumPy >= 2.0.
 * FIX: `pylabianca.viz.plot_waveform()` (as well as `.plot_waveform()` methods of `Spikes` and `SpikeEpochs`) now produces a clearer error when no waveforms are present in the data.
+* FIX: fixed `pval_text=False` still giving p value text (but without text boxes) in `pylabianca.viz.add_highlights()`
 
 <br/>
 
