@@ -34,7 +34,10 @@
 * FIX: make `pylabianca.analysis.xarray_to_dict()` work also on arrays without cell x trial multi-dim coords (e.g. `('cell', 'trial')`), which are common after concatenating multiple sessions.
 * FIX: saving pylabianca created xarrays like firing rate to NetCDF now works without the need to clear attributes (previously a dictionary of coord units was stored in the attributes, which caused an error when writing the file).
 * FIX: `SpikeEpochs.n_spikes(per_epoch=True)` used spike rate calculation to count spikes in each epoch. This was unnecessary (and possibly slow) and in rare cases could lead to wrong results (probably numerical error when multiplying spike rate by window duration and immediately turning to int, without rounding). Now `SpikeEpochs.n_spikes(per_epoch=True)` counts spikes directly using `pylabianca.utils._get_trial_boundaries`.
+* FIX: mne compatibility - use the `copy=False` argument in `.get_data()` method (introduced in newer mne versions)
 * FIX: made `Spikes.epoch()` raise a more informative error when no `event_id` values were found in the provided `events` array. When some of the `event_id` values are missing, a warning is raised and the function proceeds with the available values.
+* FIX: fixed error when passing a single integer to `event_id` in `Spikes.epoch()`.
+* FIX: fixed error when trying to epoch cells with no spikes
 * FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes.
 * FIX: dataframe returned by `pylabianca.selectivity.cluster_based_selectivity()` had two unused columns (`'pev'` and `'peak_pev'`), where correct names should have been `'PEV'` and `'peak_PEV'`. Now corrected.
 * FIX: make `pylabianca.selectivity.assess_selectivity()` work when empty DataFrame is passed (no clusters found in `pylabianca.selectivity.cluster_based_selectivity()`).
@@ -42,6 +45,7 @@
 * FIX: `pylabianca.viz.plot_shaded()` now produces a clearer error when too many dimensional DataArray is used.
 * FIX: `pylabianca.utils._handle_cell_names()` (used internally in a few places) now works with NumPy >= 2.0.
 * FIX: `pylabianca.viz.plot_waveform()` (as well as `.plot_waveform()` methods of `Spikes` and `SpikeEpochs`) now produces a clearer error when no waveforms are present in the data.
+* FIX: fixed `pval_text=False` still giving p value text (but without text boxes) in `pylabianca.viz.add_highlights()`
 
 <br/>
 
