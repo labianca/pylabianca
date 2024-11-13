@@ -105,6 +105,37 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     return firing
 
 
+def df_from_xarray(xarr, dim):
+    '''
+    Extract xarray coordinate information as a dataframe.
+
+    Parameters
+    ----------
+    xarr : xarray.DataArray
+        DataArray to use.
+    dim : str
+        Dimension coordinates to extract.
+
+    Returns
+    -------
+    df : pd.DataFrame | None
+        DataFrame with coordinate information. If there are multiple
+        coordinates for dimension ``dim`` in the xarray, the DataFrame will
+        contain multiple columns. If there are no dimension coordinates,
+        None is returned.
+    '''
+    import pandas as pd
+    use_dims = xr_find_nested_dims(xarr, dim)
+
+    if len(use_dims) > 1:
+        df = {dim: xarr.coords[dim].values for dim in use_dims}
+        df = pd.DataFrame(df)
+    else:
+        df = None
+
+    return df
+
+
 def cellinfo_from_xarray(xarr):
     '''
     Extract cell information (cellinfo) dataframe from xarray.
@@ -121,17 +152,7 @@ def cellinfo_from_xarray(xarr):
         in the xarray, the DataFrame will have multiple columns. If there are
         no cell coordinates, None is returned.
     '''
-    import pandas as pd
-    cell_dims = xr_find_nested_dims(xarr, 'cell')
-
-    if len(cell_dims) > 1:
-        cellinfo = dict()
-        for dim in cell_dims:
-            cellinfo[dim] = xarr.coords[dim].values
-        cellinfo = pd.DataFrame(cellinfo)
-    else:
-        cellinfo = None
-
+    cellinfo = df_from_xarray(xarr, 'cell')
     return cellinfo
 
 
