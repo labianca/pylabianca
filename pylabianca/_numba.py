@@ -199,6 +199,7 @@ def compute_bin(x, bin_edges):
         return bin
 
 
+# CONSIDER: speed up by precomputing n, a_min, a_max
 @jit(nopython=True, cache=True)
 def numba_histogram(a, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
@@ -214,6 +215,8 @@ def numba_histogram(a, bin_edges):
     return hist, bin_edges
 
 
+# CONSIDER: speed up by precomputing event_time + [tmin, tmax]
+#           and n_epochs
 @jit(nopython=True, cache=True)
 def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
     trial_idx = [-1]
@@ -221,9 +224,8 @@ def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
     time = [np.array([0.2])]
     n_spikes = len(timestamps)
 
+    current_idx = 0
     t_idx_low = 0
-    t_idx_hi = 0
-    max_idx = n_spikes - 1
     n_epochs = event_times.shape[0]
 
     this_epo = (timestamps[0] < (event_times + tmax)).argmax()
@@ -231,50 +233,41 @@ def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
 
     for epo_idx in epo_indices:
         # find spikes that fit within the epoch
-        still_looking = True
         event_time = event_times[epo_idx]
         t_low = event_time + tmin
         t_high = event_time + tmax
 
-        if timestamps[t_idx_hi] < t_low:
-            current_idx = t_idx_hi
-        else:
+        # CONSIDER: could optimize for > and sep ==
+        if timestamps[current_idx] >= t_low:
             current_idx = t_idx_low
 
-        while still_looking and current_idx < n_spikes:
-            if timestamps[current_idx] >= t_low:
-                t_idx_low = current_idx
-                still_looking = False
+        while timestamps[current_idx] < t_low and current_idx < n_spikes:
             current_idx += 1
+        t_idx_low = current_idx
 
-        if still_looking:
-            break
-
-        still_looking = True
-        while still_looking and current_idx < n_spikes:
-            if timestamps[current_idx] >= t_high:
-                t_idx_hi = current_idx
-                still_looking = False
+        while timestamps[current_idx] <= t_high and current_idx < n_spikes:
             current_idx += 1
-
-        if still_looking:
-            t_idx_hi = current_idx + 1
 
         # select these spikes and center wrt event time
-        tms = timestamps[t_idx_low:t_idx_hi] - event_time
-        n_spk_in_tri = len(tms)
+        n_spk_in_tri = current_idx - t_idx_low
+
         if n_spk_in_tri > 0:
+            tms = timestamps[t_idx_low:current_idx] - event_time
             time.append(tms)
             trial_idx.append(epo_idx)
             n_in_trial.append(n_spk_in_tri)
 
-    trial = create_trials_from_short(trial_idx[1:], n_in_trial[1:])
-    time = concat_times(time[1:], n_in_trial[1:])
+    if len(time) > 1:
+        trial = create_trials_from_short(trial_idx[1:], n_in_trial[1:])
+        time = concat_times(time[1:], n_in_trial[1:])
+    else:
+        trial = np.empty(0, dtype=np.int16)
+        time = np.empty(0, dtype=np.float64)
 
     return trial, time
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def create_trials_from_short(trial_idx, n_in_trial):
     n_all = sum(n_in_trial)
     trial = np.empty(n_all, dtype=np.int16)
@@ -287,7 +280,7 @@ def create_trials_from_short(trial_idx, n_in_trial):
     return trial
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True)
 def concat_times(times, n_in_trial):
     n_all = sum(n_in_trial)
     time = np.empty(n_all, dtype=np.float64)
