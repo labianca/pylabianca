@@ -798,35 +798,51 @@ class Spikes(object):
         timestamps = list() if keep_timestamps else None
         return_idx = has_waveform or keep_timestamps
 
+        epoching_fun = check_numba(backend, has_waveform, keep_timestamps)
 
-        tmin_samples = tmin * self.sfreq
-        tmax_samples = tmax * self.sfreq
-        if np.issubdtype(event_times.dtype, np.integer):
-            tmin_samples = np.int64(np.round(tmin_samples))
-            tmax_samples = np.int64(np.round(tmax_samples))
-        elif np.issubdtype(event_times.dtype, np.floating):
-            tmin_samples = np.float64(tmin_samples)
-            tmax_samples = np.float64(tmax_samples)
+        # TODO: make sure the tmin_samples etc. is the SAME type as timestamps
+        # CONSIDER: checking for overflow with unsigned int timestamps
+        #           or just warning when unsigned int timestamps are used
+        if backend in ['numpy2', 'numba2', 'numba_jump2']:
+            tmin_samples = tmin * self.sfreq
+            tmax_samples = tmax * self.sfreq
+            if np.issubdtype(event_times.dtype, np.integer):
+                tmin_samples = np.int64(np.round(tmin_samples))
+                tmax_samples = np.int64(np.round(tmax_samples))
+            elif np.issubdtype(event_times.dtype, np.floating):
+                tmin_samples = np.float64(tmin_samples)
+                tmax_samples = np.float64(tmax_samples)
 
-        event_tmin = event_times + tmin_samples
-        event_tmax = event_times + tmax_samples
+            event_tmin = event_times + tmin_samples
+            event_tmax = event_times + tmax_samples
+        else:
+            event_times = event_times / self.sfreq
 
         for neuron_idx in range(n_neurons):
-            if backend == 'numpy':
-                tri, tim, idx = _epoch_spikes(
-                    self.timestamps[neuron_idx] / self.sfreq, event_times,
-                    tmin, tmax, return_idx=return_idx
-                )
-            elif backend == 'numba':
-                tri, tim = _epoch_spikes_numba2(
-                    self.timestamps[neuron_idx], event_times,
-                    event_tmin, event_tmax, self.sfreq
-                )
-            elif backend == 'numba_jump':
-                tri, tim = _epoch_spikes_numba_jump2(
-                    self.timestamps[neuron_idx], event_times,
-                    event_tmin, event_tmax, self.sfreq
-                )
+            if '2' in backend:
+                if 'numba' in backend:
+                    tri, tim = epoching_fun(
+                        self.timestamps[neuron_idx], event_times,
+                        event_tmin, event_tmax, self.sfreq
+                    )
+                else:
+                    tri, tim, idx = epoching_fun(
+                        self.timestamps[neuron_idx], event_times,
+                        event_tmin, event_tmax, self.sfreq,
+                        return_idx=return_idx
+                    )
+            else:
+                if 'numba' in backend:
+                    tri, tim = epoching_fun(
+                        self.timestamps[neuron_idx] / self.sfreq, event_times,
+                        tmin, tmax
+                    )
+                else:
+                    tri, tim, idx = epoching_fun(
+                        self.timestamps[neuron_idx] / self.sfreq, event_times,
+                        tmin, tmax, return_idx=return_idx
+                    )
+
             trial.append(tri)
             time.append(tim)
 
@@ -1290,8 +1306,13 @@ def _prepare_events_event_id(events, event_id):
 
 
 def check_numba(backend, has_waveform, keep_timestamps):
-    if backend == 'numba':
+    if 'numba' in backend:
         from borsar.utils import has_numba
+    else:
+        if '2' in backend:
+            return _epoch_spikes2
+        else:
+            return _epoch_spikes
 
     if not has_numba():
         raise RuntimeError(
@@ -1306,8 +1327,18 @@ def check_numba(backend, has_waveform, keep_timestamps):
     if keep_timestamps:
         raise ValueError('Keeping timestamps is not supported '
                             'with the "numba" backend.')
-    from ._numba import _epoch_spikes_numba
-    return _epoch_spikes_numba
+    if backend == 'numba':
+        from ._numba import _epoch_spikes_numba
+        return _epoch_spikes_numba
+    elif backend == 'numba2':
+        from ._numba import _epoch_spikes_numba2
+        return _epoch_spikes_numba2
+    elif backend == 'numba_jump':
+        from ._numba import _epoch_spikes_numba_jump
+        return _epoch_spikes_numba_jump
+    elif backend == 'numba_jump2':
+        from ._numba import _epoch_spikes_numba_jump2
+        return _epoch_spikes_numba_jump2
 
 
 def concatenate_spikes(spk_list, sort=True, relabel_cell_names=True):
