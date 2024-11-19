@@ -19,9 +19,5 @@ dependencies:
   - xarray>=2023.10.1
   - xlrd>=2.0.1
   - pip:
-    - elephant
     - h5io>=0.1.9
     - h5netcdf
-    - neo
-    - quantities
-    - statsmodels
