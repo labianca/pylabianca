@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - python=3.12
   - h5py>=3.10.0
   - hdf5
   - matplotlib>=3.8.0
