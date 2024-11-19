@@ -90,36 +90,45 @@ def _add_frate_info(arr, dep='rate'):
     return arr
 
 
+# ENH: time limits for windows could be calculated only once - for all units
 # ENH: speed up by using previous mask in the next step to pre-select spikes
-# ENH: time limits per window could be calculated only once - for all units
 def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
                               n_trials, winlen=0.25, step=0.05):
     half_win = winlen / 2
     window_limits = np.array([-half_win, half_win])
-    used_range = time_limits[1] - time_limits[0]
-    n_steps = (used_range - winlen) / step + 1
-    if n_steps <= 0:
-        raise ValueError(f'The requested window length (``winlen={winlen}``)'
-                         f' is longer than available data ({used_range}).')
+    contains_zero = (
+        (time_limits[0] + half_win) <= 0
+        <= (time_limits[1] - half_win)
+    )
+    half_win_liberal = half_win * 0.9
 
-    n_steps_int = int(n_steps)
-
-    if n_steps - n_steps_int > 0.9:
-        n_steps = n_steps_int + 1
+    if not contains_zero:
+        middle_times = np.arange(
+            time_limits[0] + half_win,
+            time_limits[1] - half_win_liberal,
+            step=step)
     else:
-        n_steps = n_steps_int
+        middle_times_left = np.arange(
+            0, time_limits[0] + half_win_liberal, step=-step)[::-1]
+        middle_times_right = np.arange(
+            step, time_limits[1] - half_win_liberal, step=step)
+        middle_times = np.concatenate((middle_times_left, middle_times_right))
 
-    times = np.arange(n_steps) * step + time_limits[0] + half_win
+    n_steps = len(middle_times)
+    if n_steps == 0:
+        used_range = time_limits[1] - time_limits[0]
+        raise ValueError(f'The requested window length (``winlen={winlen}``)'
+                        f' is longer than available data ({used_range}).')
+
     frate = np.zeros((n_trials, n_steps))
-
     for step_idx in range(n_steps):
-        win_lims = times[step_idx] + window_limits
+        win_lims = middle_times[step_idx] + window_limits
         msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
         in_tri, count = np.unique(tri, return_counts=True)
         frate[in_tri, step_idx] = count / winlen
 
-    return times, frate
+    return middle_times, frate
 
 
 # @numba.jit(nopython=True)
