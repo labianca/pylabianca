@@ -653,6 +653,82 @@ def _epoch_spikes(timestamps, event_times, tmin, tmax, return_idx=False):
     return trial, time, idx
 
 
+def _epoch_spikes2(timestamps, event_times, event_tmin, event_tmax, sfreq,
+                   return_idx=False):
+    '''Epoch spike data with respect to event timestamps.
+
+    Helper function that epochs spikes for a single neuron.
+
+    Parameters
+    ----------
+    timestamps : numpy array
+        Array containing spike timestamps.
+    event_times : numpy array
+        Array containing event timestamps.
+    tmin : float
+        Lower epoch limit.
+    tmax : float
+        Upper epoch limit.
+
+    Returns
+    -------
+    trial : numpy array
+        Information about the trial that the given spike belongs to.
+    time : numpy array
+        Spike times with respect to event onset.
+    idx : numpy array
+        Indices of spikes that were retained. Depending on the epoching, some
+        spikes may be duplicated.
+    '''
+    trial = list()
+    time = list()
+    idx = list() if return_idx else None
+
+    t_idx = 0
+    n_spikes = len(timestamps)
+
+    if n_spikes == 0:
+        empty = np.array([])
+        return empty, empty.copy(), empty.copy()
+
+    n_epochs = event_times.shape[0]
+    this_epo = (timestamps[t_idx] < (event_tmax)).argmax()
+
+    for epo_idx in range(this_epo, n_epochs):
+        # find spikes that fit within the epoch
+        first_idx, last_idx = np.searchsorted(
+            timestamps[t_idx:],
+            [event_tmin[epo_idx], event_tmax[epo_idx]]
+        ) + t_idx
+
+        if first_idx < n_spikes:
+            # select these spikes and center wrt event time
+            tms = (
+                timestamps[first_idx:last_idx]
+                - event_times[epo_idx]
+            ) / sfreq
+
+            if len(tms) > 0:
+                tri = np.ones(len(tms), dtype='int') * epo_idx
+                trial.append(tri)
+                time.append(tms)
+
+                if return_idx:
+                    idx.append(np.arange(first_idx, last_idx))
+            t_idx = first_idx
+
+    if len(trial) > 0:
+        trial = np.concatenate(trial)
+        time = np.concatenate(time)
+        if return_idx:
+            idx = np.concatenate(idx)
+    else:
+        trial = np.array([])
+        time = np.array([])
+
+    return trial, time, idx
+
+
 # TODO: make this a method of SpikeEpochs and return xarray or mne.Epochs
 def _spikes_to_raw(spk, picks=None, sfreq=500.):
     '''Turn epoched spike timestamps into binary representation.
