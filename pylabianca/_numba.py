@@ -242,7 +242,7 @@ def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
             current_idx += 1
         t_idx_low = current_idx
 
-        while timestamps[current_idx] <= t_high and current_idx < n_spikes:
+        while timestamps[current_idx] < t_high and current_idx < n_spikes:
             time.append(timestamps[current_idx] - event_time)
             trial.append(epo_idx)
             current_idx += 1
@@ -278,7 +278,7 @@ def _epoch_spikes_numba2(timestamps, event_times, event_tmin, event_tmax,
             current_idx += 1
         t_idx_low = current_idx
 
-        while timestamps[current_idx] <= t_high and current_idx < n_spikes:
+        while timestamps[current_idx] < t_high and current_idx < n_spikes:
             time.append((timestamps[current_idx] - event_time) / sfreq)
             trial.append(epo_idx)
             current_idx += 1
