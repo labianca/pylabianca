@@ -39,6 +39,7 @@
 * FIX: made `Spikes.epoch()` raise a more informative error when no `event_id` values were found in the provided `events` array. When some of the `event_id` values are missing, a warning is raised and the function proceeds with the available values.
 * FIX: fixed error when passing a single integer to `event_id` in `Spikes.epoch()`.
 * FIX: fixed error when trying to epoch cells with no spikes
+* FIX: fixed error when using `Spikes.epoch()` with `backend='numba'` when some epoch limits did not contain spikes. Each such epoch would still receive one spike, but with correctly calculated time (out of epoch range). This way this bug did not affect further spike rate analysis.
 * FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes.
 * FIX: dataframe returned by `pylabianca.selectivity.cluster_based_selectivity()` had two unused columns (`'pev'` and `'peak_pev'`), where correct names should have been `'PEV'` and `'peak_PEV'`. Now corrected.
 * FIX: make `pylabianca.selectivity.assess_selectivity()` work when empty DataFrame is passed (no clusters found in `pylabianca.selectivity.cluster_based_selectivity()`).
