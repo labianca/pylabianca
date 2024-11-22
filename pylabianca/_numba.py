@@ -216,165 +216,37 @@ def numba_histogram(a, bin_edges):
 
 
 @jit(nopython=True, cache=True)
-def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
-    trial = []
-    time = []
-    n_spikes = len(timestamps)
-
-    current_idx = 0
-    t_idx_low = 0
-    n_epochs = event_times.shape[0]
-
-    this_epo = (timestamps[0] < (event_times + tmax)).argmax()
-    epo_indices = np.arange(this_epo, n_epochs, dtype=np.int16)
-
-    for epo_idx in epo_indices:
-        # find spikes that fit within the epoch
-        event_time = event_times[epo_idx]
-        t_low = event_time + tmin
-        t_high = event_time + tmax
-
-        # CONSIDER: could optimize for > and sep ==
-        if timestamps[current_idx] >= t_low:
-            current_idx = t_idx_low
-
-        while timestamps[current_idx] < t_low and current_idx < n_spikes:
-            current_idx += 1
-        t_idx_low = current_idx
-
-        while timestamps[current_idx] <= t_high and current_idx < n_spikes:
-            time.append(timestamps[current_idx] - event_time)
-            trial.append(epo_idx)
-            current_idx += 1
-
-    return np.array(trial), np.array(time)
-
-
-@jit(nopython=True, cache=True)
-def _epoch_spikes_numba2(timestamps, event_times, event_tmin, event_tmax,
-                         sfreq):
-    trial = []
-    time = []
-    n_spikes = len(timestamps)
-
-    current_idx = 0
-    t_idx_low = 0
-    n_epochs = event_times.shape[0]
-
-    this_epo = (timestamps[0] < (event_tmax)).argmax()
-    epo_indices = np.arange(this_epo, n_epochs, dtype=np.int16)
-
-    for epo_idx in epo_indices:
-        # find spikes that fit within the epoch
-        event_time = event_times[epo_idx]
-        t_low = event_tmin[epo_idx]
-        t_high = event_tmax[epo_idx]
-
-        # CONSIDER: could optimize for > and sep ==
-        if timestamps[current_idx] >= t_low:
-            current_idx = t_idx_low
-
-        while timestamps[current_idx] < t_low and current_idx < n_spikes:
-            current_idx += 1
-        t_idx_low = current_idx
-
-        while timestamps[current_idx] <= t_high and current_idx < n_spikes:
-            time.append((timestamps[current_idx] - event_time) / sfreq)
-            trial.append(epo_idx)
-            current_idx += 1
-
-    return np.array(trial), np.array(time)
-
-
-@jit(nopython=True, cache=True)
-def _epoch_spikes_numba_jump(spike_times, event_times, tmin, tmax,
-                             min_step_size=15):
+def _epoch_spikes_numba(spike_times, event_times, event_tmin, event_tmax,
+                        sfreq, min_step_size=15):
     """
-    Efficiently epoch spike timestamps based on event times and epoch limits (tmin, tmax).
-    Uses proportional stepping to find relevant spikes for each event.
+    Epoch spike timestamps based on event times and epoch limits.
 
-    Parameters:
-    spike_times (numpy.ndarray): Array of spike timestamps (sorted).
-    event_times (numpy.ndarray): Array of event times (sorted).
-    tmin (float): Lower time limit for epoching relative to event times.
-    tmax (float): Upper time limit for epoching relative to event times.
+    Uses proportional stepping to efficiently find relevant spikes for each
+    event.
 
-    Returns:
-    trial_ids (numpy.ndarray): Array of trial indices corresponding to each spike.
-    epoch_spike_times (numpy.ndarray): Array of spike times relative to event times.
-    """
-    trial_ids = []
-    epoch_spike_times = []
+    Parameters
+    ----------
+    spike_times: numpy.ndarray
+        Array of spike timestamps (sorted).
+    event_times: numpy.ndarray
+        Array of event timestamps (sorted).
+    event_tmin: numpy.ndarray
+        Array of lower time limits for epoching.
+    event_tmax: numpy.ndarray
+        Array of upper time limit for epoching.
+    sfreq: float
+        Sampling frequency of the spike timestamps.
+    min_step_size: int
+        Minimum step size for finding the first spike within the event limits.
+        Once the calculated step size falls below this value, simple iteration
+        is used to find the first spike.
 
-    num_spikes = len(spike_times)
-    start_idx = 0
-    current_idx = 0
-    step_multiplier = max(1, int(np.round(
-        num_spikes / (spike_times[-1] - spike_times[0])
-        )))
-    epoch_len = tmax - tmin
-
-    for trial_idx, event_time in enumerate(event_times):
-        start_time = event_time + tmin
-        end_time = event_time + tmax
-
-        if spike_times[current_idx] >= start_time:
-            current_idx = start_idx
-
-        # Find the first spike within the event limits
-        distance = start_time - spike_times[start_idx]
-        step_size = max(1, int(distance / epoch_len * step_multiplier))
-        while step_size > min_step_size:
-            start_idx += step_size
-            if start_idx >= num_spikes:
-                start_idx -= step_size
-                break
-            distance = start_time - spike_times[start_idx]
-            step_size = max(1, int(distance / epoch_len * step_multiplier))
-
-        # Adjust start_idx to ensure it's the first valid spike
-        if distance < 0:
-            if start_idx >= num_spikes:
-                start_idx = num_spikes - 1
-
-            while start_idx >= 0 and spike_times[start_idx] >= start_time:
-                start_idx -= 1
-            start_idx += 1
-        else:
-            while (start_idx < num_spikes
-                   and spike_times[start_idx] < start_time):
-                start_idx += 1
-
-        current_idx = start_idx
-
-        # Find all spikes within the event limits
-        while current_idx < num_spikes and spike_times[current_idx] < end_time:
-            trial_ids.append(trial_idx)
-            epoch_spike_times.append(spike_times[current_idx] - event_time)
-            current_idx += 1
-
-        spikes_in_event = current_idx - start_idx + 1
-        step_multiplier = max(1, spikes_in_event)
-
-    return np.array(trial_ids), np.array(epoch_spike_times)
-
-
-@jit(nopython=True, cache=True)
-def _epoch_spikes_numba_jump2(spike_times, event_times, event_tmin, event_tmax,
-                              sfreq, min_step_size=15):
-    """
-    Efficiently epoch spike timestamps based on event times and epoch limits (tmin, tmax).
-    Uses proportional stepping to find relevant spikes for each event.
-
-    Parameters:
-    spike_times (numpy.ndarray): Array of spike timestamps (sorted).
-    event_times (numpy.ndarray): Array of event times (sorted).
-    tmin (float): Lower time limit for epoching relative to event times.
-    tmax (float): Upper time limit for epoching relative to event times.
-
-    Returns:
-    trial_ids (numpy.ndarray): Array of trial indices corresponding to each spike.
-    epoch_spike_times (numpy.ndarray): Array of spike times relative to event times.
+    Returns
+    -------
+    trial_ids: numpy.ndarray
+        Array of trial indices corresponding to each spike.
+    epoch_spike_times: numpy.ndarray
+        Array of spike times relative to event times.
     """
     trial_ids = []
     epoch_spike_times = []
@@ -432,29 +304,3 @@ def _epoch_spikes_numba_jump2(spike_times, event_times, event_tmin, event_tmax,
         step_multiplier = max(1, spikes_in_event)
 
     return np.array(trial_ids), np.array(epoch_spike_times)
-
-
-@jit(nopython=True, cache=True)
-def create_trials_from_short(trial_idx, n_in_trial):
-    n_all = sum(n_in_trial)
-    trial = np.empty(n_all, dtype=np.int16)
-    idx = 0
-    for tri_idx, n_fill in zip(trial_idx, n_in_trial):
-        idx_end = idx + n_fill
-        trial[idx:idx_end] = tri_idx
-        idx = idx_end
-
-    return trial
-
-
-@jit(nopython=True, cache=True)
-def concat_times(times, n_in_trial):
-    n_all = sum(n_in_trial)
-    time = np.empty(n_all, dtype=np.float64)
-    idx = 0
-    for tms, n_fill in zip(times, n_in_trial):
-        idx_end = idx + n_fill
-        time[idx:idx_end] = tms
-        idx = idx_end
-
-    return time
