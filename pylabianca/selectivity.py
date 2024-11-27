@@ -652,7 +652,7 @@ def compute_time_in_window(df_cluster, window_of_interest):
 # CONSIDER renaming return_dist to return_traces / return_dict, etc.
 def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
               n_permutations=100, significance='gumbel', return_dist=False,
-              subsample=1, reduction=None):
+              subsample=1, reduction=None, permute_independently=False):
     """ZETA test for comparing cumulative spike distributions between
     conditions.
 
@@ -687,6 +687,9 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         Reduction function to apply to the cumulative traces. Default is
         ``None``, which uses the difference function for two conditions and
         variance for more than two conditions.
+    permute_independently : bool, optional
+        Whether to permute conditions for each cell independently. Default is
+        ``False``.
 
     Returns
     -------
@@ -753,14 +756,20 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     # prepare random states for the permutations
     # (so that every cell gets the same permutation sequence)
     max_val = 2**32 - 1  # np.iinfo(int).max
-    rnd = np.random.randint(0, high=max_val + 1, size=n_permutations,
-                            dtype=np.int64)
+
+    if not permute_independently:
+        rnd = np.random.randint(
+            0, high=max_val + 1, size=n_permutations, dtype=np.int64)
 
     # TODO: add joblib parallelization if necessary
     for pick_idx, pick in enumerate(picks):
         times, trials, reference_time = _get_times_and_trials(
             spk, pick, tmin, tmax, subsample, backend)
         n_samples = reference_time.shape[0]
+
+        if permute_independently:
+            rnd = np.random.randint(
+                0, high=max_val + 1, size=n_permutations, dtype=np.int64)
 
         if backend == 'numba':
             fraction_diff, permutations = numba_func(
