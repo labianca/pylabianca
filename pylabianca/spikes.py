@@ -167,7 +167,7 @@ class SpikeEpochs():
         return self
 
     def spike_rate(self, picks=None, winlen=0.25, step=0.01, tmin=None,
-                   tmax=None, backend='numpy'):
+                   tmax=None, backend='numpy', center_time=False):
         '''Calculate spike rate with a running window.
 
         Parameters
@@ -187,6 +187,9 @@ class SpikeEpochs():
             Time end in seconds. Default to trial end if ``tmax`` is ``None``.
         backend : str
             Execution backend. Can be ``'numpy'`` or ``'numba'``.
+        center_time : bool
+            If ``True`` the time is centered around zero, if possible. Defaults to
+            ``False``.
 
         Returns
         -------
@@ -194,7 +197,8 @@ class SpikeEpochs():
             Xarray with following labeled dimensions: cell, trial, time.
         '''
         return compute_spike_rate(self, picks=picks, winlen=winlen, step=step,
-                                  tmin=tmin, tmax=tmax, backend=backend)
+                                  tmin=tmin, tmax=tmax, backend=backend,
+                                  center_time=center_time)
 
     def spike_density(self, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
                       sfreq=500.):
