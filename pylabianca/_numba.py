@@ -4,26 +4,18 @@ from numba.extending import overload
 
 
 @jit(nopython=True, cache=True)
-def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
-                              n_trials, winlen=0.25, step=0.05):
-    half_win = winlen / 2
-    window_limits = np.array([-half_win, half_win])
-    epoch_len = time_limits[1] - time_limits[0]
-    n_steps = int(np.floor((epoch_len - winlen) / step + 1))
-
-    fr_t_start = time_limits[0] + half_win
-    fr_tend = time_limits[1] - half_win + step * 0.001
-    times = np.arange(fr_t_start, fr_tend, step=step)
+def _compute_spike_rate_numba(spike_times, spike_trials, times, window_limits,
+                              win_len, n_trials):
+    n_steps = len(times)
     frate = np.zeros((n_trials, n_steps))
-
     for step_idx in range(n_steps):
-        winlims = times[step_idx] + window_limits
-        msk = (spike_times >= winlims[0]) & (spike_times < winlims[1])
+        win_lims = times[step_idx] + window_limits
+        msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
         in_tri, count = _monotonic_unique_counts(tri)
-        frate[in_tri, step_idx] = count / winlen
+        frate[in_tri, step_idx] = count / win_len
 
-    return times, frate
+    return frate
 
 
 @jit(nopython=True, cache=True)
