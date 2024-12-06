@@ -105,7 +105,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     return firing
 
 
-def df_from_xarray(xarr, dim):
+def df_from_xarray_coords(xarr, dim):
     '''
     Extract xarray coordinate information as a dataframe.
 
@@ -152,7 +152,7 @@ def cellinfo_from_xarray(xarr):
         in the xarray, the DataFrame will have multiple columns. If there are
         no cell coordinates, None is returned.
     '''
-    cellinfo = df_from_xarray(xarr, 'cell')
+    cellinfo = df_from_xarray_coords(xarr, 'cell')
     return cellinfo
 
 
