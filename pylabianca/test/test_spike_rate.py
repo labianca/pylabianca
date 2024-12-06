@@ -67,6 +67,19 @@ def test_firing_rate_against_elephant(spk_epochs):
     this_spk.spike_rate(winlen=0.35, step=0.05)
 
 
+def test_time_centering():
+    spk = pln.utils.create_random_spikes(n_cells=3, n_trials=10)
+
+    fr = spk.spike_rate()
+    zero_dist = np.abs(fr.time - 0).min().item()
+
+    fr2 = spk.spike_rate(center_time=True)
+    zero_dist2 = np.abs(fr2.time - 0).min().item()
+
+    assert zero_dist > zero_dist2
+    assert zero_dist2 == 0.
+
+
 def test_frate_writes_to_netcdf4(spk_epochs, tmp_path):
     import xarray as xr
 
