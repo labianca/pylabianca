@@ -7,10 +7,9 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 # TODO: add n_jobs?
 # CONSIDER wintype 'rectangular' vs 'gaussian'
 # TODO: refactor (DRY: merge both loops into one?)
-# TODO: better handling of numpy vs numba implementation
 # TODO: consider adding `return_type` with `Epochs` option (mne object)
 def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
-                       tmax=None, backend='numpy'):
+                       tmax=None, backend='numpy', center_time=False):
     '''Calculate spike rate with a running or static window.
 
     Parameters
@@ -32,6 +31,9 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
         Time end in seconds. Default to trial end if ``tmax`` is ``None``.
     backend : str
         Execution backend. Can be ``'numpy'`` or ``'numba'``.
+    center_time : bool
+        If ``True`` the time is centered around zero, if possible. Defaults to
+        ``False``.
 
     Returns
     -------
@@ -42,40 +44,39 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
     tmin = spk.time_limits[0] if tmin is None else tmin
     tmax = spk.time_limits[1] if tmax is None else tmax
 
+    n_cells = len(picks)
+    n_trials = spk.n_trials
+
     if isinstance(step, bool) and not step:
 
         times = f'{tmin} - {tmax} s'
 
-        frate = list()
+        frate = np.zeros((n_cells, n_trials))
         cell_names = list()
 
-        for pick in picks:
-            frt = _compute_spike_rate_fixed(
+        for idx, pick in enumerate(picks):
+            frate[idx] = _compute_spike_rate_fixed(
                 spk.time[pick], spk.trial[pick], [tmin, tmax],
                 spk.n_trials)
-            frate.append(frt)
             cell_names.append(spk.cell_names[pick])
 
     else:
-        frate = list()
         cell_names = list()
+        func = _check_backend(backend)
+        times, window_limits = _eval_time(winlen, step, [tmin, tmax],
+                                          center_time)
 
-        if backend == 'numpy':
-            func = _compute_spike_rate_numpy
-        elif backend == 'numba':
-            from ._numba import _compute_spike_rate_numba
-            func = _compute_spike_rate_numba
-        else:
-            raise ValueError('Backend can be only "numpy" or "numba".')
+        n_times = len(times)
+        frate = np.zeros((n_cells, n_trials, n_times))
 
-        for pick in picks:
-            times, frt = func(
-                spk.time[pick], spk.trial[pick], np.array([tmin, tmax]),
-                spk.n_trials, winlen=winlen, step=step)
-            frate.append(frt)
+        for idx, pick in enumerate(picks):
+            frate[idx] = func(
+                spk.time[pick], spk.trial[pick],
+                times, window_limits, winlen,
+                n_trials
+            )
             cell_names.append(spk.cell_names[pick])
 
-    frate = np.stack(frate, axis=0)
     frate = _turn_spike_rate_to_xarray(times, frate, spk,
                                         cell_names=cell_names)
     frate = _add_frate_info(frate)
@@ -91,35 +92,63 @@ def _add_frate_info(arr, dep='rate'):
 
 
 # ENH: speed up by using previous mask in the next step to pre-select spikes
-# ENH: time limits per window could be calculated only once - for all units
-def _compute_spike_rate_numpy(spike_times, spike_trials, time_limits,
-                              n_trials, winlen=0.25, step=0.05):
-    half_win = winlen / 2
-    window_limits = np.array([-half_win, half_win])
-    used_range = time_limits[1] - time_limits[0]
-    n_steps = (used_range - winlen) / step + 1
-    if n_steps <= 0:
-        raise ValueError(f'The requested window length (``winlen={winlen}``)'
-                         f' is longer than available data ({used_range}).')
-
-    n_steps_int = int(n_steps)
-
-    if n_steps - n_steps_int > 0.9:
-        n_steps = n_steps_int + 1
-    else:
-        n_steps = n_steps_int
-
-    times = np.arange(n_steps) * step + time_limits[0] + half_win
+def _compute_spike_rate_numpy(spike_times, spike_trials, times,
+                              window_limits, win_len, n_trials):
+    n_steps = len(times)
     frate = np.zeros((n_trials, n_steps))
-
     for step_idx in range(n_steps):
         win_lims = times[step_idx] + window_limits
         msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
         in_tri, count = np.unique(tri, return_counts=True)
-        frate[in_tri, step_idx] = count / winlen
+        frate[in_tri, step_idx] = count / win_len
 
-    return times, frate
+    return frate
+
+
+def _check_backend(backend):
+    if backend == 'numpy':
+        return _compute_spike_rate_numpy
+    elif backend == 'numba':
+        from ._numba import _compute_spike_rate_numba
+        return _compute_spike_rate_numba
+    else:
+        raise ValueError('Backend can be only "numpy" or "numba".')
+
+
+def _eval_time(winlen, step, time_limits, center_time=False):
+    half_win = winlen / 2
+    window_limits = np.array([-half_win, half_win])
+
+    if center_time:
+        contains_zero = (
+            (time_limits[0] + half_win) <= 0
+            <= (time_limits[1] - half_win)
+        )
+    else:
+        contains_zero = False
+
+    half_win_liberal = half_win * 0.9
+
+    if not contains_zero:
+        middle_times = np.arange(
+            time_limits[0] + half_win,
+            time_limits[1] - half_win_liberal,
+            step=step)
+    else:
+        middle_times_left = np.arange(
+            0, time_limits[0] + half_win_liberal, step=-step)[::-1]
+        middle_times_right = np.arange(
+            step, time_limits[1] - half_win_liberal, step=step)
+        middle_times = np.concatenate((middle_times_left, middle_times_right))
+
+    n_steps = len(middle_times)
+    if n_steps == 0:
+        used_range = time_limits[1] - time_limits[0]
+        raise ValueError(f'The requested window length (``winlen={winlen}``)'
+                        f' is longer than available data ({used_range}).')
+
+    return middle_times, window_limits
 
 
 # @numba.jit(nopython=True)

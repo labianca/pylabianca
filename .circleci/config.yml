@@ -27,6 +27,7 @@ jobs:
             else
               pip install mne==<< parameters.mne_version >>;
             fi
+            pip install borsar elephant neo quantities statsmodels --no-deps
             mamba install pytest -y;
             hash -r pytest
             pip install pytest-cov

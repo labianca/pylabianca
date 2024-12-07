@@ -398,6 +398,35 @@ def test_epoching_overlapping():
         assert (spk_epo.time[0] == exp_tim).all()
 
 
+def test_epoching_some_epochs_without_spikes():
+    '''Make sure epoching works if some epoch limits do not contain spikes.'''
+
+    evnts = '  e     e           ee                    e'
+    stmps = '|  ||   |  |                 |   |  | '
+    tmin, tmax = -4, 9
+
+    exp_tri = [ 0, 0, 0, 0,  1, 1, 1, 3]
+    exp_tim = [-2, 1, 2, 6, -4, 0, 3, 8]
+
+    evnts = np.where(np.array(list(evnts)) == 'e')[0]
+    stmps = np.where(np.array(list(stmps)) == '|')[0]
+
+    n_events = evnts.shape[0]
+    events = np.zeros((n_events, 3), dtype=int)
+    events[:, 0] = evnts
+
+    spk = pln.Spikes([stmps], sfreq=1.)
+    spk_epo = spk.epoch(events, tmin=tmin, tmax=tmax)
+
+    assert (spk_epo.trial[0] == exp_tri).all()
+    assert (spk_epo.time[0] == exp_tim).all()
+
+    if has_numba():
+        spk_epo = spk.epoch(events, tmin=tmin, tmax=tmax, backend='numba')
+        assert (spk_epo.trial[0] == exp_tri).all()
+        assert (spk_epo.time[0] == exp_tim).all()
+
+
 def test_metadata():
     spk = create_random_spikes()
 

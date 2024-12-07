@@ -4,26 +4,18 @@ from numba.extending import overload
 
 
 @jit(nopython=True, cache=True)
-def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
-                              n_trials, winlen=0.25, step=0.05):
-    half_win = winlen / 2
-    window_limits = np.array([-half_win, half_win])
-    epoch_len = time_limits[1] - time_limits[0]
-    n_steps = int(np.floor((epoch_len - winlen) / step + 1))
-
-    fr_t_start = time_limits[0] + half_win
-    fr_tend = time_limits[1] - half_win + step * 0.001
-    times = np.arange(fr_t_start, fr_tend, step=step)
+def _compute_spike_rate_numba(spike_times, spike_trials, times, window_limits,
+                              win_len, n_trials):
+    n_steps = len(times)
     frate = np.zeros((n_trials, n_steps))
-
     for step_idx in range(n_steps):
-        winlims = times[step_idx] + window_limits
-        msk = (spike_times >= winlims[0]) & (spike_times < winlims[1])
+        win_lims = times[step_idx] + window_limits
+        msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
         in_tri, count = _monotonic_unique_counts(tri)
-        frate[in_tri, step_idx] = count / winlen
+        frate[in_tri, step_idx] = count / win_len
 
-    return times, frate
+    return frate
 
 
 @jit(nopython=True, cache=True)
@@ -199,6 +191,7 @@ def compute_bin(x, bin_edges):
         return bin
 
 
+# CONSIDER: speed up by precomputing n, a_min, a_max
 @jit(nopython=True, cache=True)
 def numba_histogram(a, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
@@ -215,86 +208,91 @@ def numba_histogram(a, bin_edges):
 
 
 @jit(nopython=True, cache=True)
-def _epoch_spikes_numba(timestamps, event_times, tmin, tmax):
-    trial_idx = [-1]
-    n_in_trial = [0]
-    time = [np.array([0.2])]
-    n_spikes = len(timestamps)
+def _epoch_spikes_numba(spike_times, event_times, event_tmin, event_tmax,
+                        sfreq, min_step_size=15):
+    """
+    Epoch spike timestamps based on event times and epoch limits.
 
-    t_idx_low = 0
-    t_idx_hi = 0
-    max_idx = n_spikes - 1
-    n_epochs = event_times.shape[0]
+    Uses proportional stepping to efficiently find relevant spikes for each
+    event.
 
-    this_epo = (timestamps[0] < (event_times + tmax)).argmax()
-    epo_indices = np.arange(this_epo, n_epochs, dtype=np.int16)
+    Parameters
+    ----------
+    spike_times: numpy.ndarray
+        Array of spike timestamps (sorted).
+    event_times: numpy.ndarray
+        Array of event timestamps (sorted).
+    event_tmin: numpy.ndarray
+        Array of lower time limits for epoching.
+    event_tmax: numpy.ndarray
+        Array of upper time limit for epoching.
+    sfreq: float
+        Sampling frequency of the spike timestamps.
+    min_step_size: int
+        Minimum step size for finding the first spike within the event limits.
+        Once the calculated step size falls below this value, simple iteration
+        is used to find the first spike.
 
-    for epo_idx in epo_indices:
-        # find spikes that fit within the epoch
-        still_looking = True
-        event_time = event_times[epo_idx]
-        t_low = event_time + tmin
-        t_high = event_time + tmax
+    Returns
+    -------
+    trial_ids: numpy.ndarray
+        Array of trial indices corresponding to each spike.
+    epoch_spike_times: numpy.ndarray
+        Array of spike times relative to event times.
+    """
+    trial_ids = []
+    epoch_spike_times = []
 
-        if timestamps[t_idx_hi] < t_low:
-            current_idx = t_idx_hi
+    num_spikes = len(spike_times)
+    start_idx = 0
+    current_idx = 0
+    step_multiplier = max(1, int(np.round(
+        num_spikes / (spike_times[-1] - spike_times[0])
+        )))
+    epoch_len = event_tmax[0] - event_tmin[0]
+
+    for trial_idx, event_time in enumerate(event_times):
+        start_time = event_tmin[trial_idx]
+        end_time = event_tmax[trial_idx]
+
+        if spike_times[current_idx] >= start_time:
+            current_idx = start_idx
+
+        # Find the first spike within the event limits
+        distance = start_time - spike_times[start_idx]
+        step_size = max(1, int(distance / epoch_len * step_multiplier))
+        while step_size > min_step_size:
+            start_idx += step_size
+            if start_idx >= num_spikes:
+                start_idx -= step_size
+                break
+            distance = start_time - spike_times[start_idx]
+            step_size = max(1, int(distance / epoch_len * step_multiplier))
+
+        # Adjust start_idx to ensure it's the first valid spike
+        if distance < 0:
+            if start_idx >= num_spikes:
+                start_idx = num_spikes - 1
+
+            while start_idx >= 0 and spike_times[start_idx] >= start_time:
+                start_idx -= 1
+            start_idx += 1
         else:
-            current_idx = t_idx_low
+            while (start_idx < num_spikes
+                   and spike_times[start_idx] < start_time):
+                start_idx += 1
 
-        while still_looking and current_idx < n_spikes:
-            if timestamps[current_idx] >= t_low:
-                t_idx_low = current_idx
-                still_looking = False
+        current_idx = start_idx
+
+        # Find all spikes within the event limits
+        while current_idx < num_spikes and spike_times[current_idx] < end_time:
+            trial_ids.append(trial_idx)
+            epoch_spike_times.append(
+                (spike_times[current_idx] - event_time) / sfreq
+            )
             current_idx += 1
 
-        if still_looking:
-            break
+        spikes_in_event = current_idx - start_idx + 1
+        step_multiplier = max(1, spikes_in_event)
 
-        still_looking = True
-        while still_looking and current_idx < n_spikes:
-            if timestamps[current_idx] >= t_high:
-                t_idx_hi = current_idx
-                still_looking = False
-            current_idx += 1
-
-        if still_looking:
-            t_idx_hi = current_idx + 1
-
-        # select these spikes and center wrt event time
-        tms = timestamps[t_idx_low:t_idx_hi] - event_time
-        n_spk_in_tri = len(tms)
-        if n_spk_in_tri > 0:
-            time.append(tms)
-            trial_idx.append(epo_idx)
-            n_in_trial.append(n_spk_in_tri)
-
-    trial = create_trials_from_short(trial_idx[1:], n_in_trial[1:])
-    time = concat_times(time[1:], n_in_trial[1:])
-
-    return trial, time
-
-
-@jit(nopython=True)
-def create_trials_from_short(trial_idx, n_in_trial):
-    n_all = sum(n_in_trial)
-    trial = np.empty(n_all, dtype=np.int16)
-    idx = 0
-    for tri_idx, n_fill in zip(trial_idx, n_in_trial):
-        idx_end = idx + n_fill
-        trial[idx:idx_end] = tri_idx
-        idx = idx_end
-
-    return trial
-
-
-@jit(nopython=True)
-def concat_times(times, n_in_trial):
-    n_all = sum(n_in_trial)
-    time = np.empty(n_all, dtype=np.float64)
-    idx = 0
-    for tms, n_fill in zip(times, n_in_trial):
-        idx_end = idx + n_fill
-        time[idx:idx_end] = tms
-        idx = idx_end
-
-    return time
+    return np.array(trial_ids), np.array(epoch_spike_times)

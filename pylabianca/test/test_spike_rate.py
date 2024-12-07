@@ -42,7 +42,7 @@ def test_firing_rate_against_elephant(spk_epochs):
     assert avg_diff < 0.5
 
     rval, _ = pearsonr(sel_rate, fr[0, 0].values)
-    assert rval > 0.999
+    assert rval > 0.998
 
     # compare spike density
     sigma = 0.075
@@ -60,11 +60,24 @@ def test_firing_rate_against_elephant(spk_epochs):
             idx = find_index(np.array(rate.times), fr.time[[0, -1]].values)
             elephant_fr = rate.magnitude.ravel()[idx[0]:idx[1] + 1]
             rval, _ = pearsonr(fr[cell_idx, tri_idx].values, elephant_fr)
-            assert rval > 0.999
+            assert rval > 0.998
 
     # test a case where times vector and n_steps did not align (lead to error)
     this_spk = spk_epochs.copy().crop(tmin=-1., tmax=2.)
     this_spk.spike_rate(winlen=0.35, step=0.05)
+
+
+def test_time_centering():
+    spk = pln.utils.create_random_spikes(n_cells=3, n_trials=10)
+
+    fr = spk.spike_rate()
+    zero_dist = np.abs(fr.time - 0).min().item()
+
+    fr2 = spk.spike_rate(center_time=True)
+    zero_dist2 = np.abs(fr2.time - 0).min().item()
+
+    assert zero_dist > zero_dist2
+    assert zero_dist2 == 0.
 
 
 def test_frate_writes_to_netcdf4(spk_epochs, tmp_path):

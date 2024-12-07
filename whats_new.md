@@ -16,10 +16,12 @@
 <br/>
 
 * ENH: `Spikes` and `SpikeEpochs` can now be saved to FieldTrip data format. To maintain the input-output roundtrip (data saved and then read are identical) additional non-standard fields are added to the file when `.metadata` or `.cellinfo` are used. These additional fields should not conflict with using the file in FieldTrip.
+* ENH: `SpikeEpochs.spike_rate()` now has a `center_time` argument to allow firing rate time coordinate to be centered around zero (default is `center_time=False`).
+* ENH: `Spikes.epoch()` with `backend='numba'` has been further sped up, it is now 30-40 times faster than numpy
+* ENH: `pylabianca.analysis.spike_centered_windows()` (previously `pylabianca.utils.spike_centered_windows()`) has been sped up twofold.
+* ENH: `pylabianca.analysis.xarray_to_dict()` has been sped up considerably. It relies on sessions being concatenated along the cell dimension (so each session being a contiguous block of cells).
 * ENH: add `pylabianca.utils._inherit_from_xarray()` to allow inheriting metadata (cell or trial-level additional information) from xarray DataArray to new xarray DataArray.
 * ENH: `pylabianca.analysis.dict_to_xarray()` now allows to pass dictionary of `xarray.Dataset` as input.
-* ENH: `pylabianca.analysis.xarray_to_dict()` has been sped up considerably. It relies on sessions being concatenated along the cell dimension (so each session being a contiguous block of cells).
-* ENH: `pylabianca.analysis.spike_centered_windows()` (previously `pylabianca.utils.spike_centered_windows()`) has been sped up twofold.
 * ENH: added `pylabianca.selectivity.compute_percent_selective()` - function to use on the results of `pylabianca.selectivity.compute_selectivity_continuous()` to calculate the percentage of selective cells. Allows to split the calculations according to `groupby` argument value, specify selectivity threshold (single value or percentile of the permutation distribution). It also performs the percentage calculations on the permutation distribution - this is useful when calculating time-resolved selectivity and using the permutation distribution of percentages in cluster-based permutation test.
 * ENH: added `pylabianca.selectivity.threshold_selectivity()` to transform selectivity statistics xarray into binary selective / non-selective mask based on a given threshold (single value or percentile of the permutation distribution).
 * ENH: added `pylabianca.analysis.aggregate()` to aggregate firing rate data. The aggregation is done by averaging the firing rate data over the trials dimension with optional grouping by one or more trial coordinates (conditions). The firing rate data can be optionally z-scored per-cell before aggregation. The function returns an xarray DataArray with aggregated firing rate data and accepts xarray DataArray or dictionary of xarray DataArray as input.
@@ -38,6 +40,7 @@
 * FIX: made `Spikes.epoch()` raise a more informative error when no `event_id` values were found in the provided `events` array. When some of the `event_id` values are missing, a warning is raised and the function proceeds with the available values.
 * FIX: fixed error when passing a single integer to `event_id` in `Spikes.epoch()`.
 * FIX: fixed error when trying to epoch cells with no spikes
+* FIX: fixed error when using `Spikes.epoch()` with `backend='numba'` when some epoch limits did not contain spikes. Each such epoch would still receive one spike, but with correctly calculated time (out of epoch range). This way this bug did not affect further spike rate analysis.
 * FIX: small fixes to `pylabianca.postproc.mark_duplicates()` - do not error when there are channels without any spikes.
 * FIX: dataframe returned by `pylabianca.selectivity.cluster_based_selectivity()` had two unused columns (`'pev'` and `'peak_pev'`), where correct names should have been `'PEV'` and `'peak_PEV'`. Now corrected.
 * FIX: make `pylabianca.selectivity.assess_selectivity()` work when empty DataFrame is passed (no clusters found in `pylabianca.selectivity.cluster_based_selectivity()`).
