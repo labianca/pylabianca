@@ -42,6 +42,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         is ``None`` which uses the default matplotlib color cycle.
     labels : bool
         Whether to add labels to the axes.
+    kwargs : dict
+        Additional keyword arguments for the plot.
 
     Returns
     -------
@@ -130,6 +132,10 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
                        ax=None, legend=True, legend_pos=None, colors=None,
                        **kwargs):
     """
+    Plot xarray with error bar shade.
+
+    Parameters
+    ----------
     arr : xarray.DataArray
         Xarray with at least two dimensions: one is plotted along the x axis
         (this is controlled with ``x_dim`` argument); the other is reduced
@@ -156,6 +162,13 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         List of RGB arrays to use as colors for condition groups. Can also be
         a dictionary linking condition names / values and RBG arrays. Default
         is ``None`` which uses the default matplotlib color cycle.
+    kwargs : dict
+        Additional keyword arguments for the plot.
+
+    Returns
+    -------
+    ax : matplotlib.Axes
+        Axis with the plot.
     """
     import matplotlib.pyplot as plt
     assert reduce_dim is not None
@@ -696,7 +709,7 @@ def _create_mask_from_window_str(window, frate):
 # TODO: could infer x coords from plot (if lines are already present)
 def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                    min_pval=0.001, bottom_extend=True, pval_text=True,
-                   text_props=None):
+                   pval_fontsize=10, text_props=None):
     '''Highlight significant clusters along the last array dimension.
 
     Parameters
@@ -733,6 +746,8 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         Dictionary with text properties for p value text boxes. If None,
         defaults to
         ``{'boxstyle': 'round', 'facecolor': 'white', 'alpha': 0.75, edgecolor='gray'}``.
+    pval_fontsize : int
+        Font size for the p value text.
 
     Returns
     -------
@@ -810,7 +825,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                     p_txt = format_pvalue(this_pval)
 
                 this_text = ax.text(
-                    text_x, text_y, p_txt,
+                    text_x, text_y, p_txt, fontsize=pval_fontsize,
                     bbox=text_props, horizontalalignment='center'
                 )
                 try:
