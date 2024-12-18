@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from .analysis import nested_groupby_apply
-from .utils import (xr_find_nested_dims, cellinfo_from_xarray,
+from .utils import (find_nested_dims, cellinfo_from_xarray,
                     _inherit_metadata_from_xarray, assign_session_coord)
 
 
@@ -211,7 +211,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     # add cell coords
     # TODO: move after Dataset creation
-    copy_coords = xr_find_nested_dims(frate, 'cell')
+    copy_coords = find_nested_dims(frate, 'cell')
     if len(copy_coords) > 0:
         for key in results.keys():
             results[key] = _inherit_metadata_from_xarray(

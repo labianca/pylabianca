@@ -221,7 +221,7 @@ def test_turn_spike_rate_to_xarray():
     assert (xr.trial.values == np.arange(10)).all()
 
     # make sure that metadata is inherited
-    trial_dims = pln.utils.xr_find_nested_dims(xr, 'trial')
+    trial_dims = pln.utils.find_nested_dims(xr, 'trial')
     assert len(trial_dims) == 2
     assert 'a' in trial_dims
     assert 'b' in trial_dims
