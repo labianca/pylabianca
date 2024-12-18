@@ -183,7 +183,8 @@ def xr_find_nested_dims(arr, dim_name):
 
     if isinstance(dim_name, tuple):
         for dim in dim_name:
-            coords.remove(dim)
+            if dim in coords:
+                coords.remove(dim)
         sub_dim = dim_name
     else:
         coords.remove(dim_name)
