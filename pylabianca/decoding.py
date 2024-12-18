@@ -460,7 +460,8 @@ def _do_permute(arr, decoding_fun, target_coord, average_folds=True,
 
 def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
                       time=None, arguments=dict(), n_resamples=20, n_jobs=1,
-                      permute=False, select_trials=None, decim=None):
+                      permute=False, select_trials=None, decim=None,
+                      resampling_fun=None):
     """Resample a decoding analysis.
 
     The resampling is done by rearranging trials within each subject,
@@ -535,7 +536,7 @@ def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
     if n_jobs == 1 or n_resamples == 1:
         score_resamples = [
             _do_resample(Xs, ys, decoding_fun, arguments,
-                         time=time)
+                         time=time, resampling_fun=resampling_fun)
             for resample_idx in range(n_resamples)
         ]
     else:
@@ -543,7 +544,8 @@ def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
 
         score_resamples = Parallel(n_jobs=n_jobs)(
             delayed(_do_resample)(
-                Xs, ys, decoding_fun, arguments, time=time)
+                Xs, ys, decoding_fun, arguments, time=time,
+                resampling_fun=resampling_fun)
             for resample_idx in range(n_resamples)
         )
 
@@ -557,8 +559,13 @@ def resample_decoding(decoding_fun, frates=None, target=None, Xs=None, ys=None,
     return score_resamples
 
 
-def _do_resample(Xs, ys, decoding_fun, arguments, time=None):
-    X, y = join_subjects(Xs, ys)
+def _do_resample(Xs, ys, decoding_fun, arguments, time=None,
+                 resampling_fun=None):
+    '''Resample a decoding analysis.'''
+    if resampling_fun is None:
+        X, y = join_subjects(Xs, ys)
+    else:
+        X, y = resampling_fun(Xs, ys)
 
     # do the actual decoding
     return decoding_fun(X, y, time=time, **arguments)

@@ -3,7 +3,7 @@ import numpy as np
 from .utils import (
     _get_trial_boundaries, _deal_with_picks, find_index, parse_sub_ses)
 from .utils.xarr import (
-    xr_find_nested_dims, _inherit_metadata, assign_session_coord)
+    find_nested_dims, _inherit_metadata, assign_session_coord)
 from .utils.validate import _validate_xarray_for_aggregation
 
 
@@ -752,7 +752,7 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
             new_coords = dict()
             drop_coords = list()
             if 'cell' in arr.coords and 'trial' in arr.coords:
-                nested_coords = xr_find_nested_dims(arr, ('cell', 'trial'))
+                nested_coords = find_nested_dims(arr, ('cell', 'trial'))
             else:
                 nested_coords = list()
 
