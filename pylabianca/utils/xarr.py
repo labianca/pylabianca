@@ -187,7 +187,8 @@ def find_nested_dims(arr, dim_name):
                 coords.remove(dim)
         sub_dim = dim_name
     else:
-        coords.remove(dim_name)
+        if dim_name in coords:
+            coords.remove(dim_name)
         sub_dim = (dim_name,)
 
     for coord in coords:
