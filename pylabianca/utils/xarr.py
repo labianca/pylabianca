@@ -125,7 +125,7 @@ def df_from_xarray_coords(xarr, dim):
         None is returned.
     '''
     import pandas as pd
-    use_dims = xr_find_nested_dims(xarr, dim)
+    use_dims = find_nested_dims(xarr, dim)
 
     if len(use_dims) > 1:
         df = {dim: xarr.coords[dim].values for dim in use_dims}
@@ -169,7 +169,7 @@ def _inherit_metadata(coords, metadata, dimname, tri=None):
 def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
                                   copy_coords=None):
     if copy_coords is None:
-        copy_coords = xr_find_nested_dims(xarr_from, dimname)
+        copy_coords = find_nested_dims(xarr_from, dimname)
     if len(copy_coords) > 0:
         coords = {coord: (dimname, xarr_from.coords[coord].values)
                   for coord in copy_coords}
@@ -177,16 +177,18 @@ def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
     return xarr_to
 
 
-def xr_find_nested_dims(arr, dim_name):
+def find_nested_dims(arr, dim_name):
     names = list()
     coords = list(arr.coords)
 
     if isinstance(dim_name, tuple):
         for dim in dim_name:
-            coords.remove(dim)
+            if dim in coords:
+                coords.remove(dim)
         sub_dim = dim_name
     else:
-        coords.remove(dim_name)
+        if dim_name in coords:
+            coords.remove(dim_name)
         sub_dim = (dim_name,)
 
     for coord in coords:

@@ -221,7 +221,7 @@ def test_turn_spike_rate_to_xarray():
     assert (xr.trial.values == np.arange(10)).all()
 
     # make sure that metadata is inherited
-    trial_dims = pln.utils.xr_find_nested_dims(xr, 'trial')
+    trial_dims = pln.utils.find_nested_dims(xr, 'trial')
     assert len(trial_dims) == 2
     assert 'a' in trial_dims
     assert 'b' in trial_dims
@@ -246,3 +246,21 @@ def test_turn_spike_rate_to_xarray():
     assert xr.dims == ('cell', 'time')
     assert (xr.cell.values == spk.cell_names).all()
     assert (xr.time.values == times).all()
+
+
+def test_find_nested_dims():
+    import xarray as xr
+    from pylabianca.testing import gen_random_xarr
+
+    n_cells, n_trials, n_times = 5, 24, 100
+    tri_coord = np.random.choice(list('abcd'), size=n_trials)
+    xarr = (
+        gen_random_xarr(n_cells, n_trials, n_times)
+        .drop_vars('trial')
+        .assign_coords({'cond': ('trial', tri_coord)})
+    )
+
+    sub_dims = pln.utils.xarr.find_nested_dims(xarr, 'trial')
+    assert isinstance(sub_dims, list)
+    assert len(sub_dims) == 1
+    assert 'cond' in sub_dims

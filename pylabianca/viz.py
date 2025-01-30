@@ -42,6 +42,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         is ``None`` which uses the default matplotlib color cycle.
     labels : bool
         Whether to add labels to the axes.
+    kwargs : dict
+        Additional keyword arguments for the plot.
 
     Returns
     -------
@@ -130,6 +132,10 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
                        ax=None, legend=True, legend_pos=None, colors=None,
                        **kwargs):
     """
+    Plot xarray with error bar shade.
+
+    Parameters
+    ----------
     arr : xarray.DataArray
         Xarray with at least two dimensions: one is plotted along the x axis
         (this is controlled with ``x_dim`` argument); the other is reduced
@@ -156,6 +162,13 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         List of RGB arrays to use as colors for condition groups. Can also be
         a dictionary linking condition names / values and RBG arrays. Default
         is ``None`` which uses the default matplotlib color cycle.
+    kwargs : dict
+        Additional keyword arguments for the plot.
+
+    Returns
+    -------
+    ax : matplotlib.Axes
+        Axis with the plot.
     """
     import matplotlib.pyplot as plt
     assert reduce_dim is not None
@@ -595,9 +608,9 @@ def plot_raster(spk, pick=0, groupby=None, ax=None, colors=None, labels=True,
     return ax
 
 
-def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
-                pvals=None, pick=0, p_threshold=0.05, min_pval=0.001, ax=None,
-                eventplot_kwargs=None):
+def plot_spikes(spk, frate, groupby=None, colors=None, df_clst=None,
+                clusters=None, pvals=None, pick=0, p_threshold=0.05,
+                min_pval=0.001, ax=None, eventplot_kwargs=None, fontsize=12):
     '''Plot average spike rate and spike raster.
 
     spk : pylabianca.spikes.SpikeEpochs
@@ -607,6 +620,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
         ``spk.spike_density()``.
     groupby : str | None
         How to group the plots. If None, no grouping is done.
+    colors : list of str | None
+        List of colors to use for each group. If None uses the default
     df_clst : pandas.DataFrame | None
         DataFrame with cluster time ranges and p values. If None, no cluster
         information is shown. This argument is to support results obtained
@@ -632,6 +647,8 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
         is used for raster plot. If None, a new figure is created.
     eventplot_kwargs : dict | None
         Additional keyword arguments for the eventplot.
+    fontsize : int
+        Font size for the labels.
 
     Returns
     -------
@@ -655,7 +672,7 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
     else:
         assert(len(ax) == 2)
         fig = ax[0].figure
-    plot_shaded(this_frate, groupby=groupby, ax=ax[0])
+    plot_shaded(this_frate, groupby=groupby, colors=colors, ax=ax[0])
 
     # add highlight
     add_highlight = (df_clst is not None) or (
@@ -669,15 +686,15 @@ def plot_spikes(spk, frate, groupby=None, df_clst=None, clusters=None,
         add_highlights(this_frate, clusters, pvals, ax=ax[0],
                        p_threshold=p_threshold, min_pval=min_pval)
 
-    plot_raster(spk.copy().pick_cells(cell_name), pick=0,
-                groupby=groupby, ax=ax[1], eventplot_kwargs=eventplot_kwargs)
+    plot_raster(spk.copy().pick_cells(cell_name), pick=0, groupby=groupby,
+                colors=colors, ax=ax[1], eventplot_kwargs=eventplot_kwargs)
     ylim = ax[1].get_xlim()
     ax[0].set_xlim(ylim)
 
     ax[0].set_xlabel('')
-    ax[0].set_ylabel('Spike rate (Hz)', fontsize=12)
-    ax[1].set_xlabel('Time (s)', fontsize=12)
-    ax[1].set_ylabel('Trials', fontsize=12)
+    ax[0].set_ylabel('Spike rate (Hz)', fontsize=fontsize)
+    ax[1].set_xlabel('Time (s)', fontsize=fontsize)
+    ax[1].set_ylabel('Trials', fontsize=fontsize)
 
     return fig
 
@@ -692,7 +709,7 @@ def _create_mask_from_window_str(window, frate):
 # TODO: could infer x coords from plot (if lines are already present)
 def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                    min_pval=0.001, bottom_extend=True, pval_text=True,
-                   text_props=None):
+                   pval_fontsize=10, text_props=None):
     '''Highlight significant clusters along the last array dimension.
 
     Parameters
@@ -729,6 +746,8 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         Dictionary with text properties for p value text boxes. If None,
         defaults to
         ``{'boxstyle': 'round', 'facecolor': 'white', 'alpha': 0.75, edgecolor='gray'}``.
+    pval_fontsize : int
+        Font size for the p value text.
 
     Returns
     -------
@@ -806,7 +825,7 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
                     p_txt = format_pvalue(this_pval)
 
                 this_text = ax.text(
-                    text_x, text_y, p_txt,
+                    text_x, text_y, p_txt, fontsize=pval_fontsize,
                     bbox=text_props, horizontalalignment='center'
                 )
                 try:
