@@ -3,17 +3,10 @@ from numba import jit, njit
 from numba.extending import overload
 
 
-@njit
-def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
-                              n_trials, winlen=0.25, step=0.05):
-    half_win = winlen / 2
-    window_limits = np.array([-half_win, half_win])
-    epoch_len = time_limits[1] - time_limits[0]
-    n_steps = int(np.floor((epoch_len - winlen) / step + 1))
-
-    fr_t_start = time_limits[0] + half_win
-    fr_tend = time_limits[1] - half_win + step * 0.001
-    times = np.arange(fr_t_start, fr_tend, step=step)
+@njit(cache=True)
+def _compute_spike_rate_numba(spike_times, spike_trials, times, window_limits,
+                              win_len, n_trials):
+    n_steps = len(times)
     frate = np.zeros((n_trials, n_steps))
     for step_idx in range(n_steps):
         win_lims = times[step_idx] + window_limits
@@ -25,7 +18,7 @@ def _compute_spike_rate_numba(spike_times, spike_trials, time_limits,
     return frate
 
 
-@njit
+@njit(cache=True)
 def _monotonic_unique_counts(values):
     n_val = len(values)
     if n_val == 0:
@@ -67,7 +60,7 @@ def numba_compare_times(spk, cell_idx1, cell_idx2, spk2=None):
     return res
 
 
-@njit
+@njit(cache=True)
 def _numba_compare_times(times1, times2, distances):
     n_times1 = times1.shape[0]
     n_times2 = times2.shape[0]
@@ -87,7 +80,7 @@ def _numba_compare_times(times1, times2, distances):
     return distances
 
 
-@njit
+@njit(cache=True)
 def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
     '''Compute auto-correlation histogram for a single cell.
 
@@ -125,7 +118,7 @@ def _xcorr_hist_auto_numba(times, bins, batch_size=1_000):
     return counts
 
 
-@njit
+@njit(cache=True)
 def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
     '''Compute cross-correlation histogram for a single cell.
 
@@ -179,7 +172,7 @@ def _xcorr_hist_cross_numba(times, times2, bins, batch_size=1_000):
     return counts
 
 
-@njit
+@njit(cache=True)
 def compute_bin(x, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
     # assuming uniform bins for now
@@ -199,7 +192,7 @@ def compute_bin(x, bin_edges):
         return bin
 
 
-@njit
+@njit(cache=True)
 def numba_histogram(a, bin_edges):
     '''Copied from https://numba.pydata.org/numba-examples/examples/density_estimation/histogram/results.html'''
     n_bins = len(bin_edges) - 1
@@ -214,7 +207,7 @@ def numba_histogram(a, bin_edges):
     return hist, bin_edges
 
 
-@jit(nopython=True, cache=True)
+@njit(cache=True)
 def _epoch_spikes_numba(spike_times, event_times, event_tmin, event_tmax,
                         sfreq, min_step_size=15):
     """
@@ -305,7 +298,7 @@ def _epoch_spikes_numba(spike_times, event_times, event_tmin, event_tmax,
     return np.array(trial_ids), np.array(epoch_spike_times)
 
 
-@njit
+@njit(cache=True)
 def _select_spikes_numba(spikes, trials, tri_sel):
     '''Assumes both trials and tri_sel are sorted.'''
     tri_sel_idx = 0
@@ -331,7 +324,7 @@ def _select_spikes_numba(spikes, trials, tri_sel):
 
 # TODO: could return error if not found (or be wrapped to return error)
 #       (or [x] at least return out-of-bounds index)
-@njit
+@njit(cache=True)
 def _monotonic_find_first(values, find_val):
     n_val = values.shape[0]
     for idx in range(n_val):
@@ -344,7 +337,7 @@ def _get_trial_boundaries(spk, cell_idx):
     return _get_trial_boundaries_numba(spk.trial[cell_idx], spk.n_trials)
 
 
-@njit
+@njit(cache=True)
 def _get_trial_boundaries_numba(trials, n_trials):
     '''
     Numba implementation of get_trial_boundaries.
@@ -389,7 +382,7 @@ def _get_trial_boundaries_numba(trials, n_trials):
     return trial_boundaries, trial_ids
 
 
-@njit
+@njit(cache=True)
 def get_condition_indices_and_unique_numba(cnd_values):
     n_trials = cnd_values.shape[0]
     uni_cnd = np.unique(cnd_values)
@@ -406,7 +399,7 @@ def get_condition_indices_and_unique_numba(cnd_values):
     return cnd_idx_per_tri, n_trials_per_cond, uni_cnd, n_cnd
 
 
-@njit
+@njit(cache=True)
 def depth_of_selectivity_numba(arr, groupby):
     avg_by_cond = groupby_mean(arr, groupby)
     n_categories = avg_by_cond.shape[0]
@@ -417,14 +410,14 @@ def depth_of_selectivity_numba(arr, groupby):
     return selectivity, avg_by_cond
 
 
-@njit
+@njit(cache=True)
 def depth_of_selectivity_numba_low_level(avg_by_cond, n_categories):
     r_max = max_2d_axis_0(avg_by_cond)
     numerator = n_categories - (avg_by_cond / r_max).sum(axis=0)
     return numerator / (n_categories - 1)
 
 
-@njit
+@njit(cache=True)
 def groupby_mean(arr, groupby):
     cnd_idx_per_tri, n_trials_per_cond, _, n_cnd = (
         get_condition_indices_and_unique_numba(groupby)
@@ -434,7 +427,7 @@ def groupby_mean(arr, groupby):
     return avg_by_cnd
 
 
-@njit
+@njit(cache=True)
 def max_2d_axis_0(arr):
     out = np.zeros(arr.shape[1], dtype=arr.dtype)
     for idx in range(arr.shape[1]):
@@ -442,7 +435,7 @@ def max_2d_axis_0(arr):
     return out
 
 
-@njit
+@njit(cache=True)
 def var_2d_axis_0(arr):
     out = np.zeros(arr.shape[1], dtype=arr.dtype)
     for idx in range(arr.shape[1]):
@@ -452,7 +445,7 @@ def var_2d_axis_0(arr):
     return out
 
 
-@njit
+@njit(cache=True)
 def _groupby_mean_low_level(arr, cnd_idx_per_tri, n_trials_per_cond, n_cnd):
     n_trials = arr.shape[0]
     nd2 = arr.shape[1]
