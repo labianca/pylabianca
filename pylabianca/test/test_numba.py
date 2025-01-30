@@ -106,6 +106,7 @@ def test_find_first():
     assert idx_nb == idx_np
 
 
+@pytest.mark.skipif(not has_numba(), reason="requires numba")
 def test_trial_boundaries_numba():
     from pylabianca.utils import has_numba
 
