@@ -31,6 +31,7 @@ jobs:
             mamba install pytest -y;
             hash -r pytest
             pip install pytest-cov
+            pip install zetapy
       - run:
           name: Run tests
           command: |

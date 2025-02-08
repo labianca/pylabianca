@@ -68,6 +68,7 @@
 
 <br/>
 
+* ENH: implement fast ZETA test for comparing trials from two up to N conditions for each cell. The test is implemented in `pylabianca.selectivity.zeta_test()`. ZETA is a non-parametric test that compares the cumulative distributions of firing rates between conditions (see https://elifesciences.org/articles/71969). The current implementation is based on the zetapy package (https://pypi.org/project/zetapy/), but is much faster and compatible with pylabianca SpikeEpochs objects. The speedup with respect to zetapy depends on the computation backend used (``backend`` argument): the default numpy implementation is around 5 - 10 faster, while the numba implementation is around 20 - 40 times faster.
 * ENH: around 10-fold speed up to `Spikes.epoch()` (20-fold for thousands of spikes and epoching events)
 * ENH: further speed up to `Spikes.epoch()` (around 5 - 13-fold) is now also possible by using `backend='numba'` (if numba is installed)
 * ENH: added `n_jobs` argument to `pylabianca.selectivity.cluster_based_selectivity()` to allow for parallel processing of cells
