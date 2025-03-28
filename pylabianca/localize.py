@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 def set_up_paths(onedrive_dir=None):
-    """Prepare OneDrive BIDS anatomy paths.
+    """Prepare BIDS anatomy paths.
 
     Parameters
     ----------

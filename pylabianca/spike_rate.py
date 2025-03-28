@@ -219,7 +219,7 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
     cnt_times = times[trim:-trim]
 
     if len(cnt_times) == 0:
-        raise ValueError('Convolution kernel length ({len(kernel)} samples)'
+        raise ValueError(f'Convolution kernel length ({len(kernel)} samples)'
                          ' exceeds the length of the data '
                          f'({bin_rep.shape[-1]} samples).')
 
