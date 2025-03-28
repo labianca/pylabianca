@@ -429,20 +429,9 @@ class SpikeEpochs():
                 ch_names=[self.cell_names[idx] for idx in picks], sfreq=sfreq,
                 ch_types=['seeg'] * len(picks)
             )
-            # NOTE: currently .to_raw() already returns trials x cells x time
-            # CONSIDER: change this to cells x trials x time to be consistent
-            #           with how firing rate xarrays are constructed
-            # spk_bin = spk_bin.transpose((1, 0, 2))  # trials first
-            spk_bin = EpochsArray(spk_bin, info, tmin=self.time_limits[0])
-
-            # add metadata if available
-            if self.metadata is not None:
-                spk_bin.metadata = self.metadata
-
+            spk_bin = spk_bin.transpose((1, 0, 2))  # trials first
+            spk_bin = EpochsArray(spk_bin, info)
             return spk_bin
-        else:
-            raise ValueError(f'Unknown format: "{format}". '
-                             'Use "numpy" or "mne".')
 
 
     def to_spiketools(self, picks=None):
