@@ -50,12 +50,17 @@ def _deal_with_picks(spk, picks):
 
 
 def _get_trial_boundaries(spk, cell_idx):
-    n_spikes = len(spk.trial[cell_idx])
+    '''Get trial boundaries for a given cell.'''
+    return _get_trial_boundaries_array(spk.trial[cell_idx])
+
+
+def _get_trial_boundaries_array(trials):
+    n_spikes = len(trials)
     if n_spikes > 0:
-        trial_boundaries = np.where(np.diff(spk.trial[cell_idx]))[0] + 1
+        trial_boundaries = np.where(np.diff(trials))[0] + 1
         trial_boundaries = np.concatenate(
             [[0], trial_boundaries, [n_spikes]])
-        tri_num = spk.trial[cell_idx][trial_boundaries[:-1]]
+        tri_num = trials[trial_boundaries[:-1]]
     else:
         trial_boundaries, tri_num = np.array([]), np.array([])
 
