@@ -431,6 +431,11 @@ class SpikeEpochs():
             )
             spk_bin = spk_bin.transpose((1, 0, 2))  # trials first
             spk_bin = EpochsArray(spk_bin, info)
+
+            # add metadata if available
+            if self.metadata is not None:
+                spk_bin.metadata = self.metadata
+
             return spk_bin
 
 
