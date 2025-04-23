@@ -440,6 +440,9 @@ class SpikeEpochs():
                 spk_bin.metadata = self.metadata
 
             return spk_bin
+        else:
+            raise ValueError(f'Unknown format: "{format}". '
+                             'Use "numpy" or "mne".')
 
 
     def to_spiketools(self, picks=None):
