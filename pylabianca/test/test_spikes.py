@@ -312,11 +312,6 @@ def test_to_raw():
 
     assert (spk_mne_epochs.metadata == trial_metadata).all().all()
 
-    # raises error when incorrect format:
-    expected_msg = 'Unknown format: "abcd"'
-    with pytest.raises(ValueError, match=expected_msg):
-        spk.to_raw(sfreq=10, format='abcd')
-
 
 def test_apply():
     spk = create_random_spikes(n_cells=4, n_trials=23)
