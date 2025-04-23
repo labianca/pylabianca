@@ -282,13 +282,14 @@ def test_pick_cells_cellinfo_query():
 
 # TODO: move to io tests?
 def test_to_raw():
+    import mne
+
     times = [np.array([-0.3, -0.28, -0.26, 0.15, 0.18, 0.2]),
              np.array([-0.045, 0.023, -0.1, 0.13])]
     trials = [np.array([0, 0, 0, 0, 0, 0]), np.array([0, 0, 1, 1])]
     spk = pln.SpikeEpochs(times, trials)
 
     spk_tm, spk_raw = pln.spikes._spikes_to_raw(spk, sfreq=10)
-    print(spk_raw)
     good_tms = np.arange(-0.3, 0.21, step=0.1)
     good_raw = np.array(
         [[[3, 0, 0, 0, 1, 2], [0, 0, 0, 2, 0, 0]],
@@ -296,6 +297,25 @@ def test_to_raw():
     )
     assert (spk_tm == good_tms).all()
     assert (spk_raw == good_raw).all()
+
+    # mne format output
+    spk_mne_epochs = spk.to_raw(sfreq=10, format='mne')
+    assert isinstance(spk_mne_epochs, mne.EpochsArray)
+    assert (spk_mne_epochs._data == spk_raw).all()
+    np.testing.assert_almost_equal(spk_mne_epochs.times, good_tms)
+    assert spk_mne_epochs.metadata is None
+
+    # now test that metadata is added when available
+    trial_metadata = pd.DataFrame({'a': np.arange(2), 'b': list('AB')})
+    spk.metadata = trial_metadata
+    spk_mne_epochs = spk.to_raw(sfreq=10, format='mne')
+
+    assert (spk_mne_epochs.metadata == trial_metadata).all().all()
+
+    # raises error when incorrect format:
+    expected_msg = 'Unknown format: "abcd"'
+    with pytest.raises(ValueError, match=expected_msg):
+        spk.to_raw(sfreq=10, format='abcd')
 
 
 def test_apply():

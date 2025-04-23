@@ -386,8 +386,8 @@ class SpikeEpochs():
                 t_start=self.time_limits[0])
         return spikes
 
-    # TODO: return xarray? / return mne.Epochs?
-    def to_raw(self, picks=None, sfreq=500.):
+    # TODO: return xarray?
+    def to_raw(self, picks=None, sfreq=500., format='numpy'):
         '''Turn epoched spike timestamps into binned continuous representation.
 
         Parameters
@@ -399,6 +399,14 @@ class SpikeEpochs():
             (``None``) uses all available neurons.
         sfreq : float
             Sampling frequency of the the output array. Defaults to ``500.``.
+        format : str
+            Format of the output. Can be:
+            * ``'numpy'`` for two numpy arrays: one with time labels and one
+              with binary spike information in shape ``trials x cells x time
+              samples``
+            * ``'mne'`` for one mne.EpochsArray object
+
+            Defaults to ``'numpy'``.
 
         Returns
         -------
@@ -408,7 +416,34 @@ class SpikeEpochs():
             ``trials x cells x time samples`` array with binary spike
             information.
         '''
-        return _spikes_to_raw(self, picks=picks, sfreq=sfreq)
+        picks = _deal_with_picks(self, picks)
+        times, spk_bin = _spikes_to_raw(self, picks=picks, sfreq=sfreq)
+
+        if format == 'numpy':
+            return times, spk_bin
+        elif format == 'mne':
+            from mne import create_info
+            from mne.epochs import EpochsArray
+
+            info = create_info(
+                ch_names=[self.cell_names[idx] for idx in picks], sfreq=sfreq,
+                ch_types=['seeg'] * len(picks)
+            )
+            # NOTE: currently .to_raw() already returns trials x cells x time
+            # CONSIDER: change this to cells x trials x time to be consistent
+            #           with how firing rate xarrays are constructed
+            # spk_bin = spk_bin.transpose((1, 0, 2))  # trials first
+            spk_bin = EpochsArray(spk_bin, info, tmin=self.time_limits[0])
+
+            # add metadata if available
+            if self.metadata is not None:
+                spk_bin.metadata = self.metadata
+
+            return spk_bin
+        else:
+            raise ValueError(f'Unknown format: "{format}". '
+                             'Use "numpy" or "mne".')
+
 
     def to_spiketools(self, picks=None):
         '''Convert pylabianca SpikeEpochs to list of arrays.
