@@ -16,6 +16,15 @@ def get_data_path():
 
 
 def get_fieldtrip_data():
+    """
+    Download fieldtrip plexon nex data.
+    If the data is already downloaded, it will not be downloaded again.
+
+    Returns
+    -------
+    fname : str
+        Path to the downloaded file.
+    """
     import pooch
 
     data_path = get_data_path()
@@ -26,6 +35,31 @@ def get_fieldtrip_data():
     fname = pooch.retrieve(
         url=ft_url, known_hash=known_hash,
         fname='p029_sort_final_01.nex', path=data_path
+    )
+    return fname
+
+
+def get_fieldtrip_metadata():
+    """
+    Download metadata for the fieldtrip plexon nex data.
+    The metadata table was created based on the events present in the nex file
+    and information provided in the fieldtrip spike-field tutorial.
+
+    Returns
+    -------
+    fname : str
+        Path to the downloaded file.
+    """
+    import pooch
+
+    data_path = get_data_path()
+    file_url = ('https://www.dropbox.com/scl/fi/0snol5gx92kpzm1aqmb6f/monkey'
+                '_stim.csv?rlkey=pfqcjg2tuaevbfjgntak5r7gm&st=nueys5na&dl=1')
+    known_hash = ('5d4728fb31d85e4126d0c7b096014ce5c03fe8b30eb26c969948965a'
+                  'a189f668')
+    fname = pooch.retrieve(
+        url=file_url, known_hash=known_hash,
+        fname='monkey_stim.csv', path=data_path
     )
     return fname
 
