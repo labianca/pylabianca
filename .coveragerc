@@ -2,3 +2,4 @@
 omit =
     */test*
     _numba.py
+    _zeta_numba.py
