@@ -78,6 +78,8 @@ algn_smpl = 94
 
 
 # %% MAIN SCRIPT
+from pylabianca.postproc import (
+    find_coincidence_clusters, plot_high_similarity_cluster)
 
 # TODO - add check that highest channel number is in a pack
 
@@ -263,7 +265,7 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
 
     spk_pack = spk.copy().pick_cells(pack_units_idx)
     suspicious_idx, clusters, counts = (
-        pln.spike_distance.find_coincidence_clusters(
+        find_coincidence_clusters(
             simil,
             threshold=coincidence_threshold
         )
@@ -373,7 +375,7 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
         if save_fig:
             fname_base = f'pack_{pack_idx:02g}_cluster_{cluster_idx:02g}'
             fname = fname_base + '_01_coincid.png'
-            fig = pln.spike_distance.plot_high_similarity_cluster(
+            fig = plot_high_similarity_cluster(
                 spk_pack, simil, clusters, suspicious_idx,
                 cluster_idx=cluster_idx)
             fig.savefig(op.join(save_fig_dir, fname), dpi=300)
@@ -398,7 +400,7 @@ for pack_idx, (pack_units_idx, simil) in enumerate(
                 this_clst_idx = np.where(this_clst_msk)[0]
                 this_clst_msk[this_clst_idx[drop_msk]] = False
 
-                fig = pln.spike_distance.plot_high_similarity_cluster(
+                fig = plot_high_similarity_cluster(
                     spk_pack, simil, these_clusters, suspicious_idx,
                     cluster_idx=cluster_idx)
                 fig.savefig(op.join(save_fig_dir, fname), dpi=300)
@@ -463,7 +465,7 @@ simil = similarity_per_pack[pack_idx]
 
 spk_pack = spk.copy().pick_cells(pack_units_idx)
 suspicious_idx, clusters, counts = (
-    pln.spike_distance.find_coincidence_clusters(
+    find_coincidence_clusters(
         simil,
         threshold=coincidence_threshold
     )
