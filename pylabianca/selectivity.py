@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from .analysis import nested_groupby_apply
-from .utils import (find_nested_dims, cellinfo_from_xarray,
+from .utils import (find_nested_dims, cellinfo_from_xarray, _inherit_metadata,
                     _inherit_metadata_from_xarray, assign_session_coord)
 
 
@@ -652,7 +652,8 @@ def compute_time_in_window(df_cluster, window_of_interest):
 # CONSIDER renaming return_dist to return_traces / return_dict, etc.
 def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
               n_permutations=100, significance='gumbel', return_dist=False,
-              subsample=1, reduction=None, permute_independently=False):
+              subsample=1, reduction=None, permute_independently=False,
+              as_xarray=False):
     """ZETA test for comparing cumulative spike distributions between
     conditions.
 
@@ -796,13 +797,34 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     z_scores, p_values = compute_pvalues(
         real_abs_max, perm_abs_max, significance=significance)
 
-    if not return_dist:
-        return z_scores, p_values
+    if as_xarray:
+        import xarray as xr
+
+        coords = {'cell': spk.cell_names}
+        coords = _inherit_metadata(coords, spk.cellinfo, 'cell')
+
+        # construct Dataset
+        cell_stat = xr.DataArray(real_abs_max, dims=['cell'], coords=coords)
+        cell_pval = xr.DataArray(p_values, dims=['cell'], coords=coords)
+        dataset = {'stat': cell_stat, 'pval': cell_pval}
+
+        if significance in ['both', 'gumbel']:
+            cell_zval = xr.DataArray(z_scores, dims=['cell'], coords=coords)
+            dataset['zval'] = cell_zval
+        if return_dist:
+            perm_stat = xr.DataArray(perm_abs_max, dims=['cell', 'perm'],
+                                     coords=coords)
+            dataset['dist'] = perm_stat
+
+        return xr.Dataset(data_vars=dataset)
     else:
-        other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
-                     max=real_abs_max, perm_max=perm_abs_max,
-                     ref_time=reference_times)
-        return z_scores, p_values, other
+        if not return_dist:
+            return z_scores, p_values
+        else:
+            other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
+                         max=real_abs_max, perm_max=perm_abs_max,
+                         ref_time=reference_times)
+            return z_scores, p_values, other
 
 
 def threshold_selectivity(selectivity, threshold):
