@@ -662,7 +662,10 @@ def plot_spikes(spk, frate, groupby=None, colors=None, df_clst=None,
         cell_name = pick
         this_frate = frate.sel(cell=cell_name)
     else:
-        this_frate = frate.isel(cell=pick)
+        if 'cell' in frate.dims:
+            this_frate = frate.isel(cell=pick)
+        else:
+            this_frate = frate
         cell_name = this_frate.coords['cell'].item()
 
     # plot
