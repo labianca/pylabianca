@@ -902,6 +902,46 @@ def _catch_common_percentile_errors(percentile, dist, tail):
 # TODO: create apply_dict function (with out_type='dict' or 'xarray' etc.)
 def compute_selectivity_multisession(frate, compare=None, select=None,
                                      n_perm=1_000, n_jobs=1):
+    """
+    Compute neuron selectivity for each session from a dictionary of
+    sessions.
+
+    Parameters
+    ----------
+    frate : dict of xarray.DataArray
+        Dictionary of firing rate data for each session. Each key is a session
+        name and each value is an xarray DataArray with firing rate data.
+        The DataArray must contain the dimensions ``'cell'``, ``'trial'`` and
+        optionally ``'time'``.
+    compare : str | None
+        Metadata category to compare.
+    select : str | None
+        Trial selection criteria. If ``None``, all trials are used.
+    n_perm : int
+        Number of permutations to use for later permutation test.
+        Defaults to ``1_000``.
+    n_jobs : int
+        Number of parallel jobs to use. Defaults to ``1``. If ``-1``, all
+        available CPUs are used. ``n_jobs`` other than ``1`` requires the
+        ``joblib`` package.
+
+    Returns
+    -------
+    all_results : xarray.Dataset
+        Dataset with selectivity results for each cell. The dataset contains
+        the following variables:
+        * ``'stat'`` - selectivity statistic (t values), DataArray with
+          dimensions ``('cell', 'time')`` (unless time was not present in the
+          ``frate``)
+        * ``'thresh'`` - 95% significance thresholds from permutation test:
+          lower, negative (2.5%) and higher, positive (97.5%) tails. DataArray
+          with dimensions ``('tail', 'cell', 'time')`` (unless time was not
+          present in the ``frate``)
+        * ``'perm'`` - selectivity statistic for each permutation. DataArray
+          with dimensions ``('perm', 'cell', 'time')`` (unless time was not
+          present in the ``frate``)
+        * ``'cell'`` - cell coordinates.
+    """
     import xarray as xr
     assert isinstance(frate, dict)
 
