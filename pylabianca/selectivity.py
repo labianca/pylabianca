@@ -876,18 +876,73 @@ def threshold_selectivity(selectivity, threshold):
 
 def compute_percent_selective(selectivity, threshold=None, dist=None,
                               percentile=None, tail='both', groupby=None):
-    '''
-    Selectivity can be:
-    * boolean xarray (already thresholded)
-    * xarray with the selectivity statistic (requires threshold argument)
-    * xarray.Dataset containing the selectivity statistic, the threshold and
-        the null distribution (will be thrsholded, unless percentile is
-        defined)
+    """
+    Compute the percentage of selective cells based on a selectivity measure.
 
-    if percentiles is not defined (default None) and selectivity is not already
-    a boolean array, threshold must be defined. Either in the threshold keyword
-    argument or in the selectivity xarray.Dataset as 'thresh' variable.
-    '''
+    Parameters
+    ----------
+    selectivity : xarray.DataArray or xarray.Dataset
+        The selectivity data. It can be:
+        - A boolean ``xarray.DataArray`` (thresholded selectivity data).
+        - An ``xarray.DataArray`` with the selectivity statistic (requires
+        specifying the ``threshold`` argument).
+        - An ``xarray.Dataset`` in the format returned by
+        ``pylabianca.selectivity.compute_selectivity_continuous`` (should
+        contain the selectivity statistic in ``'stat'`` variable, the
+        ``'thresh'`` variable for the threshold, and the ``'dist'`` variable
+        for the null distribution). If threshold is provided the null
+        distribution is not needed, unless `percentile` is defined.
+    threshold : float or xarray.DataArray, optional
+        The threshold value for determining selectivity. If not provided, it
+        must be present in the `selectivity` ``xarray.Dataset`` as the
+        ``'thresh'`` variable (unless ``percentile`` is defined).
+    dist : xarray.DataArray, optional
+        The null distribution of the selectivity statistic. Required if
+        `percentile` is defined (but can be provided in a selectivity
+        ``xarray.Dataset``, see description of the ``selectivity`` argument).
+    percentile : float, optional
+        The percentile value for thresholding based on the null distribution.
+        Requires `dist` to be provided or present in the ``selectivity``
+        ``xarray.Dataset``.
+    tail : {'both', 'pos', 'neg'}, default 'both'
+        Specifies the tail(s) to consider for thresholding when using
+        percentiles:
+        - 'both': Two-tailed thresholding.
+        - 'pos': Positive tail only.
+        - 'neg': Negative tail only.
+    groupby : str or list of str, optional
+        Dimension(s) to group by when computing the percentage of selective
+        cells. This is useful for computing the percentage of selective cells
+        across different brain regions or conditions.
+
+    Returns
+    -------
+    xarray.DataArray or xarray.Dataset
+        If `dist` and `threshold` are not provided, returns an xarray.DataArray
+        containing the percentage of selective cells. If a null distribution is
+        provided, returns an xarray.Dataset with the following variables:
+        - 'stat': The percentage of selective cells.
+        - 'thresh': The threshold for the percentage of selective cells.
+        - 'dist': The null distribution of the percentage of selective cells.
+        - 'num': The total number of cells.
+
+    Raises
+    ------
+    TypeError
+        If `selectivity` is not an xarray.DataArray or xarray.Dataset.
+    ValueError
+        If `selectivity` does not contain the 'cell' dimension.
+    AssertionError
+        If no `threshold` or `percentile` is provided and `selectivity` is not a
+        boolean array.
+        If `percentile` is defined but no null distribution (`dist`) is provided.
+
+    Notes
+    -----
+    - If `percentile` is not defined and `selectivity` is not already a boolean
+    array, the `threshold` must be defined either as an argument or as the
+    'thresh' variable in the `selectivity` xarray.Dataset.
+    """
     import xarray as xr
 
     # selectivity has to be DataArray or Dataset
