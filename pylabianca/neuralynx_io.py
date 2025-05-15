@@ -258,6 +258,14 @@ def parse_neuralynx_time_string_new(time_string):
 def check_ncs_records(records):
     # Check that all the records in the array are "similar"
     # (have the same sampling frequency etc.)
+    
+    # first check if empty - if so, skip other checks
+    is_empty = len(records) == 0
+    if is_empty:
+        warnings.warn('The file does not contain any data to read (apart '
+                      'from the header')
+        return False
+    
     dt = np.diff(records['TimeStamp']).astype(int)  # uint by default
     dt = np.abs(dt - dt[0])
     good_n_valid_samples = records['NumValidSamples'] == 512
@@ -266,7 +274,8 @@ def check_ncs_records(records):
         warnings.warn('Channel number changed during record sequence')
         return False
     elif not np.all(records['SampleFreq'] == records[0]['SampleFreq']):
-        warnings.warn('Sampling frequency changed during record sequence')
+        warnings.warn('Sampling frequency changed during the sequence '
+                      'of records')
         return False
     elif not np.all(good_n_valid_samples[:-1]):
         # [:-1] above is to ignore the last record - can be incomplete
@@ -294,15 +303,17 @@ def load_ncs(file_path, load_time=True, rescale_data=True,
 
     # Reshape (and rescale, if requested) the data into a 1D array
     data = records['Samples'].ravel()
-    #data = records['Samples'].reshape((NCS_SAMPLES_PER_RECORD * len(records), 1))
+    # data = records['Samples'].reshape(
+    #     (NCS_SAMPLES_PER_RECORD * len(records), 1))
     if rescale_data:
         try:
-            # ADBitVolts specifies the conversion factor between the ADC counts
-            # and volts
+            # ADBitVolts specifies the conversion factor between the ADC
+            # counts and volts
             data = data.astype(np.float64) * (np.float64(header['ADBitVolts'])
                                               * signal_scaling[0])
         except KeyError:
-            warnings.warn('Unable to rescale data, no ADBitVolts value specified in header')
+            warnings.warn('Unable to rescale data, ADBitVolts value '
+                          'not specified in the header')
             rescale_data = False
 
     # Pack the extracted data in a dictionary that is passed out of the function
@@ -312,17 +323,24 @@ def load_ncs(file_path, load_time=True, rescale_data=True,
     ncs['header'] = header
     ncs['data'] = data
     ncs['data_units'] = signal_scaling[1] if rescale_data else 'ADC counts'
-    ncs['sampling_rate'] = records['SampleFreq'][0]
-    ncs['channel_number'] = records['ChannelNumber'][0]
+    
+    n_records = len(records)
+    if n_records > 0:
+        ncs['sampling_rate'] = records['SampleFreq'][0]
+        ncs['channel_number'] = records['ChannelNumber'][0]
+
     ncs['timestamp'] = records['TimeStamp']
 
     # Calculate the sample time points (if needed)
     if load_time:
-        num_samples = data.shape[0]
-        times = np.interp(
-            np.arange(num_samples), np.arange(0, num_samples, 512),
-            records['TimeStamp']).astype(np.uint64)
-        ncs['time'] = times
+        if n_records > 0:
+            num_samples = data.shape[0]
+            times = np.interp(
+                np.arange(num_samples), np.arange(0, num_samples, 512),
+                records['TimeStamp']).astype(np.uint64)
+            ncs['time'] = times
+        else:
+            ncs['time'] = np.array([], dtype=np.uint64)
         ncs['time_units'] = u'µs'
 
     return ncs
