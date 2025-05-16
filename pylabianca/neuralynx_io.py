@@ -92,7 +92,8 @@ def read_header(file_path):
 
 
 def read_raw_header(fid):
-    # Read the raw header data (16 kb) from the file object fid. Restores the position in the file object after reading.
+    # Read the raw header data (16 kb) from the file object fid. Restores the
+    # position in the file object after reading.
     pos = fid.tell()
     fid.seek(0)
     raw_hdr = fid.read(HEADER_LENGTH).strip(b'\0')
@@ -120,7 +121,8 @@ def parse_header(raw_hdr):
     # Parse the header string into a dictionary of name value pairs
     hdr = dict()
 
-    # Decode the header as iso-8859-1 (the spec says ASCII, but there is at least one case of 0xB5 in some headers)
+    # Decode the header as iso-8859-1 (the spec says ASCII, but there is at
+    # least one case of 0xB5 in some headers)
     raw_hdr = raw_hdr.decode('iso-8859-1')
 
     # Neuralynx headers seem to start with a line identifying the file, so
@@ -142,7 +144,9 @@ def parse_header(raw_hdr):
             hdr[u'FileName'] = value
             new_way = True
     except:
-        warnings.warn('Unable to parse original file path from Neuralynx header: ' + hdr_lines[1])
+        warnings.warn(
+            'Unable to parse original file path from Neuralynx header: '
+            + hdr_lines[1])
         new_way = True
 
     # Process lines with file opening and closing times
@@ -185,8 +189,9 @@ def parse_header(raw_hdr):
 
 
 def read_records(fid, record_dtype, record_skip=0, count=None):
-    # Read count records (default all) from the file object fid skipping the first record_skip records. Restores the
-    # position of the file object after reading.
+    # Read count records (default all) from the file object fid skipping the
+    # first record_skip records. Restores the position of the file object
+    # after reading.
     if count is None:
         count = -1
 
@@ -205,28 +210,36 @@ def estimate_record_count(file_path, record_dtype):
     file_size -= HEADER_LENGTH
 
     if file_size % record_dtype.itemsize != 0:
-        warnings.warn('File size is not divisible by record size (some bytes unaccounted for)')
+        warnings.warn(
+            'File size is not divisible by record size (some bytes '
+            'unaccounted for)')
 
     return file_size / record_dtype.itemsize
 
 
 def parse_neuralynx_time_string(time_string):
-    # Parse a datetime object from the idiosyncratic time string in Neuralynx file headers
+    # Parse a datetime object from the idiosyncratic time string in Neuralynx
+    # file headers
     try:
         tmp_date = [int(x) for x in time_string.split()[4].split('/')]
-        tmp_time = [int(x) for x in time_string.split()[-1].replace('.', ':').split(':')]
+        str_split = time_string.split()[-1].replace('.', ':').split(':')
+        tmp_time = [int(x) for x in str_split]
         tmp_microsecond = tmp_time[3] * 1000
     except:
-        warnings.warn('Unable to parse time string from Neuralynx header: ' + time_string)
+        warnings.warn('Unable to parse time string from Neuralynx header: '
+                      + time_string)
         return None
     else:
-        return datetime.datetime(tmp_date[2], tmp_date[0], tmp_date[1],  # Year, month, day
-                                 tmp_time[0], tmp_time[1], tmp_time[2],  # Hour, minute, second
-                                 tmp_microsecond)
+        return datetime.datetime(
+            tmp_date[2], tmp_date[0], tmp_date[1],  # Year, month, day
+            tmp_time[0], tmp_time[1], tmp_time[2],  # Hour, minute, second
+            tmp_microsecond
+        )
 
 
 def parse_neuralynx_time_string_new(time_string):
-    # Parse a datetime object from the idiosyncratic time string in Neuralynx file headers
+    # Parse a datetime object from the idiosyncratic time string in Neuralynx
+    # file headers
     try:
         if time_string == 'File was not closed properly':
             return None
@@ -236,22 +249,38 @@ def parse_neuralynx_time_string_new(time_string):
             date_list = tmp_date + tmp_time
             return datetime.datetime(*date_list)
     except:
-        warnings.warn('Unable to parse time string from Neuralynx header: ' + time_string)
+        warnings.warn(
+            'Unable to parse time string from Neuralynx header: '
+            + time_string)
         return None
 
 
 def check_ncs_records(records):
-    # Check that all the records in the array are "similar" (have the same sampling frequency etc.
-    dt = np.diff(records['TimeStamp'])
+    # Check that all the records in the array are "similar"
+    # (have the same sampling frequency etc.)
+    
+    # first check if empty - if so, skip other checks
+    is_empty = len(records) == 0
+    if is_empty:
+        warnings.warn('The file does not contain any data to read (apart '
+                      'from the header')
+        return False
+    
+    dt = np.diff(records['TimeStamp']).astype(int)  # uint by default
     dt = np.abs(dt - dt[0])
+    good_n_valid_samples = records['NumValidSamples'] == 512
+
     if not np.all(records['ChannelNumber'] == records[0]['ChannelNumber']):
         warnings.warn('Channel number changed during record sequence')
         return False
     elif not np.all(records['SampleFreq'] == records[0]['SampleFreq']):
-        warnings.warn('Sampling frequency changed during record sequence')
+        warnings.warn('Sampling frequency changed during the sequence '
+                      'of records')
         return False
-    elif not np.all(records['NumValidSamples'] == 512):
-        warnings.warn('Invalid samples in one or more records')
+    elif not np.all(good_n_valid_samples[:-1]):
+        # [:-1] above is to ignore the last record - can be incomplete
+        n_bad = np.sum(~good_n_valid_samples)
+        warnings.warn(f'Invalid samples in {n_bad} records')
         return False
     elif not np.all(dt <= 1):
         warnings.warn('Time stamp difference tolerance exceeded')
@@ -260,8 +289,10 @@ def check_ncs_records(records):
         return True
 
 
-def load_ncs(file_path, load_time=True, rescale_data=True, signal_scaling=MICROVOLT_SCALING):
-    # Load the given file as a Neuralynx .ncs continuous acquisition file and extract the contents
+def load_ncs(file_path, load_time=True, rescale_data=True,
+             signal_scaling=MICROVOLT_SCALING):
+    # Load the given file as a Neuralynx .ncs continuous acquisition file and
+    # extract the contents
     file_path = os.path.abspath(file_path)
     with open(file_path, 'rb') as fid:
         raw_header = read_raw_header(fid)
@@ -272,13 +303,17 @@ def load_ncs(file_path, load_time=True, rescale_data=True, signal_scaling=MICROV
 
     # Reshape (and rescale, if requested) the data into a 1D array
     data = records['Samples'].ravel()
-    #data = records['Samples'].reshape((NCS_SAMPLES_PER_RECORD * len(records), 1))
+    # data = records['Samples'].reshape(
+    #     (NCS_SAMPLES_PER_RECORD * len(records), 1))
     if rescale_data:
         try:
-            # ADBitVolts specifies the conversion factor between the ADC counts and volts
-            data = data.astype(np.float64) * (np.float64(header['ADBitVolts']) * signal_scaling[0])
+            # ADBitVolts specifies the conversion factor between the ADC
+            # counts and volts
+            data = data.astype(np.float64) * (np.float64(header['ADBitVolts'])
+                                              * signal_scaling[0])
         except KeyError:
-            warnings.warn('Unable to rescale data, no ADBitVolts value specified in header')
+            warnings.warn('Unable to rescale data, ADBitVolts value '
+                          'not specified in the header')
             rescale_data = False
 
     # Pack the extracted data in a dictionary that is passed out of the function
@@ -288,22 +323,32 @@ def load_ncs(file_path, load_time=True, rescale_data=True, signal_scaling=MICROV
     ncs['header'] = header
     ncs['data'] = data
     ncs['data_units'] = signal_scaling[1] if rescale_data else 'ADC counts'
-    ncs['sampling_rate'] = records['SampleFreq'][0]
-    ncs['channel_number'] = records['ChannelNumber'][0]
+    
+    n_records = len(records)
+    if n_records > 0:
+        ncs['sampling_rate'] = records['SampleFreq'][0]
+        ncs['channel_number'] = records['ChannelNumber'][0]
+
     ncs['timestamp'] = records['TimeStamp']
 
     # Calculate the sample time points (if needed)
     if load_time:
-        num_samples = data.shape[0]
-        times = np.interp(np.arange(num_samples), np.arange(0, num_samples, 512), records['TimeStamp']).astype(np.uint64)
-        ncs['time'] = times
+        if n_records > 0:
+            num_samples = data.shape[0]
+            times = np.interp(
+                np.arange(num_samples), np.arange(0, num_samples, 512),
+                records['TimeStamp']).astype(np.uint64)
+            ncs['time'] = times
+        else:
+            ncs['time'] = np.array([], dtype=np.uint64)
         ncs['time_units'] = u'µs'
 
     return ncs
 
 
 def load_nev(file_path):
-    # Load the given file as a Neuralynx .nev event file and extract the contents
+    # Load the given file as a Neuralynx .nev event file and extract the
+    # contents
     file_path = os.path.abspath(file_path)
     with open(file_path, 'rb') as fid:
         raw_header = read_raw_header(fid)
@@ -311,16 +356,15 @@ def load_nev(file_path):
 
     header = parse_header(raw_header)
 
-    # Check for the packet data size, which should be two. DISABLED because these seem to be set to 0 in our files.
-    #assert np.all(record['pkt_data_size'] == 2), 'Some packets have invalid data size'
+    # Check for the packet data size, which should be two. DISABLED because
+    # these seem to be set to 0 in our files.
+    # assert np.all(record['pkt_data_size'] == 2), 'Some packets have invalid data size'
 
-
-    # Pack the extracted data in a dictionary that is passed out of the function
-    nev = dict()
-    nev['file_path'] = file_path
-    nev['raw_header'] = raw_header
-    nev['header'] = header
-    nev['records'] = records
-    nev['events'] = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl', 'Extra', 'EventString']]
+    # Pack the extracted data in a dictionary that is passed out of the
+    # function
+    nev = dict(file_path=file_path, raw_header=raw_header,
+               header=header, records=records)
+    nev['events'] = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl',
+                             'Extra', 'EventString']]
 
     return nev
