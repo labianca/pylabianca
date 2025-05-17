@@ -32,42 +32,60 @@ import numpy as np
 import datetime
 
 HEADER_LENGTH = 16 * 1024  # 16 kilobytes of header
-
 NCS_SAMPLES_PER_RECORD = 512
-NCS_RECORD = np.dtype([('TimeStamp',       np.uint64),       # Cheetah timestamp for this record. This corresponds to
-                                                             # the sample time for the first data point in the Samples
-                                                             # array. This value is in microseconds.
-                       ('ChannelNumber',   np.uint32),       # The channel number for this record. This is NOT the A/D
-                                                             # channel number
-                       ('SampleFreq',      np.uint32),       # The sampling frequency (Hz) for the data stored in the
-                                                             # Samples Field in this record
-                       ('NumValidSamples', np.uint32),       # Number of values in Samples containing valid data
-                       ('Samples',         np.int16, NCS_SAMPLES_PER_RECORD)])  # Data points for this record. Cheetah
-                                                                                # currently supports 512 data points per
-                                                                                # record. At this time, the Samples
-                                                                                # array is a [512] array.
-
-NEV_RECORD = np.dtype([('stx',           np.int16),      # Reserved
-                       ('pkt_id',        np.int16),      # ID for the originating system of this packet
-                       ('pkt_data_size', np.int16),      # This value should always be two (2)
-                       ('TimeStamp',     np.uint64),     # Cheetah timestamp for this record. This value is in
-                                                         # microseconds.
-                       ('event_id',      np.int16),      # ID value for this event
-                       ('ttl',           np.int16),      # Decimal TTL value read from the TTL input port
-                       ('crc',           np.int16),      # Record CRC check from Cheetah. Not used in consumer
-                                                         # applications.
-                       ('dummy1',        np.int16),      # Reserved
-                       ('dummy2',        np.int16),      # Reserved
-                       ('Extra',         np.int32, 8),   # Extra bit values for this event. This array has a fixed
-                                                         # length of eight (8)
-                       ('EventString',   'S', 128)])     # Event string associated with this event record. This string
-                                                         # consists of 127 characters plus the required null termination
-                                                         # character. If the string is less than 127 characters, the
-                                                         # remainder of the characters will be null.
 
 VOLT_SCALING = (1, u'V')
-MILLIVOLT_SCALING = (1000, u'mV')
-MICROVOLT_SCALING = (1000000, u'µV')
+MILLIVOLT_SCALING = (1_000, u'mV')
+MICROVOLT_SCALING = (1_000_000, u'µV')
+
+"""
+NCS_RECORD
+----------
+TimeStamp       - Cheetah/ATLAS timestamp for this record. This corresponds to
+                  the sample time for the first data point in the Samples
+                  array. This value is in microseconds.
+ChannelNumber   - The channel number for this record. This is NOT the A/D
+                  channel number
+SampleFreq      - The sampling frequency (Hz) for the data stored in the
+                  Samples Field in this record
+NumValidSamples - Number of values in Samples containing valid data
+Samples         - Data points for this record. Cheetah/ATLAS currently supports
+                  512 data points per record. At this time, the Samples array
+                  is a [512] array.
+"""
+NCS_RECORD = np.dtype(
+    [('TimeStamp', np.uint64), ('ChannelNumber', np.uint32),
+     ('SampleFreq', np.uint32), ('NumValidSamples', np.uint32),
+     ('Samples', np.int16, NCS_SAMPLES_PER_RECORD)]
+)
+
+"""
+NEV_RECORD
+----------
+stx           - Reserved
+pkt_id        - ID for the originating system of this packet
+pkt_data_size - This value should always be two (2)
+TimeStamp     - Cheetah/ATLAS timestamp for this record. This value is in
+                microseconds.
+event_id      - ID value for this event
+ttl           - Decimal TTL value read from the TTL input port
+crc           - Record CRC check from Cheetah/ATLAS. Not used in consumer
+                applications.
+dummy1        - Reserved
+dummy2        - Reserved
+Extra         - Extra bit values for this event. This array has a fixed
+                length of eight (8)
+EventString   - Event string associated with this event record. This string
+                consists of 127 characters plus the required null termination
+                character. If the string is less than 127 characters, the
+                remainder of the characters will be null.
+"""
+NEV_RECORD = np.dtype(
+    [('stx', np.int16), ('pkt_id', np.int16), ('pkt_data_size', np.int16),
+     ('TimeStamp', np.uint64), ('event_id', np.int16), ('ttl', np.int16),
+     ('crc', np.int16), ('dummy1', np.int16), ('dummy2', np.int16),
+     ('Extra', np.int32, 8), ('EventString', 'S', 128)]
+)
 
 
 def read_header(file_path):
