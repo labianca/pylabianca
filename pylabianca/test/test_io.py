@@ -246,7 +246,8 @@ def test_neuralynx_no_records(tmp_path):
         read_raw_header, write_ncs, NCS_RECORD, load_ncs)
 
     # Read test data file raw header
-    path_part = r'test_neuralynx\sub-U06_ses-screening_set-U6d_run-01_ieeg'
+    path_part = op.join('test_neuralynx',
+                        'sub-U06_ses-screening_set-U6d_run-01_ieeg')
     fname = 'CSC129.ncs'
     with open(op.join(data_dir, path_part, fname), 'rb') as fid:
         raw_header = read_raw_header(fid)
@@ -275,7 +276,8 @@ def test_neuralynx_no_scaling_info(tmp_path):
         NCS_RECORD, HEADER_LENGTH)
 
     fname = 'CSC129.ncs'
-    path_part = r'test_neuralynx\sub-U06_ses-screening_set-U6d_run-01_ieeg'
+    path_part = op.join('test_neuralynx',
+                        'sub-U06_ses-screening_set-U6d_run-01_ieeg')
     input_file = op.join(data_dir, path_part, fname)
     with open(input_file, 'rb') as fid:
         raw_header = read_raw_header(fid)
