@@ -239,8 +239,9 @@ def parse_neuralynx_time_string(time_string):
     # Parse a datetime object from the idiosyncratic time string in Neuralynx
     # file headers
     try:
-        tmp_date = [int(x) for x in time_string.split()[4].split('/')]
-        str_split = time_string.split()[-1].replace('.', ':').split(':')
+        time_split = time_string.split()
+        tmp_date = [int(x) for x in time_split[4].split('/')]
+        str_split = time_split[-1].replace('.', ':').split(':')
         tmp_time = [int(x) for x in str_split]
         tmp_microsecond = tmp_time[3] * 1000
     except:
@@ -262,8 +263,9 @@ def parse_neuralynx_time_string_new(time_string):
         if time_string == 'File was not closed properly':
             return None
         else:
-            tmp_date = [int(x) for x in time_string.split()[0].split('/')]
-            tmp_time = [int(x) for x in time_string.split()[-1].split(':')]
+            time_split = time_string.split()
+            tmp_date = [int(x) for x in time_split[0].split('/')]
+            tmp_time = [int(x) for x in time_split[-1].split(':')]
             date_list = tmp_date + tmp_time
             return datetime.datetime(*date_list)
     except:
