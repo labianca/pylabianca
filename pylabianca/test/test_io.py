@@ -161,7 +161,6 @@ def make_sure_identical(spk, spk2):
 
 
 def test_read_write_fieldtrip(tmp_path):
-    import random
     from string import ascii_lowercase
 
     def io_roundtrip(spk, filepath, kind='trials'):
@@ -240,3 +239,64 @@ def test_read_write_fieldtrip(tmp_path):
         n_cells=3, n_trials=0, n_spikes=(23, 55))
     spk_raw.cellinfo = cellinfo.iloc[:-1, :]
     io_roundtrip(spk_raw, filepath, kind='raw')
+
+
+def test_neuralynx_no_records(tmp_path):
+    from pylabianca.neuralynx_io import (
+        read_raw_header, write_ncs, NCS_RECORD, load_ncs)
+
+    # Read test data file raw header
+    path_part = r'test_neuralynx\sub-U06_ses-screening_set-U6d_run-01_ieeg'
+    fname = 'CSC129.ncs'
+    with open(op.join(data_dir, path_part, fname), 'rb') as fid:
+        raw_header = read_raw_header(fid)
+
+    # create and write ncs file containing only the header
+    new_fname = fname.replace('.ncs', '_no_data.ncs')
+    output_file = op.join(tmp_path, new_fname)
+    write_ncs(output_file, np.array([], dtype=NCS_RECORD), raw_header)
+
+    # assert that a warning is raised when reading the file
+    msg = 'The file does not contain any data to read'
+    with pytest.warns(UserWarning, match=msg):
+        data = load_ncs(output_file, load_time=False)
+    assert data['data'].shape == (0,)
+    assert 'time' not in data
+
+    with pytest.warns(UserWarning, match=msg):
+        data = load_ncs(output_file)
+    assert data['data'].shape == (0,)
+    assert data['time'].shape == (0,)
+
+
+def test_neuralynx_no_scaling_info(tmp_path):
+    from pylabianca.neuralynx_io import (
+        read_raw_header, read_records, write_ncs, load_ncs,
+        NCS_RECORD, HEADER_LENGTH)
+
+    fname = 'CSC129.ncs'
+    path_part = r'test_neuralynx\sub-U06_ses-screening_set-U6d_run-01_ieeg'
+    input_file = op.join(data_dir, path_part, fname)
+    with open(input_file, 'rb') as fid:
+        raw_header = read_raw_header(fid)
+        records = read_records(fid, NCS_RECORD)
+
+    # Remove the ADBitVolts line
+    header_str = raw_header.decode('ascii', errors='ignore')
+    header_lines = [line for line in header_str.splitlines()
+                    if not line.strip().startswith("-ADBitVolts")]
+    stripped_header = '\r\n'.join(header_lines).encode('ascii')
+    stripped_header = stripped_header[:HEADER_LENGTH] + b'\0' * (HEADER_LENGTH - len(stripped_header))
+
+    new_fname = fname.replace('.ncs', '_no_scaling_info.ncs')
+    output_file = op.join(tmp_path, new_fname)
+    write_ncs(output_file, records[:10], stripped_header)
+
+    data = load_ncs(output_file, load_time=False, rescale_data=False)
+    assert data['data'].dtype == np.int16
+
+    with pytest.warns(UserWarning, match='Unable to rescale data'):
+        data = load_ncs(output_file, load_time=False)
+
+    assert data['data'].dtype == np.int16
+    assert (data['data'][:512] == records[0]['Samples']).all()
