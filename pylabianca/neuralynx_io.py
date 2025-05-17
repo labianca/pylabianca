@@ -401,8 +401,34 @@ def load_nev(file_path):
 
     # construct output
     nev = dict(file_path=file_path, raw_header=raw_header,
-               header=header, records=records)
-    nev['events'] = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl',
-                             'Extra', 'EventString']]
+               header=header, records=records, events=events)
 
     return nev
+
+
+def write_ncs(filename, records, raw_header):
+    """
+    Write Neuralynx .ncs file with the given records and raw header.
+
+    Parameters
+    ----------
+    filename : str
+        Path to output .ncs file.
+    records : np.ndarray
+        Structured array with dtype as defined in NCS_RECORD.
+    raw_header : bytes
+        16 kB header (can be modified or unchanged).
+    """
+    if not isinstance(records, np.ndarray) or records.dtype != NCS_RECORD:
+        raise ValueError("records must be a structured np.ndarray with dtype"
+                         " defined as in NCS_RECORD")
+
+    # Pad or trim header to exactly 16 kB
+    raw_header = raw_header.strip(b'\0')
+    if len(raw_header) > HEADER_LENGTH:
+        raise ValueError("Header too long (exceeds 16 KB)")
+    padded_header = raw_header + b'\0' * (HEADER_LENGTH - len(raw_header))
+
+    with open(filename, 'wb') as f:
+        f.write(padded_header)
+        records.tofile(f)
