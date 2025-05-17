@@ -278,14 +278,14 @@ def parse_neuralynx_time_string_new(time_string):
 def check_ncs_records(records):
     # Check that all the records in the array are "similar"
     # (have the same sampling frequency etc.)
-    
+
     # first check if empty - if so, skip other checks
     is_empty = len(records) == 0
     if is_empty:
         warnings.warn('The file does not contain any data to read (apart '
-                      'from the header')
+                      'from the header)')
         return False
-    
+
     dt = np.diff(records['TimeStamp']).astype(int)  # uint by default
     dt = np.abs(dt - dt[0])
     good_n_valid_samples = records['NumValidSamples'] == 512
