@@ -321,10 +321,38 @@ def load_ncs(file_path, load_time=True, rescale_data=True,
     header = parse_header(raw_header)
     check_ncs_records(records)
 
-    # Reshape (and rescale, if requested) the data into a 1D array
+    # Reshape the data into a 1D array
+    # the shape before ravel should be:
+    # (NCS_SAMPLES_PER_RECORD * len(records), 1)
     data = records['Samples'].ravel()
-    # data = records['Samples'].reshape(
-    #     (NCS_SAMPLES_PER_RECORD * len(records), 1))
+    timestamp = records['TimeStamp']
+
+    n_records = len(records)
+    n_samples = data.shape[0]
+
+    if n_records > 0:
+        sampling_rate = records['SampleFreq'][0]
+        channel_number = records['ChannelNumber'][0]
+    else:
+        sampling_rate = np.nan
+        channel_number = 0
+
+    data, data_units = _handle_scaling(data, header, rescale_data,
+                                       signal_scaling)
+
+    # construct output
+    ncs = dict(file_path=file_path, raw_header=raw_header, header=header,
+               data=data, data_units=data_units, sampling_rate=sampling_rate,
+               timestamp=timestamp, channel_number=channel_number)
+
+    # Calculate the sample time points (if needed)
+    if load_time:
+        _add_time(ncs, timestamp, n_records, n_samples)
+
+    return ncs
+
+
+def _handle_scaling(data, header, rescale_data, signal_scaling):
     if rescale_data:
         try:
             # ADBitVolts specifies the conversion factor between the ADC
@@ -335,35 +363,23 @@ def load_ncs(file_path, load_time=True, rescale_data=True,
             warnings.warn('Unable to rescale data, ADBitVolts value '
                           'not specified in the header')
             rescale_data = False
+    data_units = signal_scaling[1] if rescale_data else 'ADC counts'
 
-    # Pack the extracted data in a dictionary that is passed out of the function
-    ncs = dict()
-    ncs['file_path'] = file_path
-    ncs['raw_header'] = raw_header
-    ncs['header'] = header
-    ncs['data'] = data
-    ncs['data_units'] = signal_scaling[1] if rescale_data else 'ADC counts'
-    
-    n_records = len(records)
+    return data, data_units
+
+
+def _add_time(ncs, timestamp, n_records, n_samples):
     if n_records > 0:
-        ncs['sampling_rate'] = records['SampleFreq'][0]
-        ncs['channel_number'] = records['ChannelNumber'][0]
+        from_samples = np.arange(0, n_samples, 512)
+        to_samples = np.arange(0, n_samples)
 
-    ncs['timestamp'] = records['TimeStamp']
+        times = np.interp(
+            to_samples, from_samples, timestamp).astype(np.uint64)
+    else:
+        times = np.array([], dtype=np.uint64)
 
-    # Calculate the sample time points (if needed)
-    if load_time:
-        if n_records > 0:
-            num_samples = data.shape[0]
-            times = np.interp(
-                np.arange(num_samples), np.arange(0, num_samples, 512),
-                records['TimeStamp']).astype(np.uint64)
-            ncs['time'] = times
-        else:
-            ncs['time'] = np.array([], dtype=np.uint64)
-        ncs['time_units'] = u'µs'
-
-    return ncs
+    ncs['time'] = times
+    ncs['time_units'] = u'µs'
 
 
 def load_nev(file_path):
@@ -380,8 +396,10 @@ def load_nev(file_path):
     # these seem to be set to 0 in our files.
     # assert np.all(record['pkt_data_size'] == 2), 'Some packets have invalid data size'
 
-    # Pack the extracted data in a dictionary that is passed out of the
-    # function
+    events = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl', 'Extra',
+                      'EventString']]
+
+    # construct output
     nev = dict(file_path=file_path, raw_header=raw_header,
                header=header, records=records)
     nev['events'] = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl',
