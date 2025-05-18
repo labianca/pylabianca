@@ -54,8 +54,10 @@ Samples         - Data points for this record. Cheetah/ATLAS currently supports
                   is a [512] array.
 """
 NCS_RECORD = np.dtype(
-    [('TimeStamp', np.uint64), ('ChannelNumber', np.uint32),
-     ('SampleFreq', np.uint32), ('NumValidSamples', np.uint32),
+    [('TimeStamp', np.uint64),
+     ('ChannelNumber', np.uint32),
+     ('SampleFreq', np.uint32),
+     ('NumValidSamples', np.uint32),
      ('Samples', np.int16, NCS_SAMPLES_PER_RECORD)]
 )
 
@@ -81,10 +83,17 @@ EventString   - Event string associated with this event record. This string
                 remainder of the characters will be null.
 """
 NEV_RECORD = np.dtype(
-    [('stx', np.int16), ('pkt_id', np.int16), ('pkt_data_size', np.int16),
-     ('TimeStamp', np.uint64), ('event_id', np.int16), ('ttl', np.int16),
-     ('crc', np.int16), ('dummy1', np.int16), ('dummy2', np.int16),
-     ('Extra', np.int32, 8), ('EventString', 'S', 128)]
+    [('stx', np.int16),
+     ('pkt_id', np.int16),
+     ('pkt_data_size', np.int16),
+     ('TimeStamp', np.uint64),
+     ('event_id', np.int16),
+     ('ttl', np.int16),
+     ('crc', np.int16),
+     ('dummy1', np.int16),
+     ('dummy2', np.int16),
+     ('Extra', np.int32, 8),
+     ('EventString', 'S', 128)]
 )
 
 
