@@ -160,24 +160,20 @@ def parse_header(raw_hdr):
 
     # Try to read the original file path
     try:
-        try:
-            assert hdr_lines[1].split()[1:3] == ['File', 'Name']
+        some_old_header_format = hdr_lines[1].split()[1:3] == ['File', 'Name']
+        if some_old_header_format:
             hdr[u'FileName']  = ' '.join(hdr_lines[1].split()[3:])
-            new_way = False
-            # hdr['save_path'] = hdr['FileName']
-        except AssertionError:
+        else:
             field_name = '-OriginalFileName'
             _, value = _get_field_value(hdr_lines, field_name)
             hdr[u'FileName'] = value
-            new_way = True
     except:
         warnings.warn(
-            'Unable to parse original file path from Neuralynx header: '
-            + hdr_lines[1])
-        new_way = True
+            'Unable to parse original file path from the Neuralynx header.')
+        some_old_header_format = False
 
     # Process lines with file opening and closing times
-    if new_way:
+    if not some_old_header_format:
         parse_rest_from = 1
         time_fields = list()
         ix, hdr[u'TimeCreated'] = _get_field_value(hdr_lines, '-TimeCreated')
@@ -204,10 +200,10 @@ def parse_header(raw_hdr):
             parts = line[1:].split()
             name = parts[0]
             value = ' '.join(parts[1:])
-            if not new_way or (line_idx + parse_rest_from) not in time_fields:
+            if some_old_header_format or (line_idx + parse_rest_from) not in time_fields:
                 hdr[name] = value
         except:
-            if not new_way or (line_idx + parse_rest_from) not in time_fields:
+            if some_old_header_format or (line_idx + parse_rest_from) not in time_fields:
                 warnings.warn(
                     'Unable to parse parameter line from Neuralynx header: '
                     + line)
