@@ -32,42 +32,69 @@ import numpy as np
 import datetime
 
 HEADER_LENGTH = 16 * 1024  # 16 kilobytes of header
-
 NCS_SAMPLES_PER_RECORD = 512
-NCS_RECORD = np.dtype([('TimeStamp',       np.uint64),       # Cheetah timestamp for this record. This corresponds to
-                                                             # the sample time for the first data point in the Samples
-                                                             # array. This value is in microseconds.
-                       ('ChannelNumber',   np.uint32),       # The channel number for this record. This is NOT the A/D
-                                                             # channel number
-                       ('SampleFreq',      np.uint32),       # The sampling frequency (Hz) for the data stored in the
-                                                             # Samples Field in this record
-                       ('NumValidSamples', np.uint32),       # Number of values in Samples containing valid data
-                       ('Samples',         np.int16, NCS_SAMPLES_PER_RECORD)])  # Data points for this record. Cheetah
-                                                                                # currently supports 512 data points per
-                                                                                # record. At this time, the Samples
-                                                                                # array is a [512] array.
-
-NEV_RECORD = np.dtype([('stx',           np.int16),      # Reserved
-                       ('pkt_id',        np.int16),      # ID for the originating system of this packet
-                       ('pkt_data_size', np.int16),      # This value should always be two (2)
-                       ('TimeStamp',     np.uint64),     # Cheetah timestamp for this record. This value is in
-                                                         # microseconds.
-                       ('event_id',      np.int16),      # ID value for this event
-                       ('ttl',           np.int16),      # Decimal TTL value read from the TTL input port
-                       ('crc',           np.int16),      # Record CRC check from Cheetah. Not used in consumer
-                                                         # applications.
-                       ('dummy1',        np.int16),      # Reserved
-                       ('dummy2',        np.int16),      # Reserved
-                       ('Extra',         np.int32, 8),   # Extra bit values for this event. This array has a fixed
-                                                         # length of eight (8)
-                       ('EventString',   'S', 128)])     # Event string associated with this event record. This string
-                                                         # consists of 127 characters plus the required null termination
-                                                         # character. If the string is less than 127 characters, the
-                                                         # remainder of the characters will be null.
 
 VOLT_SCALING = (1, u'V')
-MILLIVOLT_SCALING = (1000, u'mV')
-MICROVOLT_SCALING = (1000000, u'µV')
+MILLIVOLT_SCALING = (1_000, u'mV')
+MICROVOLT_SCALING = (1_000_000, u'µV')
+
+"""
+NCS_RECORD
+----------
+TimeStamp       - Cheetah/ATLAS timestamp for this record. This corresponds to
+                  the sample time for the first data point in the Samples
+                  array. This value is in microseconds.
+ChannelNumber   - The channel number for this record. This is NOT the A/D
+                  channel number
+SampleFreq      - The sampling frequency (Hz) for the data stored in the
+                  Samples Field in this record
+NumValidSamples - Number of values in Samples containing valid data
+Samples         - Data points for this record. Cheetah/ATLAS currently supports
+                  512 data points per record. At this time, the Samples array
+                  is a [512] array.
+"""
+NCS_RECORD = np.dtype(
+    [('TimeStamp', np.uint64),
+     ('ChannelNumber', np.uint32),
+     ('SampleFreq', np.uint32),
+     ('NumValidSamples', np.uint32),
+     ('Samples', np.int16, NCS_SAMPLES_PER_RECORD)]
+)
+
+"""
+NEV_RECORD
+----------
+stx           - Reserved
+pkt_id        - ID for the originating system of this packet
+pkt_data_size - This value should always be two (2)
+TimeStamp     - Cheetah/ATLAS timestamp for this record. This value is in
+                microseconds.
+event_id      - ID value for this event
+ttl           - Decimal TTL value read from the TTL input port
+crc           - Record CRC check from Cheetah/ATLAS. Not used in consumer
+                applications.
+dummy1        - Reserved
+dummy2        - Reserved
+Extra         - Extra bit values for this event. This array has a fixed
+                length of eight (8)
+EventString   - Event string associated with this event record. This string
+                consists of 127 characters plus the required null termination
+                character. If the string is less than 127 characters, the
+                remainder of the characters will be null.
+"""
+NEV_RECORD = np.dtype(
+    [('stx', np.int16),
+     ('pkt_id', np.int16),
+     ('pkt_data_size', np.int16),
+     ('TimeStamp', np.uint64),
+     ('event_id', np.int16),
+     ('ttl', np.int16),
+     ('crc', np.int16),
+     ('dummy1', np.int16),
+     ('dummy2', np.int16),
+     ('Extra', np.int32, 8),
+     ('EventString', 'S', 128)]
+)
 
 
 def read_header(file_path):
@@ -133,41 +160,32 @@ def parse_header(raw_hdr):
 
     # Try to read the original file path
     try:
-        try:
-            assert hdr_lines[1].split()[1:3] == ['File', 'Name']
+        some_old_header_format = hdr_lines[1].split()[1:3] == ['File', 'Name']
+        if some_old_header_format:
             hdr[u'FileName']  = ' '.join(hdr_lines[1].split()[3:])
-            new_way = False
-            # hdr['save_path'] = hdr['FileName']
-        except AssertionError:
+        else:
             field_name = '-OriginalFileName'
             _, value = _get_field_value(hdr_lines, field_name)
             hdr[u'FileName'] = value
-            new_way = True
     except:
         warnings.warn(
-            'Unable to parse original file path from Neuralynx header: '
-            + hdr_lines[1])
-        new_way = True
+            'Unable to parse original file path from the Neuralynx header.')
+        some_old_header_format = False
 
     # Process lines with file opening and closing times
-    if new_way:
+    if not some_old_header_format:
         parse_rest_from = 1
         time_fields = list()
         ix, hdr[u'TimeCreated'] = _get_field_value(hdr_lines, '-TimeCreated')
         time_fields.append(ix)
-        hdr[u'TimeOpened_dt'] = parse_neuralynx_time_string_new(
-            hdr[u'TimeCreated'])
 
         ix, hdr[u'TimeClosed'] = _get_field_value(hdr_lines, '-TimeClosed')
         time_fields.append(ix)
-        hdr[u'TimeClosed_dt'] = parse_neuralynx_time_string_new(
-            hdr[u'TimeClosed'])
+
     else:
         parse_rest_from = 4
         hdr[u'TimeOpened'] = hdr_lines[2][3:]
-        hdr[u'TimeOpened_dt'] = parse_neuralynx_time_string(hdr_lines[2])
         hdr[u'TimeClosed'] = hdr_lines[3][3:]
-        hdr[u'TimeClosed_dt'] = parse_neuralynx_time_string(hdr_lines[3])
 
 
     # Read the parameters, assuming "-PARAM_NAME PARAM_VALUE" format
@@ -177,10 +195,10 @@ def parse_header(raw_hdr):
             parts = line[1:].split()
             name = parts[0]
             value = ' '.join(parts[1:])
-            if not new_way or (line_idx + parse_rest_from) not in time_fields:
+            if some_old_header_format or (line_idx + parse_rest_from) not in time_fields:
                 hdr[name] = value
         except:
-            if not new_way or (line_idx + parse_rest_from) not in time_fields:
+            if some_old_header_format or (line_idx + parse_rest_from) not in time_fields:
                 warnings.warn(
                     'Unable to parse parameter line from Neuralynx header: '
                     + line)
@@ -217,55 +235,18 @@ def estimate_record_count(file_path, record_dtype):
     return file_size / record_dtype.itemsize
 
 
-def parse_neuralynx_time_string(time_string):
-    # Parse a datetime object from the idiosyncratic time string in Neuralynx
-    # file headers
-    try:
-        tmp_date = [int(x) for x in time_string.split()[4].split('/')]
-        str_split = time_string.split()[-1].replace('.', ':').split(':')
-        tmp_time = [int(x) for x in str_split]
-        tmp_microsecond = tmp_time[3] * 1000
-    except:
-        warnings.warn('Unable to parse time string from Neuralynx header: '
-                      + time_string)
-        return None
-    else:
-        return datetime.datetime(
-            tmp_date[2], tmp_date[0], tmp_date[1],  # Year, month, day
-            tmp_time[0], tmp_time[1], tmp_time[2],  # Hour, minute, second
-            tmp_microsecond
-        )
-
-
-def parse_neuralynx_time_string_new(time_string):
-    # Parse a datetime object from the idiosyncratic time string in Neuralynx
-    # file headers
-    try:
-        if time_string == 'File was not closed properly':
-            return None
-        else:
-            tmp_date = [int(x) for x in time_string.split()[0].split('/')]
-            tmp_time = [int(x) for x in time_string.split()[-1].split(':')]
-            date_list = tmp_date + tmp_time
-            return datetime.datetime(*date_list)
-    except:
-        warnings.warn(
-            'Unable to parse time string from Neuralynx header: '
-            + time_string)
-        return None
-
 
 def check_ncs_records(records):
     # Check that all the records in the array are "similar"
     # (have the same sampling frequency etc.)
-    
+
     # first check if empty - if so, skip other checks
     is_empty = len(records) == 0
     if is_empty:
         warnings.warn('The file does not contain any data to read (apart '
-                      'from the header')
+                      'from the header)')
         return False
-    
+
     dt = np.diff(records['TimeStamp']).astype(int)  # uint by default
     dt = np.abs(dt - dt[0])
     good_n_valid_samples = records['NumValidSamples'] == 512
@@ -301,10 +282,38 @@ def load_ncs(file_path, load_time=True, rescale_data=True,
     header = parse_header(raw_header)
     check_ncs_records(records)
 
-    # Reshape (and rescale, if requested) the data into a 1D array
+    # Reshape the data into a 1D array
+    # the shape before ravel should be:
+    # (NCS_SAMPLES_PER_RECORD * len(records), 1)
     data = records['Samples'].ravel()
-    # data = records['Samples'].reshape(
-    #     (NCS_SAMPLES_PER_RECORD * len(records), 1))
+    timestamp = records['TimeStamp']
+
+    n_records = len(records)
+    n_samples = data.shape[0]
+
+    if n_records > 0:
+        sampling_rate = records['SampleFreq'][0]
+        channel_number = records['ChannelNumber'][0]
+    else:
+        sampling_rate = np.nan
+        channel_number = 0
+
+    data, data_units = _handle_scaling(data, header, rescale_data,
+                                       signal_scaling)
+
+    # construct output
+    ncs = dict(file_path=file_path, raw_header=raw_header, header=header,
+               data=data, data_units=data_units, sampling_rate=sampling_rate,
+               timestamp=timestamp, channel_number=channel_number)
+
+    # Calculate the sample time points (if needed)
+    if load_time:
+        _add_time(ncs, timestamp, n_records, n_samples)
+
+    return ncs
+
+
+def _handle_scaling(data, header, rescale_data, signal_scaling):
     if rescale_data:
         try:
             # ADBitVolts specifies the conversion factor between the ADC
@@ -315,35 +324,23 @@ def load_ncs(file_path, load_time=True, rescale_data=True,
             warnings.warn('Unable to rescale data, ADBitVolts value '
                           'not specified in the header')
             rescale_data = False
+    data_units = signal_scaling[1] if rescale_data else 'ADC counts'
 
-    # Pack the extracted data in a dictionary that is passed out of the function
-    ncs = dict()
-    ncs['file_path'] = file_path
-    ncs['raw_header'] = raw_header
-    ncs['header'] = header
-    ncs['data'] = data
-    ncs['data_units'] = signal_scaling[1] if rescale_data else 'ADC counts'
-    
-    n_records = len(records)
+    return data, data_units
+
+
+def _add_time(ncs, timestamp, n_records, n_samples):
     if n_records > 0:
-        ncs['sampling_rate'] = records['SampleFreq'][0]
-        ncs['channel_number'] = records['ChannelNumber'][0]
+        from_samples = np.arange(0, n_samples, 512)
+        to_samples = np.arange(0, n_samples)
 
-    ncs['timestamp'] = records['TimeStamp']
+        times = np.interp(
+            to_samples, from_samples, timestamp).astype(np.uint64)
+    else:
+        times = np.array([], dtype=np.uint64)
 
-    # Calculate the sample time points (if needed)
-    if load_time:
-        if n_records > 0:
-            num_samples = data.shape[0]
-            times = np.interp(
-                np.arange(num_samples), np.arange(0, num_samples, 512),
-                records['TimeStamp']).astype(np.uint64)
-            ncs['time'] = times
-        else:
-            ncs['time'] = np.array([], dtype=np.uint64)
-        ncs['time_units'] = u'µs'
-
-    return ncs
+    ncs['time'] = times
+    ncs['time_units'] = u'µs'
 
 
 def load_nev(file_path):
@@ -360,11 +357,39 @@ def load_nev(file_path):
     # these seem to be set to 0 in our files.
     # assert np.all(record['pkt_data_size'] == 2), 'Some packets have invalid data size'
 
-    # Pack the extracted data in a dictionary that is passed out of the
-    # function
+    events = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl', 'Extra',
+                      'EventString']]
+
+    # construct output
     nev = dict(file_path=file_path, raw_header=raw_header,
-               header=header, records=records)
-    nev['events'] = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl',
-                             'Extra', 'EventString']]
+               header=header, records=records, events=events)
 
     return nev
+
+
+def write_ncs(filename, records, raw_header):
+    """
+    Write Neuralynx .ncs file with the given records and raw header.
+
+    Parameters
+    ----------
+    filename : str
+        Path to output .ncs file.
+    records : np.ndarray
+        Structured array with dtype as defined in NCS_RECORD.
+    raw_header : bytes
+        16 kB header (can be modified or unchanged).
+    """
+    if not isinstance(records, np.ndarray) or records.dtype != NCS_RECORD:
+        raise ValueError("records must be a structured np.ndarray with dtype"
+                         " defined as in NCS_RECORD")
+
+    # Pad or trim header to exactly 16 kB
+    raw_header = raw_header.strip(b'\0')
+    if len(raw_header) > HEADER_LENGTH:
+        raise ValueError("Header too long (exceeds 16 KB)")
+    padded_header = raw_header + b'\0' * (HEADER_LENGTH - len(raw_header))
+
+    with open(filename, 'wb') as f:
+        f.write(padded_header)
+        records.tofile(f)
