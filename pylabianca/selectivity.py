@@ -1012,7 +1012,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
             perm_sel, groupby, apply_fn=apply_func)
         perc_sel_perm = (n_sel_perm / n_total) * 100.
 
-        perm_dim = _find_dim(n_sel_perm)
+        perm_dim, _ = _find_dim(n_sel_perm)
         perm_thresh = find_percentile_threshold(
             perc_sel_perm, percentile=5, tail='pos', perm_dim=perm_dim
         )
