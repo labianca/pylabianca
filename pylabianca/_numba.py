@@ -244,12 +244,19 @@ def _epoch_spikes_numba(spike_times, event_times, event_tmin, event_tmax,
     epoch_spike_times = []
 
     num_spikes = len(spike_times)
+
+    if num_spikes == 0:
+        return np.array(trial_ids), np.array(epoch_spike_times)
+
     start_idx = 0
     current_idx = 0
-    step_multiplier = max(1, int(np.round(
-        num_spikes / (spike_times[-1] - spike_times[0])
-        )))
+    time_range = max(1, spike_times[-1] - spike_times[0])
     epoch_len = event_tmax[0] - event_tmin[0]
+
+    step_multiplier = max(1, int(
+        np.round(num_spikes / time_range)
+        )
+    )
 
     for trial_idx, event_time in enumerate(event_times):
         start_time = event_tmin[trial_idx]
