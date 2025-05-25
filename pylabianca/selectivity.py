@@ -801,7 +801,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
             )
         from .stats import find_percentile_threshold
 
-        _catch_common_percentile_errors(dist, percentile, tail)
+        _catch_common_percentile_errors(percentile, dist, tail)
         threshold = find_percentile_threshold(dist, percentile, tail=tail)
 
     # if no threshold at this point - assume selectivity is already bool
