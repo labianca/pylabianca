@@ -304,7 +304,7 @@ def test_compute_percent_selective():
             ds, percentile=0.05)
 
     msg = 'The distribution does not contain negative values.'
-    ds_perm = ds['perm'].copy()
+    ds_perm = ds['dist'].copy()
     ds_perm.data[ds_perm.data < 0] = 0
     ds = ds.assign(dist=ds_perm)
     with pytest.warns(UserWarning, match=msg):
