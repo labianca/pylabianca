@@ -810,7 +810,11 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
             raise TypeError('If no threshold or percentile is passed, the '
                             'selectivity must be a boolean array.')
         sel = selectivity
-        perm_sel = None
+
+        if has_dist:
+            perm_sel = dist
+        else:
+            perm_sel = None
     else:
         sel = threshold_selectivity(selectivity, threshold)
         if has_dist:
@@ -827,7 +831,7 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     n_sel = nested_groupby_apply(sel, groupby, apply_fn=apply_func)
     perc_sel = (n_sel / n_total) * 100.
 
-    if has_dist and threshold is not None:
+    if has_dist:
         from .stats import find_percentile_threshold, _find_dim
 
         n_sel_perm = nested_groupby_apply(
