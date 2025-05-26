@@ -233,7 +233,7 @@ def _get_ft_cellinfo(data):
 #       data['hdr'].item()['FileHeader'].item()['Frequency'].item()
 #       (what if waveform_time and timestamp sfreq are different ?
 #        first check if waveform_time is present ?)
-def _write_filedtrip_trials(spk, filepath):
+def _write_fieldtrip_trials(spk, filepath):
     """
     Saves SpikeEpochs data to FieldTrip-compatible .mat file.
 
@@ -272,7 +272,7 @@ def _write_filedtrip_trials(spk, filepath):
     # use some logging later: print(f"Spike trials saved to {filepath}")
 
 
-def _write_filedtrip_raw(spk, filepath):
+def _write_fieldtrip_raw(spk, filepath):
     """
     Saves Spikes data to FieldTrip-compatible .mat file.
 
