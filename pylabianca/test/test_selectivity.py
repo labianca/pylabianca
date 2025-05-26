@@ -266,6 +266,7 @@ def test_compute_percent_selective():
             sel, threshold=thresh1, dist=perm)
     assert (perc.stat > perc.thresh).mean(dim='time').item() > 0.035
 
+    # passing a Dataset with selectivity and permutations
     ds = xr.Dataset({'stat': sel, 'dist': perm})
     perc_ds = pln.selectivity.compute_percent_selective(
             ds, threshold=thresh1)
@@ -277,3 +278,35 @@ def test_compute_percent_selective():
         ds, percentile=5)
 
     assert (perc_ds.stat > perc_ds.thresh).mean(dim='time').item() > 0.05
+
+    # various percentile issues
+    # null distribution must be given
+    with pytest.raises(ValueError, match='requires a null distribution'):
+        pln.selectivity.compute_percent_selective(
+            sel, percentile=5)
+
+    msg = 'Percentile must be between 0 and 100.'
+    with pytest.raises(ValueError, match=msg):
+        pln.selectivity.compute_percent_selective(
+            ds, percentile=-2)
+    with pytest.raises(ValueError, match=msg):
+        pln.selectivity.compute_percent_selective(
+            ds, percentile=101)
+
+    msg = 'Tail must be '
+    with pytest.raises(ValueError, match=msg):
+        pln.selectivity.compute_percent_selective(
+            ds, percentile=5, tail='booth')
+
+    # make sure a warning is raise for percentile < 1
+    with pytest.warns(UserWarning, match='Percentile is very low'):
+        pln.selectivity.compute_percent_selective(
+            ds, percentile=0.05)
+
+    msg = 'The distribution does not contain negative values.'
+    ds_perm = ds['perm'].copy()
+    ds_perm.data[ds_perm.data < 0] = 0
+    ds = ds.assign(dist=ds_perm)
+    with pytest.warns(UserWarning, match=msg):
+        perc = pln.selectivity.compute_percent_selective(
+            ds, percentile=5, tail='both')
