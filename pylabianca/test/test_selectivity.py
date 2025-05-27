@@ -237,6 +237,23 @@ def test_compute_percent_selective():
         sel, thresh1)
     assert (perc == perc2).all()
 
+    # boolean selectivity with null distribution
+    n_perm = 100
+    distr = np.random.randn(n_perm, n_cells, n_times) > thresh1
+    distr = xr.DataArray(distr, dims=['perm', 'cell', 'time'],
+                         coords={'time': times})
+
+    perc_bool = pln.selectivity.compute_percent_selective(
+        sel_bool, dist=distr)
+    assert perc_bool['stat'].dims == ('time',)
+    assert perc_bool['stat'].shape == (n_times,)
+    assert perc_bool['dist'].dims == ('perm', 'time')
+    assert perc_bool['dist'].shape == (n_perm, n_times)
+    assert 'pval' in perc_bool
+    assert 'thresh' in perc_bool
+    assert 'dist' in perc_bool
+    assert (perc_bool['pval'] > 0.).any()
+
     # using groupby
     anat = np.array(['AMY'] * 4 + ['HIP'] * 6)
     sel_anat = sel.assign_coords(anat=('cell', anat))
