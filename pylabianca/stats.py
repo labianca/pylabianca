@@ -283,13 +283,63 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
 # TODO: use neg, pos thresholds order - this would first require a change in
 #       borsar
 def find_percentile_threshold(perm_data, percentile=None, tail='both',
-                              perm_dim=None, as_xarray=True):
+                              perm_dim=None, as_xarray=True,
+                              check_correctness=True):
+    '''Find percentile thresholds for the permutation data.
+
+    Parameters
+    ----------
+    perm_data : xarray.DataArray
+        The permutation data for which the thresholds should be calculated.
+        Should contain a dimension named ``'perm'`` or ``'permutation'``. If
+        different name is used for the permutation dimension, it should be
+        specified using the ``perm_dim`` argument.
+    percentile : float, optional
+        The "top" percentile value to use for thresholding. For example, a
+        percentile of 5 means that the top 5% of the distribution will be used
+        as the threshold. The meaning of "top" depends on the
+        ``tail`` argument. If ``tail`` is ``'pos'``, then the top 5% means the
+        highest 5% of the distribution. If ``tail`` is ``'neg'``, then the top
+        5% means the lowest 5% of the distribution. If ``tail`` is ``'both'``,
+        then the top 5% means the highest 2.5% and the lowest 2.5% of the
+        distribution. This approach is used so that the percentile retains
+        the same statistical meaning regardless of the tail used.
+        If ``None`` then the default of 5 is used (i.e. the 5th "top"
+        percentile). The percentile should be between 0 and 100.
+    tail : str, optional
+        The tail to use for thresholding. Can be ``'both'``, ``'pos'`` or
+        ``'neg'``. The default is ``'both'``.
+    perm_dim : str or int, optional
+        The name or index of the dimension containing permutations. If
+        ``None`` then the function will try to find a dimension named
+        ``'perm'`` or ``'permutation'``.
+    as_xarray : bool, optional
+        Whether to return the thresholds as an xarray.DataArray. If ``False``,
+        then a list of two values is returned (for positive and negative tails).
+        The default is ``True``.
+    check_correctness : bool, optional
+        Whether to check for common errors in percentile and tail definition.
+        The default is ``True``.
+
+    Returns
+    -------
+    thresholds : xarray.DataArray or list
+        The thresholds for the positive and negative tails. If
+        ``as_xarray`` is ``True``, then an xarray.DataArray is returned with
+        dimensions ``('tail', ...)`` where ``...`` are the dimensions of the
+        original data without the permutation dimension. If ``as_xarray`` is
+        ``False``, then a list of two values is returned (for positive and
+        negative tails).
+    '''
     import xarray as xr
 
     msg = 'perm_data should be xarray.DataArray'
     assert isinstance(perm_data, xr.DataArray), msg
     assert tail in ['both', 'pos', 'neg']
     percentile = 5 if percentile is None else percentile
+
+    if check_correctness:
+        _catch_common_percentile_errors(percentile, perm_data, tail)
 
     _, perm_dim_idx = _find_dim(perm_data, perm_dim=perm_dim)
     if perm_dim_idx == -1:
@@ -346,3 +396,50 @@ def _find_dim(perm_data, perm_dim=None):
         perm_dim = perm_data.dims[perm_dim_idx]
 
     return perm_dim, perm_dim_idx
+
+
+def _catch_common_percentile_errors(percentile, dist, tail):
+    """
+    Check for common errors in percentile and tail definition.
+
+    Parameters
+    ----------
+    percentile : float
+        The percentile value to check.
+    dist : xarray.DataArray
+        The distribution to check against.
+    tail : str
+        The tail to check.
+
+    Raises
+    ------
+    ValueError
+        If the percentile is not between 0 and 100 or if the tail is not one of
+        'both', 'pos', or 'neg'.
+    """
+    if not (0 <= percentile <= 100):
+        raise ValueError('Percentile must be between 0 and 100.')
+
+    if tail not in ['both', 'pos', 'neg']:
+        raise ValueError('Tail must be one of "both", "pos", or "neg".')
+
+    # also - warn if percentile is too low (for example 0.05 likely means that
+    # the user wanted percentile of 5, and not 0.05)
+    if percentile < 1:
+        import warnings
+        per_text = f'{percentile:.2f} %'
+        warnings.warn('Percentile is very low ({per_text}). Remember that it '
+                      'is a percentile, not a fraction.')
+
+    # additionally - if tail is 'both' (the default), check if the distribution
+    # indeed contain positive and negative values - if not, warn the user
+    # that the default tail might not be appropriate in their case
+    if tail == 'both':
+        if dist.min() >= 0:
+            import warnings
+            warnings.warn('The distribution does not contain negative values. '
+                          'Consider using "pos" tail for thresholding.')
+        elif dist.max() <= 0:
+            import warnings
+            warnings.warn('The distribution does not contain positive values. '
+                          'Consider using "neg" tail for thresholding.')

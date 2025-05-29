@@ -801,7 +801,6 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
             )
         from .stats import find_percentile_threshold
 
-        _catch_common_percentile_errors(percentile, dist, tail)
         threshold = find_percentile_threshold(dist, percentile, tail=tail)
 
     # if no threshold at this point - assume selectivity is already bool
@@ -853,54 +852,6 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         return xr.Dataset(data_dict)
     else:
         return perc_sel
-
-
-def _catch_common_percentile_errors(percentile, dist, tail):
-    """
-    Check for common errors in percentile and tail definition.
-
-    Parameters
-    ----------
-    percentile : float
-        The percentile value to check.
-    dist : xarray.DataArray
-        The distribution to check against.
-    tail : str
-        The tail to check.
-
-    Raises
-    ------
-    ValueError
-        If the percentile is not between 0 and 100 or if the tail is not one of
-        'both', 'pos', or 'neg'.
-    """
-    if not (0 <= percentile <= 100):
-        raise ValueError('Percentile must be between 0 and 100.')
-
-    if tail not in ['both', 'pos', 'neg']:
-        raise ValueError('Tail must be one of "both", "pos", or "neg".')
-
-    # also - warn if percentile is too low (for example 0.05 likely means that
-    # the user wanted percentile of 5, and not 0.05)
-    if percentile < 1:
-        import warnings
-        per_text = f'{percentile:.2f} %'
-        warnings.warn('Percentile is very low ({per_text}). Remember that it '
-                      'is a percentile, not a fraction.')
-
-    # additionally - if tail is 'both' (the default), check if the distribution
-    # indeed contain positive and negative values - if not, warn the user
-    # that the default tail might not be appropriate in their case
-    if tail == 'both':
-        if dist.min() >= 0:
-            import warnings
-            warnings.warn('The distribution does not contain negative values. '
-                          'Consider using "pos" tail for thresholding.')
-        elif dist.max() <= 0:
-            import warnings
-            warnings.warn('The distribution does not contain positive values. '
-                          'Consider using "neg" tail for thresholding.')
-
 
 
 # TODO: create apply_dict function (with out_type='dict' or 'xarray' etc.)
