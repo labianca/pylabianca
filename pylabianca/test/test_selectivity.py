@@ -215,7 +215,11 @@ def test_compute_percent_selective():
     sel_data = np.random.randn(n_cells, n_times)
     sel = xr.DataArray(sel_data, dims=['cell', 'time'], coords={'time': times})
 
-    # threshold selectivity
+    # if only selectivity is passed, it must be boolean
+    with pytest.raises(ValueError, match='must be a boolean array'):
+        perc = pln.selectivity.compute_percent_selective(sel)
+
+    # threshold selectivity to get a boolean array
     thresh1 = 1.85
     sel_bool = pln.selectivity.threshold_selectivity(sel, thresh1)
 
