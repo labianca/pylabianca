@@ -216,7 +216,7 @@ def test_compute_percent_selective():
     sel = xr.DataArray(sel_data, dims=['cell', 'time'], coords={'time': times})
 
     # if only selectivity is passed, it must be boolean
-    with pytest.raises(ValueError, match='must be a boolean array'):
+    with pytest.raises(TypeError, match='must be a boolean array'):
         perc = pln.selectivity.compute_percent_selective(sel)
 
     # threshold selectivity to get a boolean array
