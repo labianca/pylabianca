@@ -335,7 +335,6 @@ def find_percentile_threshold(perm_data, percentile=None, tail='both',
 
     msg = 'perm_data should be xarray.DataArray'
     assert isinstance(perm_data, xr.DataArray), msg
-    assert tail in ['both', 'pos', 'neg']
     percentile = 5 if percentile is None else percentile
 
     if check_correctness:
