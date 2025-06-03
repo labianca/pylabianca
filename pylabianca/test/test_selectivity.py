@@ -6,7 +6,8 @@ import pylabianca as pln
 from pylabianca.analysis import (
     _symmetric_window_samples, _gauss_kernel_samples)
 from pylabianca.utils import create_random_spikes
-from pylabianca.selectivity import compute_selectivity_continuous
+from pylabianca.selectivity import (
+    compute_selectivity_continuous, compute_selectivity_multisession)
 
 import pytest
 
@@ -290,7 +291,9 @@ def test_compute_percent_selective():
     # passing a Dataset with selectivity and permutations
     ds = xr.Dataset({'stat': sel, 'dist': perm})
     perc_ds = pln.selectivity.compute_percent_selective(
-            ds, threshold=thresh1)
+        ds, threshold=thresh1
+    )
+
     are_same = (perc_ds == perc).all()
     for key in ['stat', 'thresh', 'dist']:
         assert are_same[key].item()
@@ -331,3 +334,39 @@ def test_compute_percent_selective():
     with pytest.warns(UserWarning, match=msg):
         perc = pln.selectivity.compute_percent_selective(
             ds, percentile=5, tail='both')
+
+
+def test_selectivity_multisession():
+    n_sessions = 6
+    cells_per_session = 20
+
+    frs = dict()
+    for ses_idx in range(n_sessions):
+        session_id = f'sub{ses_idx + 1:02d}'
+
+        spk_epochs = create_random_spikes(
+            n_cells=cells_per_session, n_trials=60, n_spikes=(10, 50))
+        emo = np.random.choice(['sad', 'happy', 'neutral'], size=60)
+        spk_epochs.metadata = pd.DataFrame({'emo': emo})
+
+        frs[session_id] = spk_epochs.spike_rate(tmin=0.1, tmax=1.1, step=False)
+
+    sel = compute_selectivity_multisession(
+        frs, compare='emo', n_perm=100, n_jobs=n_sessions
+    )
+
+    # make sure we have expected dimensions
+    assert sel['stat'].dims == ('cell',)
+    assert sel['dist'].dims == ('perm', 'cell',)
+
+    # make sure we have the right number of cells
+    n_cells = cells_per_session * n_sessions
+    assert sel['stat'].shape[0] == n_cells
+    assert sel['dist'].shape[1] == n_cells
+
+    # make sure we have all sessions and cells per session
+    session_ids = frs.keys()
+    for ses_id in session_ids:
+        msk = ses_id == sel.coords['sub'].values
+        assert msk.any()
+        assert msk.sum() == cells_per_session
