@@ -786,8 +786,6 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 
     extend_textbox_x = 4
 
-    clusters_x_sorting = np.argsort([np.where(x)[0][0] for x in clusters])
-
     if pvals_significant.any():
         from borsar.viz import highlight
         from borsar.stats import format_pvalue
@@ -803,6 +801,9 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 
         sig_idx = np.where(pvals_significant)[0]
         sig_clusters = [clusters[ix] for ix in sig_idx]
+        
+        if sig_clusters[0].ndim > 1:
+            sig_clusters = [np.ravel(c) for c in sig_clusters]
 
         highlight(
             x_coords, sig_clusters, ax=ax,
@@ -811,13 +812,16 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 
         # FIXME: put this into a separate function
         if pval_text:
+            clusters_x_sorting = np.argsort(
+                [np.where(x)[0][0] for x in sig_clusters])
+            pvals = pvals[sig_idx]
+
             texts = list()
+
             for ix in clusters_x_sorting:
-                if not pvals_significant[ix]:
-                    continue
 
                 this_pval = pvals[ix]
-                text_x = np.mean(x_coords[clusters[ix]])
+                text_x = np.mean(x_coords[sig_clusters[ix]])
 
                 if this_pval < min_pval:
                     p_txt = 'p < {:.3f}'.format(min_pval)
