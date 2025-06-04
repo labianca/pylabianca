@@ -6,7 +6,8 @@ import pylabianca as pln
 from pylabianca.analysis import (
     _symmetric_window_samples, _gauss_kernel_samples)
 from pylabianca.utils import create_random_spikes
-from pylabianca.selectivity import compute_selectivity_continuous
+from pylabianca.selectivity import (
+    compute_selectivity_continuous, compute_selectivity_multisession)
 
 import pytest
 
@@ -215,7 +216,11 @@ def test_compute_percent_selective():
     sel_data = np.random.randn(n_cells, n_times)
     sel = xr.DataArray(sel_data, dims=['cell', 'time'], coords={'time': times})
 
-    # threshold selectivity
+    # if only selectivity is passed, it must be boolean
+    with pytest.raises(TypeError, match='must be a boolean array'):
+        perc = pln.selectivity.compute_percent_selective(sel)
+
+    # threshold selectivity to get a boolean array
     thresh1 = 1.85
     sel_bool = pln.selectivity.threshold_selectivity(sel, thresh1)
 
@@ -236,6 +241,23 @@ def test_compute_percent_selective():
     perc2 = pln.selectivity.compute_percent_selective(
         sel, thresh1)
     assert (perc == perc2).all()
+
+    # boolean selectivity with null distribution
+    n_perm = 100
+    distr = np.random.randn(n_perm, n_cells, n_times) > thresh1
+    distr = xr.DataArray(distr, dims=['perm', 'cell', 'time'],
+                         coords={'time': times})
+
+    perc_bool = pln.selectivity.compute_percent_selective(
+        sel_bool, dist=distr)
+    assert perc_bool['stat'].dims == ('time',)
+    assert perc_bool['stat'].shape == (n_times,)
+    assert perc_bool['dist'].dims == ('perm', 'time')
+    assert perc_bool['dist'].shape == (n_perm, n_times)
+    assert 'pval' in perc_bool
+    assert 'thresh' in perc_bool
+    assert 'dist' in perc_bool
+    assert (perc_bool['pval'] > 0.).any()
 
     # using groupby
     anat = np.array(['AMY'] * 4 + ['HIP'] * 6)
@@ -266,9 +288,12 @@ def test_compute_percent_selective():
             sel, threshold=thresh1, dist=perm)
     assert (perc.stat > perc.thresh).mean(dim='time').item() > 0.035
 
+    # passing a Dataset with selectivity and permutations
     ds = xr.Dataset({'stat': sel, 'dist': perm})
     perc_ds = pln.selectivity.compute_percent_selective(
-            ds, threshold=thresh1)
+        ds, threshold=thresh1
+    )
+
     are_same = (perc_ds == perc).all()
     for key in ['stat', 'thresh', 'dist']:
         assert are_same[key].item()
@@ -277,3 +302,71 @@ def test_compute_percent_selective():
         ds, percentile=5)
 
     assert (perc_ds.stat > perc_ds.thresh).mean(dim='time').item() > 0.05
+
+    # various percentile issues
+    # null distribution must be given
+    with pytest.raises(ValueError, match='requires a null distribution'):
+        pln.selectivity.compute_percent_selective(
+            sel, percentile=5)
+
+    msg = 'Percentile must be between 0 and 100.'
+    with pytest.raises(ValueError, match=msg):
+        pln.selectivity.compute_percent_selective(
+            ds, percentile=-2)
+    with pytest.raises(ValueError, match=msg):
+        pln.selectivity.compute_percent_selective(
+            ds, percentile=101)
+
+    msg = 'Tail must be '
+    with pytest.raises(ValueError, match=msg):
+        pln.selectivity.compute_percent_selective(
+            ds, percentile=5, tail='booth')
+
+    # make sure a warning is raise for percentile < 1
+    with pytest.warns(UserWarning, match='Percentile is very low'):
+        pln.selectivity.compute_percent_selective(
+            ds, percentile=0.05)
+
+    msg = 'The distribution does not contain negative values.'
+    ds_perm = ds['dist'].copy()
+    ds_perm.data[ds_perm.data < 0] = 0
+    ds = ds.assign(dist=ds_perm)
+    with pytest.warns(UserWarning, match=msg):
+        perc = pln.selectivity.compute_percent_selective(
+            ds, percentile=5, tail='both')
+
+
+def test_selectivity_multisession():
+    n_sessions = 6
+    cells_per_session = 20
+
+    frs = dict()
+    for ses_idx in range(n_sessions):
+        session_id = f'sub{ses_idx + 1:02d}'
+
+        spk_epochs = create_random_spikes(
+            n_cells=cells_per_session, n_trials=60, n_spikes=(10, 50))
+        emo = np.random.choice(['sad', 'happy', 'neutral'], size=60)
+        spk_epochs.metadata = pd.DataFrame({'emo': emo})
+
+        frs[session_id] = spk_epochs.spike_rate(tmin=0.1, tmax=1.1, step=False)
+
+    sel = compute_selectivity_multisession(
+        frs, compare='emo', n_perm=100, n_jobs=n_sessions
+    )
+
+    # make sure we have expected dimensions
+    assert sel['stat'].dims == ('cell',)
+    assert sel['dist'].dims == ('perm', 'cell',)
+
+    # make sure we have the right number of cells
+    n_cells = cells_per_session * n_sessions
+    assert sel['stat'].shape[0] == n_cells
+    assert sel['dist'].shape[1] == n_cells
+
+    # make sure we have all sessions and cells per session
+    session_ids = frs.keys()
+    for ses_id in session_ids:
+        msk = ses_id == sel.coords['sub'].values
+        assert msk.any()
+        assert msk.sum() == cells_per_session

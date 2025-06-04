@@ -473,8 +473,8 @@ class SpikeEpochs():
         filepath : str
             Path to the output .mat file.
         """
-        from .io import _write_filedtrip_trials
-        _write_filedtrip_trials(self, filepath)
+        from .io import _write_fieldtrip_trials
+        _write_fieldtrip_trials(self, filepath)
 
     def __getitem__(self, selection):
         '''Select trials using an array of int / bool or metadata query.'''
@@ -1081,8 +1081,8 @@ class Spikes(object):
         filepath : str
             Path to the output .mat file.
         """
-        from pylabianca.io import _write_filedtrip_raw
-        _write_filedtrip_raw(self, filepath)
+        from pylabianca.io import _write_fieldtrip_raw
+        _write_fieldtrip_raw(self, filepath)
 
     def merge(self, picks):
         '''Merge spikes from multiple cells into one. Operates in-place.

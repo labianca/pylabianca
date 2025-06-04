@@ -698,18 +698,73 @@ def threshold_selectivity(selectivity, threshold):
 
 def compute_percent_selective(selectivity, threshold=None, dist=None,
                               percentile=None, tail='both', groupby=None):
-    '''
-    Selectivity can be:
-    * boolean xarray (already thresholded)
-    * xarray with the selectivity statistic (requires threshold argument)
-    * xarray.Dataset containing the selectivity statistic, the threshold and
-        the null distribution (will be thrsholded, unless percentile is
-        defined)
+    """
+    Compute the percentage of selective cells based on a selectivity measure.
 
-    if percentiles is not defined (default None) and selectivity is not already
-    a boolean array, threshold must be defined. Either in the threshold keyword
-    argument or in the selectivity xarray.Dataset as 'thresh' variable.
-    '''
+    Parameters
+    ----------
+    selectivity : xarray.DataArray or xarray.Dataset
+        The selectivity data. It can be:
+        - A boolean ``xarray.DataArray`` (thresholded selectivity data).
+        - An ``xarray.DataArray`` with the selectivity statistic (requires
+        specifying the ``threshold`` argument).
+        - An ``xarray.Dataset`` in the format returned by
+        ``pylabianca.selectivity.compute_selectivity_continuous`` (should
+        contain the selectivity statistic in ``'stat'`` variable, the
+        ``'thresh'`` variable for the threshold, and the ``'dist'`` variable
+        for the null distribution). If threshold is provided the null
+        distribution is not needed, unless `percentile` is defined.
+    threshold : float or xarray.DataArray, optional
+        The threshold value for determining selectivity. If not provided, it
+        must be present in the `selectivity` ``xarray.Dataset`` as the
+        ``'thresh'`` variable (unless ``percentile`` is defined).
+    dist : xarray.DataArray, optional
+        The null distribution of the selectivity statistic. Required if
+        `percentile` is defined (but can be provided in a selectivity
+        ``xarray.Dataset``, see description of the ``selectivity`` argument).
+    percentile : float, optional
+        The percentile value for thresholding based on the null distribution.
+        Requires `dist` to be provided or present in the ``selectivity``
+        ``xarray.Dataset``.
+    tail : {'both', 'pos', 'neg'}, default 'both'
+        Specifies the tail(s) to consider for thresholding when using
+        percentiles:
+        - 'both': Two-tailed thresholding.
+        - 'pos': Positive tail only.
+        - 'neg': Negative tail only.
+    groupby : str or list of str, optional
+        Dimension(s) to group by when computing the percentage of selective
+        cells. This is useful for computing the percentage of selective cells
+        across different brain regions or conditions.
+
+    Returns
+    -------
+    xarray.DataArray or xarray.Dataset
+        If `dist` and `threshold` are not provided, returns an xarray.DataArray
+        containing the percentage of selective cells. If a null distribution is
+        provided, returns an xarray.Dataset with the following variables:
+        - 'stat': The percentage of selective cells.
+        - 'thresh': The threshold for the percentage of selective cells.
+        - 'dist': The null distribution of the percentage of selective cells.
+        - 'num': The total number of cells.
+
+    Raises
+    ------
+    TypeError
+        If `selectivity` is not an xarray.DataArray or xarray.Dataset.
+    ValueError
+        If `selectivity` does not contain the 'cell' dimension.
+    AssertionError
+        If no `threshold` or `percentile` is provided and `selectivity` is not a
+        boolean array.
+        If `percentile` is defined but no null distribution (`dist`) is provided.
+
+    Notes
+    -----
+    - If `percentile` is not defined and `selectivity` is not already a boolean
+    array, the `threshold` must be defined either as an argument or as the
+    'thresh' variable in the `selectivity` xarray.Dataset.
+    """
     import xarray as xr
 
     # selectivity has to be DataArray or Dataset
@@ -737,20 +792,28 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         selectivity = selectivity['stat']
 
     if has_perc:
-        assert has_dist, ('percentile threshold requires passing a null '
-                          'distribution in the "dist" argument or dist '
-                          'variable being present in the selectivity '
-                          'xarray.Dataset.')
+        if not has_dist:
+            raise ValueError(
+                'The "percentile" argument requires a null distribution to be '
+                'provided. Please pass the null distribution using the "dist" '
+                'argument or ensure that the "dist" variable is present in the'
+                ' selectivity xarray.Dataset.'
+            )
         from .stats import find_percentile_threshold
+
         threshold = find_percentile_threshold(dist, percentile, tail=tail)
 
     # if no threshold at this point - assume selectivity is already bool
     if threshold is None:
-        assert selectivity.dtype == bool, ('If no threshold or percentile is '
-                                           'passed, the selectivity must be a '
-                                           'boolean array.')
+        if selectivity.dtype != bool:
+            raise TypeError('If no threshold or percentile is passed, the '
+                            'selectivity must be a boolean array.')
         sel = selectivity
-        perm_sel = None
+
+        if has_dist:
+            perm_sel = dist
+        else:
+            perm_sel = None
     else:
         sel = threshold_selectivity(selectivity, threshold)
         if has_dist:
@@ -767,25 +830,74 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
     n_sel = nested_groupby_apply(sel, groupby, apply_fn=apply_func)
     perc_sel = (n_sel / n_total) * 100.
 
-    if has_dist and threshold is not None:
-        from .stats import find_percentile_threshold
+    if has_dist:
+        from .stats import find_percentile_threshold, _find_dim
 
         n_sel_perm = nested_groupby_apply(
             perm_sel, groupby, apply_fn=apply_func)
         perc_sel_perm = (n_sel_perm / n_total) * 100.
+
+        perm_dim, _ = _find_dim(n_sel_perm)
         perm_thresh = find_percentile_threshold(
-            perc_sel_perm, percentile=5, tail='pos', perm_dim=None
+            perc_sel_perm, percentile=5, tail='pos', perm_dim=perm_dim
         )
 
-        data_dict = dict(stat=perc_sel, thresh=perm_thresh, dist=perc_sel_perm)
+        # calculate p values as well
+        n_perm = len(perc_sel_perm.coords[perm_dim])
+        p_values = (perc_sel_perm >= perc_sel).sum(dim=perm_dim) / n_perm
+        p_values = p_values.rename('pval')
+
+        data_dict = dict(stat=perc_sel, thresh=perm_thresh,
+                         dist=perc_sel_perm, num=n_total, pval=p_values)
         return xr.Dataset(data_dict)
     else:
         return perc_sel
 
 
 # TODO: create apply_dict function (with out_type='dict' or 'xarray' etc.)
+# TODO: expose ses_name as a parameter
 def compute_selectivity_multisession(frate, compare=None, select=None,
                                      n_perm=1_000, n_jobs=1):
+    """
+    Compute neuron selectivity for each session from a dictionary of
+    sessions.
+
+    Parameters
+    ----------
+    frate : dict of xarray.DataArray
+        Dictionary of firing rate data for each session. Each key is a session
+        name and each value is an xarray DataArray with firing rate data.
+        The DataArray must contain the dimensions ``'cell'``, ``'trial'`` and
+        optionally ``'time'``.
+    compare : str | None
+        Metadata category to compare.
+    select : str | None
+        Trial selection criteria. If ``None``, all trials are used.
+    n_perm : int
+        Number of permutations to use for later permutation test.
+        Defaults to ``1_000``.
+    n_jobs : int
+        Number of parallel jobs to use. Defaults to ``1``. If ``-1``, all
+        available CPUs are used. ``n_jobs`` other than ``1`` requires the
+        ``joblib`` package.
+
+    Returns
+    -------
+    all_results : xarray.Dataset
+        Dataset with selectivity results for each cell. The dataset contains
+        the following variables:
+        * ``'stat'`` - selectivity statistic (t values), DataArray with
+          dimensions ``('cell', 'time')`` (unless time was not present in the
+          ``frate``)
+        * ``'thresh'`` - 95% significance thresholds from permutation test:
+          lower, negative (2.5%) and higher, positive (97.5%) tails. DataArray
+          with dimensions ``('tail', 'cell', 'time')`` (unless time was not
+          present in the ``frate``)
+        * ``'perm'`` - selectivity statistic for each permutation. DataArray
+          with dimensions ``('perm', 'cell', 'time')`` (unless time was not
+          present in the ``frate``)
+        * ``'cell'`` - cell coordinates.
+    """
     import xarray as xr
     assert isinstance(frate, dict)
 
