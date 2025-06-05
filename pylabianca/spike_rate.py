@@ -5,7 +5,6 @@ from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
 
 
 # TODO: add n_jobs?
-# CONSIDER wintype 'rectangular' vs 'gaussian'
 # TODO: refactor (DRY: merge both loops into one?)
 # TODO: consider adding `return_type` with `Epochs` option (mne object)
 def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
@@ -237,8 +236,14 @@ def _spike_density(spk, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
     #      numerical errors, that do not seem to be present if we do one
     #      cell-trial at a time, this needs to be investigated a bit more
     #      but now we just set them to zero
+    #      (this is likely related to numerical precision in computing the
+    #       correlations via FFT)
+    #      using oaconvolve (overlap-add convolution) instead of correlate
+    #      helps, but does not solve the problem completely, so we still remove
+    #      activity below a certain "noise level" threshold
+    #      - [ ] CHECK if this is still an issue and whether the kernel is to
+    #      blame
     noise_level = 1e-14
-
     mask = np.abs(cnt) < noise_level
     cnt[mask] = 0.
 
