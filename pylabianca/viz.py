@@ -208,7 +208,7 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         elif isinstance(colors, dict):
             color_map = {k: _verify_color(v) for k, v in colors.items()}
             if not all(group in color_map for group in group_names):
-                missing = set(group_names) - set(color_map.keys())
+                missing = list(set(group_names) - set(color_map.keys()))
                 raise ValueError(f"Missing colors for: {missing}")
         else:
             raise TypeError("colors must be a string, list, tuple, np.ndarray"

@@ -106,10 +106,12 @@ def test_plot_shaded_colors_and_title():
         coords={'time': time, 'cond': ('trial', conditions)}
     )
 
+    # test that title is not set to last groupby value
     ax = pln.plot_shaded(data, groupby='cond')
     ttl = ax.get_title()
     assert not (ttl == 'cond = C')
 
+    # test that string colors work
     ax = pln.plot_shaded(
         data, groupby='cond',
         colors={'A': 'cornflowerblue', 'B': 'magenta', 'C': 'lawngreen'})
@@ -122,6 +124,33 @@ def test_plot_shaded_colors_and_title():
 
     for line, expected_color in zip(ax.lines, correct_colors):
         assert line.get_color() == expected_color
+
+    # one color string
+    ax = pln.plot_shaded(data, colors='magenta')
+    assert ax.lines[0].get_color() == correct_colors[1]
+
+    # test errors
+    msg = r"Missing colors for: \['C'\]"
+    with pytest.raises(ValueError, match=msg):
+        pln.plot_shaded(
+            data, groupby='cond',
+            colors={'A': 'cornflowerblue', 'B': 'magenta'}
+        )
+
+    msg = 'Expected 3 colors, got 2.'
+    with pytest.raises(ValueError, match=msg):
+        pln.plot_shaded(
+            data, groupby='cond',
+            colors=['cornflowerblue', 'magenta']
+        )
+
+    msg = ('colors must be a string, list, tuple, np.ndarray, or dict, '
+           "got <class 'set'>.")
+    with pytest.raises(TypeError, match=msg):
+        pln.plot_shaded(
+            data, groupby='cond',
+            colors={'cornflowerblue', 'magenta', 'lawngreen'}
+        )
 
 
 def test_plot_raster():
