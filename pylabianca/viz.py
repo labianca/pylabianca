@@ -101,7 +101,7 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     # clean up ax title if groupby is used
     if groupby is not None:
         title = ax.get_title()
-        if groupby in title and ', ' in title:
+        if groupby in title:
             title = title.split(', ')
             title = [x for x in title if not x.startswith(groupby)]
             title = ', '.join(title)
@@ -189,59 +189,74 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
     ci_high = avg + std_err
 
     # handle colors
+    group_names = (avg.coords[groupby].values if groupby is not None
+                   else ['base'])
+
     if colors is not None:
-        if groupby is not None:
-            group_names = avg.coords[groupby].values
-            n_groups = len(group_names)
-        else:
-            n_groups = 1
-            group_names = ['base']
+        n_groups = len(group_names)
+        if isinstance(colors, str):
+            colors = [colors] * n_groups
 
-            if len(colors) > 1:
-                colors = [colors]
-
-        assert len(colors) == n_groups
+        # Convert to dict if a list/tuple of colors is passed
         if isinstance(colors, (list, tuple, np.ndarray)):
-            assert all(isinstance(x, (list, tuple, np.ndarray)) for x in colors)
-            colors = {group: color for group, color in zip(group_names, colors)}
+            if len(colors) != n_groups:
+                raise ValueError(f"Expected {n_groups} colors, got {len(colors)}.")
+            color_map = {
+                group: _verify_color(color)
+                for group, color in zip(group_names, colors)
+            }
+        elif isinstance(colors, dict):
+            color_map = {k: _verify_color(v) for k, v in colors.items()}
+            if not all(group in color_map for group in group_names):
+                missing = list(set(group_names) - set(color_map.keys()))
+                raise ValueError(f"Missing colors for: {missing}")
         else:
-            assert all(name in colors.keys() for name in group_names)
-            assert all(isinstance(x, (list, tuple, np.ndarray))
-                       for x in colors.values())
+            raise TypeError("colors must be a string, list, tuple, np.ndarray"
+                            f", or dict, got {type(colors)}.")
+    else:
+        color_map = {}  # default matplotlib colors
 
     # plot each line with error interval
     if groupby is not None:
-        sel = {groupby: 0}
-        for val in avg.coords[groupby]:
-            val = val.item()
-            sel[groupby] = val
+        for val in group_names:
+            sel = {groupby: val}
 
-            add_arg = {'color': colors[val]} if colors is not None else dict()
-            if len(kwargs) > 0:
-                line_args = add_arg.copy()
-                line_args.update(kwargs)
-                lines = avg.sel(**sel).plot(label=val, ax=ax, **line_args)
-            else:
-                lines = avg.sel(**sel).plot(label=val, ax=ax, **add_arg)
+            color, line_args = _get_color_and_line_args(
+                color_map, val, **kwargs)
+
+            avg.sel(**sel).plot(label=val, ax=ax, **line_args)
             ax.fill_between(avg.coords[x_dim], ci_low.sel(**sel),
                             ci_high.sel(**sel), alpha=0.3, linewidth=0,
-                            **add_arg)
+                            color=color)
     else:
-        add_arg = {'color': colors['base']} if colors is not None else dict()
-        if len(kwargs) > 0:
-            line_args = add_arg.copy()
-            line_args.update(kwargs)
-            lines = avg.plot(ax=ax, **line_args)
-        else:
-            lines = avg.plot(ax=ax, **add_arg)
+        color, line_args = _get_color_and_line_args(
+                color_map, 'base', **kwargs)
+
+        avg.plot(ax=ax, **line_args)
         ax.fill_between(avg.coords[x_dim], ci_low, ci_high, linewidth=0,
-                        alpha=0.3, **add_arg)
+                        alpha=0.3, color=color)
 
     if groupby is not None and legend:
         pos = 'best' if legend_pos is None else legend_pos
         ax.legend(title=f'{groupby}:', loc=pos)
 
-    return lines[0].axes
+    return ax
+
+
+def _verify_color(color):
+    import matplotlib.colors as mcolors
+
+    assert isinstance(color, (list, tuple, np.ndarray, str))
+    if isinstance(color, str):
+        return mcolors.to_rgb(color)
+    return color
+
+
+def _get_color_and_line_args(color_map, group_name, **kwargs):
+    c = color_map.get(group_name, None)
+    line_args = {'color': c} if c is not None else {}
+    line_args.update(kwargs)
+    return c, line_args
 
 
 # TODO: move to borsar sometime
@@ -786,8 +801,6 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 
     extend_textbox_x = 4
 
-    clusters_x_sorting = np.argsort([np.where(x)[0][0] for x in clusters])
-
     if pvals_significant.any():
         from borsar.viz import highlight
         from borsar.stats import format_pvalue
@@ -804,6 +817,9 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         sig_idx = np.where(pvals_significant)[0]
         sig_clusters = [clusters[ix] for ix in sig_idx]
 
+        if sig_clusters[0].ndim > 1:
+            sig_clusters = [np.ravel(c) for c in sig_clusters]
+
         highlight(
             x_coords, sig_clusters, ax=ax,
             bottom_bar=True, bottom_extend=bottom_extend
@@ -811,13 +827,16 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
 
         # FIXME: put this into a separate function
         if pval_text:
+            clusters_x_sorting = np.argsort(
+                [np.where(x)[0][0] for x in sig_clusters])
+            pvals = pvals[sig_idx]
+
             texts = list()
+
             for ix in clusters_x_sorting:
-                if not pvals_significant[ix]:
-                    continue
 
                 this_pval = pvals[ix]
-                text_x = np.mean(x_coords[clusters[ix]])
+                text_x = np.mean(x_coords[sig_clusters[ix]])
 
                 if this_pval < min_pval:
                     p_txt = 'p < {:.3f}'.format(min_pval)
