@@ -171,31 +171,30 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     is_dict = isinstance(results, dict)
     has_dist = is_dict and 'dist' in results
     has_thresh = is_dict and 'thresh' in results
+    coords = {dim: frate.coords[dim].values.copy() for dim in frate_dims[1:]}
 
     # stat
     use_data = results['stat'] if is_dict else results
+    results = results if is_dict else dict()
+
     results['stat'] = xr.DataArray(
-        data=use_data, dims=dims[1:], coords=coords, name=stat_name)
+        data=use_data, dims=frate_dims[1:], coords=coords, name=stat_name)
 
     # perm
-    dims = ['perm'] + frate_dims[1:]
-    coords = {dim: frate.coords[dim].values.copy() for dim in frate_dims[1:]}
-
     if has_dist:
+        dims = ['perm'] + frate_dims[1:]
         results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
                                        coords=coords, name=stat_name)
-    else:
-        results = dict()
 
     # thresh
     if has_thresh:
         if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
             # two-tail thresholds
-            dims2 = ['tail'] + dims[1:]
+            dims2 = ['tail'] + frate_dims[1:]
             results['thresh'] = np.stack(results['thresh'], axis=0)
             coords.update({'tail': ['pos', 'neg']})
         else:
-            dims2 = dims[1:]
+            dims2 = frate_dims[1:]
             coords.update({'tail': np.array('pos')})
 
         results['thresh'] = xr.DataArray(
