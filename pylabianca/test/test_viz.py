@@ -296,3 +296,13 @@ def test_add_highlights():
     assert len(checks) == 2
     assert checks[0].sum() == 2
     assert checks[1].sum() == 2
+
+    # test with clusters of shape (1, n)
+    clusters = [c[None, :] for c in clusters]
+    ax = pln.viz.plot_shaded(fr.isel(cell=0))
+    pln.viz.add_highlights(fr, clusters, pvals)
+
+    ranges = ((0.45, 0.7),)
+    checks = compare_box_ranges(ax, ranges)
+    assert len(checks) == 1
+    assert checks[0].sum() == 2
