@@ -29,6 +29,7 @@
 * ENH: added `pylabianca.selectivity.compute_selectivity_multisession()` to compute selectivity on a multisession dictionary (session name -> xarray). The output is an xarray.Dataset with concatenated session selectivity results (the order of the sessions in the output xarray.Dataset is the same as in the input dictionary).
 * ENH: added `pylabianca.stats.find_percentile_threshold()` used to calculate significance threshold for given statistic based on percentile of the permutation distribution.
 * ENH: `pylabianca.selectivity.compute_selectivity_continuous()` now can be also run with `n_perm=0`, returning only the selectivity statistics, without the permutation distribution or permutation-based threshold. Also `pylabianca.stats.permutation_test()` can now be run with `n_perm=0`, returning only the statistic values without the permutation distribution or permutation-based threshold.
+* ENH: allow passing colors by name to `colors` in `pylabianca.viz.plot_shaded()`.
 
 <br/>
 
@@ -45,10 +46,12 @@
 * FIX: dataframe returned by `pylabianca.selectivity.cluster_based_selectivity()` had two unused columns (`'pev'` and `'peak_pev'`), where correct names should have been `'PEV'` and `'peak_PEV'`. Now corrected.
 * FIX: make `pylabianca.selectivity.assess_selectivity()` work when empty DataFrame is passed (no clusters found in `pylabianca.selectivity.cluster_based_selectivity()`).
 * FIX: `pylabianca.viz.plot_shaded()` auto-inferring of dimension to reduce (average) now correctly ignores `groupby` argument (if identical to one of the dimensions).
+* FIX: when using groupby in `pylabianca.viz.plot_shaded()` the axis title would often display the label of last condition plotted. This is now fixed, the groupby condition is not shown in the title.
 * FIX: `pylabianca.viz.plot_shaded()` now produces a clearer error when too many dimensional DataArray is used.
 * FIX: `pylabianca.utils._handle_cell_names()` (used internally in a few places) now works with NumPy >= 2.0.
 * FIX: `pylabianca.viz.plot_waveform()` (as well as `.plot_waveform()` methods of `Spikes` and `SpikeEpochs`) now produces a clearer error when no waveforms are present in the data.
 * FIX: fixed `pval_text=False` still giving p value text (but without text boxes) in `pylabianca.viz.add_highlights()`
+* FIX: using `pylabianca.stats.cluster_based_test()` would often give (1, n) shaped clusters and passing these to `pylabianca.viz.add_highlighs()` lead to errors. This has now been fixed - such clusters would be ravel()'ed into 1d representation.
 
 <br/>
 
