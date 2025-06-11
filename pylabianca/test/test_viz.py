@@ -59,10 +59,8 @@ def test_plot_shaded():
         assert (line1.get_xdata() == line2.get_xdata()).all()
         assert (line1.get_ydata() == line2.get_ydata()).all()
 
-    # colors
-    # ------
-    # plot_shaded does not accept list of str as colors
-    # BTW colors='red' should also be accepted
+
+def test_plot_shaded_colors():
     df = pd.DataFrame({'condition': ['A'] * 13 + ['B'] * 12})
     spk = pln.utils.create_random_spikes(
         n_cells=2, n_trials=25, n_spikes=(15, 35), metadata=df)
@@ -78,6 +76,81 @@ def test_plot_shaded():
                              colors=colors_rgb)
     assert ax.lines[0].get_color() == colors_rgb[0]
     assert ax.lines[1].get_color() == colors_rgb[1]
+
+
+# TODO: could split this into two text with pytest parametrization
+def test_plot_shaded_colors_and_title():
+    conditions = ['A', 'B', 'C']
+    n_trials_per_cond = 10
+    conditions = np.tile(conditions, (n_trials_per_cond, 1))
+    conditions = conditions.T.ravel()
+
+    n_times = 21
+    time = np.linspace(-0.5, 1.5, num=n_times)
+
+    effect_times = {'B': (0.3, 0.7), 'C': (0.5, 0.8)}
+    data = np.random.rand(len(conditions), n_times)
+
+    for cond, time_range in effect_times.items():
+        trial_msk = conditions == cond
+        time_msk = (time >= time_range[0]) & (time <= time_range[1])
+        n_time_msk = time_msk.sum()
+
+        data[np.ix_(trial_msk, time_msk)] += (
+            np.random.rand(n_trials_per_cond, n_time_msk)
+        )
+
+    data = xr.DataArray(
+        data,
+        dims=('trial', 'time'),
+        coords={'time': time, 'cond': ('trial', conditions)}
+    )
+
+    # test that title is not set to last groupby value
+    ax = pln.plot_shaded(data, groupby='cond')
+    ttl = ax.get_title()
+    assert not (ttl == 'cond = C')
+
+    # test that string colors work
+    ax = pln.plot_shaded(
+        data, groupby='cond',
+        colors={'A': 'cornflowerblue', 'B': 'magenta', 'C': 'lawngreen'})
+
+    correct_colors = [
+        (0.39215686274509803, 0.5843137254901961, 0.9294117647058824),
+        (1.0, 0.0, 1.0),
+        (0.48627450980392156, 0.9882352941176471, 0.0)
+    ]
+
+    for line, expected_color in zip(ax.lines, correct_colors):
+        assert line.get_color() == expected_color
+
+    # one color string
+    ax = pln.plot_shaded(data, colors='magenta')
+    assert ax.lines[0].get_color() == correct_colors[1]
+
+    # test errors
+    msg = r"Missing colors for: \['C'\]"
+    with pytest.raises(ValueError, match=msg):
+        pln.plot_shaded(
+            data, groupby='cond',
+            colors={'A': 'cornflowerblue', 'B': 'magenta'}
+        )
+
+    msg = 'Expected 3 colors, got 2.'
+    with pytest.raises(ValueError, match=msg):
+        pln.plot_shaded(
+            data, groupby='cond',
+            colors=['cornflowerblue', 'magenta']
+        )
+
+    msg = ('colors must be a string, list, tuple, np.ndarray, or dict, '
+           "got <class 'set'>.")
+    with pytest.raises(TypeError, match=msg):
+        pln.plot_shaded(
+            data, groupby='cond',
+            colors={'cornflowerblue', 'magenta', 'lawngreen'}
+        )
 
 
 def test_plot_raster():
@@ -223,3 +296,13 @@ def test_add_highlights():
     assert len(checks) == 2
     assert checks[0].sum() == 2
     assert checks[1].sum() == 2
+
+    # test with clusters of shape (1, n)
+    clusters = [c[None, :] for c in clusters]
+    ax = pln.viz.plot_shaded(fr.isel(cell=0))
+    pln.viz.add_highlights(fr, clusters, pvals)
+
+    ranges = ((0.45, 0.7),)
+    checks = compare_box_ranges(ax, ranges)
+    assert len(checks) == 1
+    assert checks[0].sum() == 2
