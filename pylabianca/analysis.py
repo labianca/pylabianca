@@ -663,9 +663,10 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
     if (select is not None) and (not isinstance(select, dict)):
         select = {'trial': select}
 
-    use_coords = None
     arr_list = list()
-    different_coords = False
+    all_coord_dims = {}  # coord_name -> dims
+    coord_dtypes = {}    # coord_name -> preferred dtype
+
     for key, arr in data.items():
         if select is not None:
             if select is not None and arr.name is None:
@@ -681,25 +682,37 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
         arr = assign_session_coord(
             arr, key, dim_name=dim_name, ses_name=ses_name)
 
-        # check if coordinates are shared
-        if use_coords is None:
-            use_coords = set(list(arr.coords))
-        else:
-            coords = set(list(arr.coords))
-            use_coords = use_coords & coords
-            if not different_coords and len(coords) != len(use_coords):
-                different_coords = True
+        for coord_name, coord in arr.coords.items():
+            if coord_name not in all_coord_dims:
+                all_coord_dims[coord_name] = coord.dims
+                coord_dtypes[coord_name] = coord.dtype
 
         arr_list.append(arr)
 
-    # drop coordinates that are not shared
-    if different_coords:
-        for idx, arr in enumerate(arr_list):
-            drop_coords = set(list(arr.coords)) - use_coords
-            arr_list[idx] = arr.drop_vars(drop_coords)
+    # Fill in missing coordinates with appropriate dummies
+    for arr in arr_list:
+        for coord_name, dims in all_coord_dims.items():
+            if coord_name not in arr.coords:
+                shape = tuple(arr.sizes[d] for d in dims)
+                dtype = coord_dtypes[coord_name]
+                missing = _get_missing_value(dtype)
+                filler = np.full(shape, missing, dtype=dtype)
+                arr.coords[coord_name] = (dims, filler)
 
-    arr = xr.concat(arr_list, dim=dim_name)
+    arr = xr.concat(arr_list, dim=dim_name, combine_attrs='override')
     return arr
+
+
+def _get_missing_value(dtype):
+    """Return a reasonable missing value for the given dtype."""
+    if np.issubdtype(dtype, np.floating):
+        return np.nan
+    elif np.issubdtype(dtype, np.integer):
+        return -1
+    elif np.issubdtype(dtype, np.str_):
+        return "missing"
+    else:
+        return None
 
 
 # CONSIDER: ses_name -> ses_coord ?
