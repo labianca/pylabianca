@@ -218,7 +218,7 @@ def test_xarr_dct_conversion():
 
     # selecting by condition
     xarr1 = xarr1.assign_coords(
-        cnd1=('trial', np.random.choice(['A', 'B'], n_trials))
+        cnd1=('trial', np.random.choice(['A', 'B'], n_trials)),
         cell_dist=('cell', np.random.rand(n_cells1))
     )
     xarr2 = xarr2.assign_coords(
