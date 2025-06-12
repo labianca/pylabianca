@@ -68,14 +68,19 @@ def test_plot_shaded_colors():
 
     color_rgb = plt.cm.colors.to_rgb('crimson')
     ax = pln.viz.plot_shaded(fr.isel(cell=0), colors=[color_rgb])
+
+    # check line and shaded area colors
     assert ax.lines[0].get_color() == color_rgb
+    assert (ax.collections[0].get_facecolor()[0, :3] == color_rgb).all()
 
     colors_str = ['crimson', 'cornflowerblue']
     colors_rgb = [plt.cm.colors.to_rgb(color) for color in colors_str]
     ax = pln.viz.plot_shaded(fr.isel(cell=0), groupby='condition',
                              colors=colors_rgb)
-    assert ax.lines[0].get_color() == colors_rgb[0]
-    assert ax.lines[1].get_color() == colors_rgb[1]
+
+    for idx, color_rgb in enumerate(colors_rgb):
+        assert ax.lines[idx].get_color() == color_rgb
+        assert (ax.collections[idx].get_facecolor()[0, :3] == color_rgb).all()
 
 
 # TODO: could split this into two text with pytest parametrization
@@ -125,9 +130,14 @@ def test_plot_shaded_colors_and_title():
     for line, expected_color in zip(ax.lines, correct_colors):
         assert line.get_color() == expected_color
 
+    for shade, expected_color in zip(ax.collections, correct_colors):
+        assert (shade.get_facecolor()[0, :3] == expected_color).all()
+
     # one color string
     ax = pln.plot_shaded(data, colors='magenta')
     assert ax.lines[0].get_color() == correct_colors[1]
+    assert (ax.collections[0].get_facecolor()[0, :3]
+            == correct_colors[1]).all()
 
     # test errors
     msg = r"Missing colors for: \['C'\]"
