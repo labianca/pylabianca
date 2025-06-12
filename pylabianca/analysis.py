@@ -710,7 +710,9 @@ def _get_missing_value(dtype):
     elif np.issubdtype(dtype, np.integer):
         return -1
     elif np.issubdtype(dtype, np.str_):
-        return "missing"
+        return ''  # "missing" seemed to be a good choice, but it is not.
+                   # Depending on the size of the string array, it can be too
+                   # long and end up being truncated to "m", for example
     else:
         return None
 
