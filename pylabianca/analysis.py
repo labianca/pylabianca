@@ -710,7 +710,7 @@ def _get_missing_value(dtype):
     elif np.issubdtype(dtype, np.integer):
         return -1
     elif np.issubdtype(dtype, np.str_):
-        return "missing"
+        return ""  # "missing" can end up trimmed to "m"
     else:
         return None
 
