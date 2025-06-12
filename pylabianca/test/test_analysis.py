@@ -218,19 +218,34 @@ def test_xarr_dct_conversion():
 
     # selecting by condition
     xarr1 = xarr1.assign_coords(
-        cnd1=('trial', np.random.choice(['A', 'B'], n_trials)))
+        cnd1=('trial', np.random.choice(['A', 'B'], n_trials))
+        cell_dist=('cell', np.random.rand(n_cells1))
+    )
     xarr2 = xarr2.assign_coords(
-        cnd2=('trial', np.random.choice(['A', 'B'], n_trials)))
+        cnd2=('trial', np.random.choice(['A', 'B'], n_trials))
+    )
 
     x_dct1 = {'sub-A01': xarr1, 'sub-A02': xarr2}
     xarr = pln.dict_to_xarray(x_dct1, select='load == 1')
-    n_tri = xarr.shape[0]
 
     n_per_condition = 10
-    assert 'cnd1' not in xarr.coords
-    assert 'cnd2' not in xarr.coords
     assert xarr.shape[0] == xarr1.shape[0] + xarr2.shape[0]
     assert (xarr.trial.data == np.arange(n_per_condition)).all()
+
+    # make sure coordinates are preserved and interpolated
+    assert 'cnd1' in xarr.coords
+    assert 'cnd2' in xarr.coords
+    assert 'cell_dist' in xarr.coords
+
+    assert xarr.cell_dist.ndim == 1
+    assert xarr.cnd1.ndim == 2
+    assert xarr.cnd2.ndim == 2
+    assert xarr.cnd1.dims == ('cell', 'trial')
+    assert xarr.cnd2.dims == ('cell', 'trial')
+
+    assert (xarr.cnd1.data == '').any(axis=1).sum() == n_cells2
+    assert (xarr.cnd2.data == '').any(axis=1).sum() == n_cells1
+    assert np.isnan(xarr.coords['cell_dist'].data).sum() == n_cells2
 
 
 def test_extract_data_and_aggregate():
