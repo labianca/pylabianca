@@ -214,7 +214,8 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
             raise TypeError("colors must be a string, list, tuple, np.ndarray"
                             f", or dict, got {type(colors)}.")
     else:
-        color_map = {}  # default matplotlib colors
+        # default matplotlib colors
+        color_map = {name: f'C{idx}' for idx, name in enumerate(group_names)}
 
     # plot each line with error interval
     if groupby is not None:
