@@ -1,6 +1,6 @@
 from .data import (
     get_data_path, get_fieldtrip_data, get_test_data_link, download_test_data,
-    create_random_spikes
+    create_random_spikes, get_zeta_example_data
 )
 from .base import (
     _deal_with_picks, _get_trial_boundaries, _get_cellinfo, find_cells,
