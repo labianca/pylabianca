@@ -105,8 +105,8 @@ def test_frate_no_spikes():
 
     assert fr.shape == (1, 0, 0)
 
-    msg = (r"Convolution kernel length (151 samples) exceeds the length of "
-           r"the data (0 samples).")
+    msg = (r"Convolution kernel length \(151 samples\) exceeds the length of "
+           r"the data \(0 samples\).")
     with pytest.raises(ValueError, match=msg):
         spk.spike_density()
 
