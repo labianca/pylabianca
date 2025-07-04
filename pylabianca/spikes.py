@@ -716,14 +716,21 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
         ``trials x cells x time samples`` array with binary spike information.
     '''
     picks = _deal_with_picks(spk, picks)
+    n_cells = len(picks)
+
+    tmin, tmax = spk.time_limits
+
+    if np.isnan(tmin) or np.isnan(tmax):
+        times = np.array([])
+        trials_raw = np.zeros((spk.n_trials, n_cells, 0), dtype='int')
+        return times, trials_raw
+
     sample_time = 1 / sfreq
     half_sample = sample_time / 2
-    tmin, tmax = spk.time_limits
     times = np.arange(tmin, tmax + 0.01 * sample_time, step=sample_time)
     time_bins = np.concatenate(
         [times - half_sample, [times[-1] + half_sample]])
 
-    n_cells = len(picks)
     n_times = len(times)
     trials_raw = np.zeros((spk.n_trials, n_cells, n_times), dtype='int')
 
