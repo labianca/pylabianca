@@ -124,6 +124,10 @@ def _eval_time(winlen, step, time_limits, center_time=False):
     half_win = winlen / 2
     window_limits = np.array([-half_win, half_win])
 
+    if np.isnan(time_limits[0]) or np.isnan(time_limits[1]):
+        middle_times = np.array([])
+        return middle_times, window_limits
+
     if center_time:
         contains_zero = (
             (time_limits[0] + half_win) <= 0
