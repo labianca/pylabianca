@@ -9,6 +9,12 @@ import pylabianca as pln
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def close_figures():
+    yield
+    plt.close('all')
+
+
 def test_plot_shaded():
     # create random xarray
     # cell x trial x time
