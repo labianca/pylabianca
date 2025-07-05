@@ -91,17 +91,37 @@ def test_selectivity_continuous():
 
 
 def test_cluster_based_selectivity():
-    # create random spikes
-    spk = create_random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
+    # arguments used in assess_selectivity to filter obtained clusters
+    asses_args = dict(min_cluster_p=0.01, window_of_interest=(0.25, 0.75),
+        min_time_in_window=0.15, min_depth_of_selectivity=0.15, min_pev=0.1,
+        min_peak_pev=0.12, min_FR_vs_baseline=1.25, min_FR_preferred=4.5)
 
-    # add metadata and cellinfo
-    spk.metadata = pd.DataFrame(
+    metadata = pd.DataFrame(
         {'cond': np.concatenate([np.ones(25), np.ones(25) * 2])}
     )
-    spk.cellinfo = pd.DataFrame(
+    cellinfo = pd.DataFrame(
         {'cell_type': ['A'], 'region': ['AMY'], 'quality': [0.78]}
     )
-    fr_orig = spk.spike_density(fwhm=0.2)
+
+    has_clusters = True
+    while has_clusters:
+        # create random spikes
+        spk = create_random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
+
+        # add metadata and cellinfo
+        spk.metadata = metadata
+        spk.cellinfo = cellinfo
+        fr_orig = spk.spike_density(fwhm=0.2)
+
+        # make sure there are no effects in the original data
+        df_no_effect = pln.selectivity.cluster_based_selectivity(
+            fr_orig, 'cond', n_permutations=250, calculate_pev=True,
+            calculate_peak_pev=True)
+        df_no_effect = pln.selectivity.assess_selectivity(
+            df_no_effect, **asses_args)
+
+        has_any_clusters = df_no_effect.shape[0] > 0
+        has_clusters = has_any_clusters and (df_no_effect.selective.sum() == 0)
 
     # add effect to one condition
     window, _ = _symmetric_window_samples(winlen=1., sfreq=500.)
@@ -136,12 +156,7 @@ def test_cluster_based_selectivity():
     assert 'in_toi' not in df.columns
     assert 'selective' not in df.columns
 
-    df = pln.selectivity.assess_selectivity(
-        df, min_cluster_p=0.01, window_of_interest=(0.25, 0.75),
-        min_time_in_window=0.15, min_depth_of_selectivity=0.15,
-        min_pev=0.1, min_peak_pev=0.12, min_FR_vs_baseline=1.25,
-        min_FR_preferred=4.5
-    )
+    df = pln.selectivity.assess_selectivity(df, **asses_args)
     assert 'in_toi' in df.columns
     assert 'selective' in df.columns
     assert df.selective.sum() == 1
@@ -151,22 +166,6 @@ def test_cluster_based_selectivity():
     pref = eval(df.preferred[clst_idx])
     assert pref == [0]
     assert df.n_preferred[clst_idx] == 1
-
-    # test that effect was absent in original data:
-    df_no_effect = pln.selectivity.cluster_based_selectivity(
-        fr_orig, 'cond', n_permutations=250, calculate_pev=True,
-        calculate_peak_pev=True)
-    df_no_effect = pln.selectivity.assess_selectivity(
-        df_no_effect, min_cluster_p=0.01, window_of_interest=(0.25, 0.75),
-        min_time_in_window=0.15, min_depth_of_selectivity=0.15,
-        min_pev=0.1, min_peak_pev=0.12, min_FR_vs_baseline=1.25,
-        min_FR_preferred=4.5
-    )
-    assert (
-        (df_no_effect.shape[0] == 0)
-        or (df_no_effect.pval > 0.05).all()
-        or (df_no_effect.selective.sum() == 0)
-    )
 
 
 def test_threshold_selectivity():
