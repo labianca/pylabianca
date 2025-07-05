@@ -66,8 +66,10 @@ class SpikeEpochs():
         self.trial = trial
 
         if time_limits is None:
-            tmin = min([min(x) for x in time if len(x) > 0])
-            tmax = max([max(x) for x in time if len(x) > 0]) + 1e-6
+            mins = [min(x) for x in time if len(x) > 0]
+            maxs = [max(x) for x in time if len(x) > 0]
+            tmin = min(mins) if len(mins) > 0 else np.nan
+            tmax = max(maxs) + 1e-6 if len(maxs) > 0 else np.nan
             time_limits = np.array([tmin, tmax])
         self.time_limits = time_limits
 
@@ -714,14 +716,21 @@ def _spikes_to_raw(spk, picks=None, sfreq=500.):
         ``trials x cells x time samples`` array with binary spike information.
     '''
     picks = _deal_with_picks(spk, picks)
+    n_cells = len(picks)
+
+    tmin, tmax = spk.time_limits
+
+    if np.isnan(tmin) or np.isnan(tmax):
+        times = np.array([])
+        trials_raw = np.zeros((spk.n_trials, n_cells, 0), dtype='int')
+        return times, trials_raw
+
     sample_time = 1 / sfreq
     half_sample = sample_time / 2
-    tmin, tmax = spk.time_limits
     times = np.arange(tmin, tmax + 0.01 * sample_time, step=sample_time)
     time_bins = np.concatenate(
         [times - half_sample, [times[-1] + half_sample]])
 
-    n_cells = len(picks)
     n_times = len(times)
     trials_raw = np.zeros((spk.n_trials, n_cells, n_times), dtype='int')
 

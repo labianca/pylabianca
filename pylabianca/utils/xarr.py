@@ -55,18 +55,24 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
 
     # later: consider having firing rate from many neurons...
     times_array = isinstance(times, np.ndarray)
+    has_trials = False
     if frate.ndim == 3:
+        has_trials = True
+        # CHECK: if data is 3D can cell_names be really None?
         n_trials = frate.shape[0] if cell_names is None else frate.shape[1]
     elif frate.ndim == 2:
         if cell_names is None:
+            has_trials = True
             n_trials = frate.shape[0]
         else:
             if times_array:
+                has_trials = False
                 n_trials = 0
             else:
+                has_trials = True
                 n_trials = frate.shape[1]
 
-    if n_trials > 0:
+    if has_trials:
         dimname = 'trial' if tri is None else 'spike'
         coords = {dimname: np.arange(n_trials)}
         dims = [dimname]
@@ -75,7 +81,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         dims = list()
 
     attrs = None
-    if isinstance(times, np.ndarray):
+    if times_array:
         dims.append(x_dim_name)
         coords[x_dim_name] = times
     else:

@@ -55,9 +55,11 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
         cell_names = list()
 
         for idx, pick in enumerate(picks):
-            frate[idx] = _compute_spike_rate_fixed(
-                spk.time[pick], spk.trial[pick], [tmin, tmax],
-                spk.n_trials)
+            spk_times = spk.time[pick]
+            if len(spk_times) > 0:
+                frate[idx] = _compute_spike_rate_fixed(
+                    spk_times, spk.trial[pick], [tmin, tmax],
+                    spk.n_trials)
             cell_names.append(spk.cell_names[pick])
 
     else:
@@ -70,11 +72,13 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
         frate = np.zeros((n_cells, n_trials, n_times))
 
         for idx, pick in enumerate(picks):
-            frate[idx] = func(
-                spk.time[pick], spk.trial[pick],
-                times, window_limits, winlen,
-                n_trials
-            )
+            spk_times = spk.time[pick]
+            if len(spk_times) > 0:
+                frate[idx] = func(
+                    spk_times, spk.trial[pick],
+                    times, window_limits, winlen,
+                    n_trials
+                )
             cell_names.append(spk.cell_names[pick])
 
     frate = _turn_spike_rate_to_xarray(times, frate, spk,
@@ -119,6 +123,10 @@ def _check_backend(backend):
 def _eval_time(winlen, step, time_limits, center_time=False):
     half_win = winlen / 2
     window_limits = np.array([-half_win, half_win])
+
+    if np.isnan(time_limits[0]) or np.isnan(time_limits[1]):
+        middle_times = np.array([])
+        return middle_times, window_limits
 
     if center_time:
         contains_zero = (

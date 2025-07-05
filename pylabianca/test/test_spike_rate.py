@@ -91,3 +91,33 @@ def test_frate_writes_to_netcdf4(spk_epochs, tmp_path):
     fr2 = xr.load_dataarray(fpath)
 
     assert fr.equals(fr2)
+
+
+def test_frate_no_spikes():
+    # test 01 - 1 cell with 0 spikes
+    # ------------------------------
+    spk = pln.SpikeEpochs([np.array([])], [np.array([])])
+
+    # compute firing rate
+    # BUT: could in future raise similar error (or warning) than spk.spike_denisty
+    #      as there is not enough time points for one FR step ...
+    fr = spk.spike_rate()
+
+    assert fr.shape == (1, 0, 0)
+
+    msg = (r"Convolution kernel length \(151 samples\) exceeds the length of "
+           r"the data \(0 samples\).")
+    with pytest.raises(ValueError, match=msg):
+        spk.spike_density()
+
+    # test 02 - 2 cells, one with spikes, one without
+    # -----------------------------------------------
+    tri = np.array([0, 0, 0, 1, 1, 2])
+    tim = np.array([-0.1, 0.8, 1.1, 0.2, 0.6, -0.3])
+    spk = pln.SpikeEpochs([tim, np.array([])], [tri, np.array([])])
+
+    fr = spk.spike_rate()
+    assert fr.shape == (2, 3, 117)
+
+    fd = spk.spike_density()
+    assert fd.shape == (2, 3, 551)
