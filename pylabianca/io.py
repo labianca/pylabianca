@@ -672,7 +672,7 @@ def read_osort(path, waveform=True, channels='all', format='mm',
 
 
 def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
-                          first_timestamp_from='CSC130.ncs'):
+                          first_timestamp_from='CSC130.ncs', ignore_zero=True):
     '''Read neuralynx events file as a simple array or dataframe.
 
     Parameters
@@ -689,6 +689,10 @@ def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
     first_timestamp_from : str
         Name of the file to take first timestamp from. ``'CSC130.ncs'`` by
         default. Not used when ``False`` or ``format`` is ``"mne"``.
+    ignore_zero : bool
+        Whether to ignore zero triggers (turning trigger off). Defaults to
+        ``True``. If ``False``, all triggers are returned, including zero
+        triggers.
 
     Returns
     -------
@@ -708,9 +712,11 @@ def read_events_neuralynx(path, events_file='Events.nev', format='dataframe',
 
     # take only non-zero event triggers
     triggers = nev['events']['ttl']
-    nonzero = triggers > 0
-    event_timestamps = event_timestamps[nonzero]
-    triggers = triggers[nonzero]
+
+    if ignore_zero:
+        nonzero = triggers > 0
+        event_timestamps = event_timestamps[nonzero]
+        triggers = triggers[nonzero]
 
     n_events = event_timestamps.shape[0]
     if format == 'dataframe':
