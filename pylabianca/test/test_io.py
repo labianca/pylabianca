@@ -94,6 +94,23 @@ def test_read_events_neuralynx():
         pln.io.read_events_neuralynx(lynx_dir, format='lieber_biber')
 
 
+def test_read_events_neuralynx_include_zero_triggers_mne():
+    lynx_dir = op.join(
+        data_dir, 'test_neuralynx',
+        'sub-U06_ses-screening_set-U6d_run-01_ieeg'
+    )
+
+    # Read events with zero triggers included
+    events_include_zero = pln.io.read_events_neuralynx(lynx_dir, format='mne', ignore_zero=False)
+
+    # Verify that triggers include zero
+    assert (events_include_zero[:, -1] == 0).any()
+
+    # Compare with events where zero triggers are ignored
+    events_ignore_zero = pln.io.read_events_neuralynx(lynx_dir, format='mne', ignore_zero=True)
+    assert len(events_include_zero) > len(events_ignore_zero)
+
+
 def make_sure_identical(spk, spk2):
     n_units = spk.n_units()
     assert (spk.cell_names == spk2.cell_names).all()
