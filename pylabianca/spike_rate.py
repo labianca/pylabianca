@@ -104,8 +104,9 @@ def _compute_spike_rate_numpy(spike_times, spike_trials, times,
         win_lims = times[step_idx] + window_limits
         msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
-        in_tri, count = np.unique(tri, return_counts=True)
-        frate[in_tri, step_idx] = count / win_len
+        if len(tri) > 0:
+            in_tri, count = np.unique(tri, return_counts=True)
+            frate[in_tri, step_idx] = count / win_len
 
     return frate
 
