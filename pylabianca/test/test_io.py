@@ -101,13 +101,15 @@ def test_read_events_neuralynx_include_zero_triggers_mne():
     )
 
     # Read events with zero triggers included
-    events_include_zero = pln.io.read_events_neuralynx(lynx_dir, format='mne', ignore_zero=False)
+    events_include_zero = pln.io.read_events_neuralynx(lynx_dir, format='mne',
+                                                       ignore_zero=False)
 
     # Verify that triggers include zero
     assert (events_include_zero[:, -1] == 0).any()
 
     # Compare with events where zero triggers are ignored
-    events_ignore_zero = pln.io.read_events_neuralynx(lynx_dir, format='mne', ignore_zero=True)
+    events_ignore_zero = pln.io.read_events_neuralynx(lynx_dir, format='mne',
+                                                      ignore_zero=True)
     assert len(events_include_zero) > len(events_ignore_zero)
 
 
