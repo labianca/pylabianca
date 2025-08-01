@@ -89,7 +89,7 @@ def test_against_zetapy():
         spk_epochs, compare='orientation', n_permutations=n_permutations,
         tmax=1., return_dist=True, backend='numpy', picks=0)
 
-    perm_idx = np.random.randint(high=n_permutations)
+    perm_idx = np.random.randint(0, high=n_permutations)
     spk_epochs_cp = spk_epochs.copy()
     spk_epochs_cp.metadata.loc[:, 'orientation'] = dist1['perm_vec'][perm_idx, :]
 
