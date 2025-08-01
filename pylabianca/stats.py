@@ -2,6 +2,8 @@ import numpy as np
 
 
 # TODO: move to borsar
+# CONSIDER: n_perm=0 returns just the statistic, it will make selectivity
+#           code a bit easier
 def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
                      return_pvalue=True, return_distribution=True, n_jobs=1):
     '''Perform permutation test on the data.
@@ -9,7 +11,9 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
     Parameters
     ----------
     *arrays : array_like
-        The arrays for which the permutation test should be performed.
+        The arrays for which the permutation test should be performed. The
+        observations are assumed to be in the first dimension. This dimension
+        is permuted.
     paired : bool
         Whether a paired (repeated measures) or unpaired test should be used.
     n_perm : int

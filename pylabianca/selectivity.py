@@ -96,7 +96,7 @@ def depth_of_selectivity(frate, groupby):
     '''
 
     avg_by_probe = frate.groupby(groupby).mean(dim='trial')
-    n_categories = len(avg_by_probe.coords[groupby])
+    n_categories = avg_by_probe.coords[groupby].shape[0]
     r_max = avg_by_probe.max(dim=groupby)
 
     singleton = r_max.shape == ()
@@ -161,7 +161,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     # permutations
     # ------------
-    arrs = [arr for _, arr in frate.groupby(compare)]
+    arrs = [arr.values for _, arr in frate.groupby(compare)]
     stat_name = 't value' if len(arrs) == 2 else 'F value'
     stat_unit = stat_name[0]
     results = permutation_test(
@@ -647,6 +647,192 @@ def compute_time_in_window(df_cluster, window_of_interest):
     df_cluster.loc[:, 'in_toi'] = df_cluster.window.apply(
         _compute_time_in_window, args=(window_of_interest,))
     return df_cluster
+
+
+# CONSIDER renaming return_dist to return_traces / return_dict, etc.
+def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
+              n_permutations=100, significance='gumbel', return_dist=False,
+              subsample=1, reduction=None, permute_independently=False):
+    """ZETA test for comparing cumulative spike distributions between
+    conditions.
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        Spike data.
+    compare : str
+        Metadata column name containing condition labels to compare.
+    picks : int | str | list of int | list of str,  optional
+        Cell indices or names to test. If None, all cells are tested.
+    tmin : float, optional
+        Minimum time to consider. Default is ``0.``.
+    tmax : float, optional
+        Maximum time to consider. Default is ``None``, which uses the maximum
+        time in the data.
+    backend : {'numpy', 'numba'}, optional
+        Backend to use. Default is 'numpy'.
+    n_permutations : int, optional
+        Number of permutations to perform. Default is ``100``.
+    significance : {'gumbel', 'empirical', 'both'}, optional
+        Method to assess significance. ``'gumbel'`` estimates p-values using
+        the Gumbel distribution. ``'empirical'`` compares the real maximum
+        value to the permutation distribution. ``'both'`` returns both
+        estimates. Default is ``'gumbel'``
+    return_dist : bool, optional
+        Whether to return the cumulative traces and permutation traces.
+        Default is ``False``.
+    subsample : int, optional
+        Subsample factor for the reference time. Default is ``10``.
+    reduction : callable, optional
+        Reduction function to apply to the cumulative traces. Default is
+        ``None``, which uses the difference function for two conditions and
+        variance for more than two conditions.
+    permute_independently : bool, optional
+        Whether to permute conditions for each cell independently. Default is
+        ``False``.
+
+    Returns
+    -------
+    z_scores : np.ndarray
+        Z-scores - one per cell. Used only if ``significance`` is
+        ``'gumbel'``, otherwise ``None``.
+    p_values : np.ndarray
+        P-values - one per cell.
+    other : dict
+        Dictionary containing additional output if ``return_dist`` is ``True``.
+        Contains the following keys:
+
+        - trace : list of np.ndarray
+            Cumulative traces for each cell.
+        - perm_trace : list of np.ndarray
+            Permutation traces for each cell.
+        - max : np.ndarray
+            Maximum values for each cell.
+        - perm_max : np.ndarray
+            Maximum values for each permutation.
+        - perm_vec : np.ndarray
+            Permutation vectors (shuffled condition assignment per trial) for
+            each permutations - so that the same shuffled conditions can used
+            when calculating additional selectivity criteria.
+            * n_permutations x n_trials if ``permute_independently=False``
+            * n_permutations x n_cells x n_trials if
+              ``permute_independently=True``
+        - ref_time : list of np.ndarray
+            Reference times for each cell.
+    """
+    from .utils import _deal_with_picks
+    from ._zeta import (_prepare_ZETA_numpy_and_numba, _get_times_and_trials,
+                        compute_pvalues)
+
+    if backend == 'numba':
+        from .utils import has_numba
+        assert has_numba(), ('Numba package is required for the numba backend'
+                             ' to work.')
+        from ._numba import (get_condition_indices_and_unique_numba
+                             as _unique_func)
+    else:
+        from ._zeta import ZETA_numpy
+        from ._zeta import get_condition_indices_and_unique as _unique_func
+
+    condition_values, n_trials_max, tmax = _prepare_ZETA_numpy_and_numba(
+        spk, compare, tmax)
+    condition_idx, n_trials_per_cond, condition_values_unique, n_cnd = (
+        _unique_func(condition_values)
+    )
+
+    if backend == 'numpy' and reduction is None:
+        if n_cnd == 2:
+            from ._zeta import diff_func as reduction
+        elif n_cnd > 2:
+            from ._zeta import var_func as reduction
+    elif backend == 'numba':
+        if n_cnd == 2:
+            from ._zeta_numba import ZETA_numba_2cond as numba_func
+        elif n_cnd > 2:
+            from ._zeta_numba import ZETA_numba_Ncond as numba_func
+
+    picks = _deal_with_picks(spk, picks)
+    n_cells = len(picks)
+
+    if return_dist:
+        cumulative_diffs = list()
+        permutation_diffs = list()
+        reference_times = list()
+
+    real_abs_max = np.zeros(n_cells)
+    perm_abs_max = np.zeros((n_cells, n_permutations))
+
+    # prepare random states for the permutations
+    # (so that every cell gets the same permutation sequence)
+    max_val = 2 ** 32 - 1  # np.iinfo(int).max
+
+    if not permute_independently:
+        rnd = np.random.randint(
+            0, high=max_val + 1, size=n_permutations, dtype=np.int64)
+
+        if return_dist:
+            perm_vec = rnd
+    elif return_dist:
+        perm_vec = list()
+
+    # TODO: add joblib parallelization if necessary
+    for pick_idx, pick in enumerate(picks):
+        times, trials, reference_time = _get_times_and_trials(
+            spk, pick, tmin, tmax, subsample, backend)
+        n_samples = reference_time.shape[0]
+
+        if permute_independently:
+            rnd = np.random.randint(
+                0, high=max_val + 1, size=n_permutations, dtype=np.int64)
+
+            if return_dist:
+                perm_vec.append(rnd)
+
+        if backend == 'numba':
+            fraction_diff, permutations = numba_func(
+                times, trials, reference_time, n_trials_max,
+                n_trials_per_cond, condition_idx, n_cnd, rnd,
+                n_samples)
+        elif backend == 'numpy':
+            fraction_diff, permutations = ZETA_numpy(
+                times, reference_time, condition_idx, n_cnd,
+                rnd, n_samples, reduction=reduction)
+
+        # center the cumulative diffs and find max(abs) values
+        # TODO: could be done earlier (so for numba - within the
+        #       compiled function)
+        real_abs_max[pick_idx] = np.max(np.abs(fraction_diff))
+        perm_abs_max[pick_idx] = np.max(np.abs(permutations), axis=-1)
+
+        if return_dist:
+            cumulative_diffs.append(fraction_diff)
+            permutation_diffs.append(permutations)
+            reference_times.append(reference_time)
+
+    # asses significance through gumbel or by only comparing to permutations
+    z_scores, p_values = compute_pvalues(
+        real_abs_max, perm_abs_max, significance=significance)
+
+    if not return_dist:
+        return z_scores, p_values
+    else:
+        from ._zeta import recreate_permutation_condition_assignment
+
+        if permute_independently:
+            perm_vec = [
+                recreate_permutation_condition_assignment(
+                    perm_vec[cell_idx], condition_idx, condition_values_unique)
+                for cell_idx in range(n_cells)
+            ]
+            perm_vec = np.stack(perm_vec, axis=1)
+        else:
+            perm_vec = recreate_permutation_condition_assignment(
+                perm_vec, condition_idx, condition_values_unique)
+
+        other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
+                     max=real_abs_max, perm_max=perm_abs_max,
+                     ref_time=reference_times, perm_vec=perm_vec)
+        return z_scores, p_values, other
 
 
 def threshold_selectivity(selectivity, threshold):
