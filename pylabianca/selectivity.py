@@ -710,6 +710,13 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
             Maximum values for each cell.
         - perm_max : np.ndarray
             Maximum values for each permutation.
+        - perm_vec : np.ndarray
+            Permutation vectors (shuffled condition assignment per trial) for
+            each permutations - so that the same shuffled conditions can used
+            when calculating additional selectivity criteria.
+            * n_permutations x n_trials if ``permute_independently=False``
+            * n_permutations x n_cells x n_trials if
+              ``permute_independently=True``
         - ref_time : list of np.ndarray
             Reference times for each cell.
     """
@@ -729,7 +736,9 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
 
     condition_values, n_trials_max, tmax = _prepare_ZETA_numpy_and_numba(
         spk, compare, tmax)
-    condition_idx, n_trials_per_cond, _, n_cnd = _unique_func(condition_values)
+    condition_idx, n_trials_per_cond, condition_values_unique, n_cnd = (
+        _unique_func(condition_values)
+    )
 
     if backend == 'numpy' and reduction is None:
         if n_cnd == 2:
@@ -755,11 +764,16 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
 
     # prepare random states for the permutations
     # (so that every cell gets the same permutation sequence)
-    max_val = 2**32 - 1  # np.iinfo(int).max
+    max_val = 2 ** 32 - 1  # np.iinfo(int).max
 
     if not permute_independently:
         rnd = np.random.randint(
             0, high=max_val + 1, size=n_permutations, dtype=np.int64)
+
+        if return_dist:
+            perm_vec = rnd
+    elif return_dist:
+        perm_vec = list()
 
     # TODO: add joblib parallelization if necessary
     for pick_idx, pick in enumerate(picks):
@@ -770,6 +784,9 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         if permute_independently:
             rnd = np.random.randint(
                 0, high=max_val + 1, size=n_permutations, dtype=np.int64)
+
+            if return_dist:
+                perm_vec.append(rnd)
 
         if backend == 'numba':
             fraction_diff, permutations = numba_func(
@@ -799,9 +816,22 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     if not return_dist:
         return z_scores, p_values
     else:
+        from ._zeta import recreate_permutation_condition_assignment
+
+        if permute_independently:
+            perm_vec = [
+                recreate_permutation_condition_assignment(
+                    perm_vec[cell_idx], condition_idx, condition_values_unique)
+                for cell_idx in range(n_cells)
+            ]
+            perm_vec = np.stack(perm_vec, axis=1)
+        else:
+            perm_vec = recreate_permutation_condition_assignment(
+                perm_vec, condition_idx, condition_values_unique)
+
         other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
                      max=real_abs_max, perm_max=perm_abs_max,
-                     ref_time=reference_times)
+                     ref_time=reference_times, perm_vec=perm_vec)
         return z_scores, p_values, other
 
 

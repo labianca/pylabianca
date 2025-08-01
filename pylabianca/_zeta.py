@@ -315,3 +315,20 @@ def compute_pvalues(real_abs_max, perm_abs_max, significance='gumbel'):
         p_values = {'gumbel': p_values_gumbel, 'empirical': p_values_empirical}
 
     return z_scores, p_values
+
+
+def recreate_permutation_condition_assignment(seed_vec, condition_idx,
+                                              condition_values):
+    n_permutations = seed_vec.shape[0]
+    n_trials = condition_idx.shape[0]
+
+    cond_vals = np.zeros_like(
+        condition_values, shape=(n_permutations, n_trials))
+
+    for perm_idx in range(n_permutations):
+        # np.random.seed(rnd[perm_idx])
+        np.random.seed(seed_vec[perm_idx])
+        condition_idx_perm = np.random.permutation(condition_idx)
+        cond_vals[perm_idx, :] = condition_values[condition_idx_perm]
+
+    return cond_vals
