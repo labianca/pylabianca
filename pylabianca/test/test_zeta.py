@@ -53,7 +53,7 @@ def test_against_zetapy():
 
     time_start = time.time()
     z_val, p_val, dist = pln.selectivity.zeta_test(
-        spk_epochs_sel, compare='orientation', n_permutations=500,
+        spk_epochs_sel, compare='orientation', n_permutations=n_permutations,
         tmax=1., return_dist=True, backend='numpy', picks=0)
     time_taken_pln = time.time() - time_start
 
@@ -84,7 +84,23 @@ def test_against_zetapy():
         assert np.abs(p_val[0] - p_val_numba[0]) < (20 / n_permutations)
         assert np.abs(z_val[0] - z_val_numba[0]) < 0.25
 
-    # test N-conditions
+    # make sure permutation vectors are accurate
+    z_val, p_val, dist1 = pln.selectivity.zeta_test(
+        spk_epochs, compare='orientation', n_permutations=n_permutations,
+        tmax=1., return_dist=True, backend='numpy', picks=0)
+
+    perm_idx = np.random.randint(high=n_permutations)
+    spk_epochs_cp = spk_epochs.copy()
+    spk_epochs_cp.metadata.loc[:, 'orientation'] = dist1['perm_vec'][perm_idx, :]
+
+    # this also tests that n_permutations=0 works
+    _, _, dist2 = pln.selectivity.zeta_test(
+        spk_epochs_cp, compare='orientation', n_permutations=0,
+        tmax=1., return_dist=True, backend='numpy', picks=0)
+
+    assert (dist1['perm_trace'][0][perm_idx] == dist2['trace'][0]).all()
+
+    # test N string conditions
     stim_ori_str = np.array([str(ori) for ori in stim_ori], dtype='object')
     spk_epochs.metadata = pd.DataFrame({'orientation': stim_ori_str})
 
