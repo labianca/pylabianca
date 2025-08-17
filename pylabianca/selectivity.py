@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 
 from .analysis import nested_groupby_apply
-from .utils import (find_nested_dims, cellinfo_from_xarray,
-                    _inherit_metadata_from_xarray, assign_session_coord)
+from .utils import (cellinfo_from_xarray, _inherit_metadata_from_xarray,
+                    assign_session_coord)
 
 
 # TODO: ! adapt for multiple cells
@@ -153,10 +153,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     from .stats import permutation_test
 
     has_time = 'time' in frate.dims
-
-    frate_dims = ['trial', 'cell']
-    if has_time:
-        frate_dims.append('time')
+    frate_dims = ['trial', 'cell', 'time'] if has_time else ['trial', 'cell']
     frate = frate.transpose(*frate_dims)
 
     # permutations
@@ -164,63 +161,62 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     arrs = [arr.values for _, arr in frate.groupby(compare)]
     stat_name = 't value' if len(arrs) == 2 else 'F value'
     stat_unit = stat_name[0]
+
     results = permutation_test(
         *arrs, paired=False, n_perm=n_perm,
         return_pvalue=False, return_distribution=True, n_jobs=n_jobs)
 
     # turn to xarray
     # --------------
-    cells = frate.cell.values
-
-    # perm
-    dims = ['perm'] + frate_dims[1:]
+    is_dict = isinstance(results, dict)
+    has_dist = is_dict and 'dist' in results
+    has_thresh = is_dict and 'thresh' in results
     coords = {dim: frate.coords[dim].values.copy() for dim in frate_dims[1:]}
 
-    if n_perm > 0:
+    # stat
+    use_data = results['stat'] if is_dict else results
+    results = results if is_dict else dict()
+
+    results['stat'] = xr.DataArray(
+        data=use_data, dims=frate_dims[1:], coords=coords, name=stat_name)
+
+    # perm
+    if has_dist:
+        dims = ['perm'] + frate_dims[1:]
         results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
                                        coords=coords, name=stat_name)
-        use_data = results['stat']
-    else:
-        use_data = results
-        results = dict()
-
-    # stat
-    results['stat'] = xr.DataArray(
-        data=use_data, dims=dims[1:], coords=coords, name=stat_name)
 
     # thresh
-    if n_perm > 0:
+    if has_thresh:
         if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
             # two-tail thresholds
-            dims2 = ['tail'] + dims[1:]
+            dims2 = ['tail'] + frate_dims[1:]
             results['thresh'] = np.stack(results['thresh'], axis=0)
             coords.update({'tail': ['pos', 'neg']})
         else:
-            dims2 = dims[1:]
+            dims2 = frate_dims[1:]
             coords.update({'tail': np.array('pos')})
 
         results['thresh'] = xr.DataArray(
             data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
 
     # copy unit information
-    # TODO: use a separate utility function
     for key in results.keys():
         results[key].attrs['unit'] = stat_unit
-        if 'coord_units' in frate.attrs:
-            results[key].attrs['coord_units'] = frate.attrs['coord_units']
+        _copy_dim_units(frate, results[key])
 
-    # add cell coords
-    # TODO: move after Dataset creation
-    copy_coords = find_nested_dims(frate, 'cell')
-    if len(copy_coords) > 0:
-        for key in results.keys():
-            results[key] = _inherit_metadata_from_xarray(
-                frate, results[key], 'cell', copy_coords=copy_coords)
-
-    # transform to dataset:
+    # transform to dataset and add cell coords:
     results = xr.Dataset(results)
+    results = _inherit_metadata_from_xarray(frate, results, 'cell')
 
     return results
+
+
+def _copy_dim_units(xarr_from, xarr_to):
+    for dim in xarr_from.dims:
+        field = f'{dim}_unit'
+        if dim in xarr_to.dims and field in xarr_from.attrs:
+            xarr_to.attrs[field] = xarr_from.attrs[field]
 
 
 # pbar is now True, which defaults to text tqdm, but could be 'auto'
