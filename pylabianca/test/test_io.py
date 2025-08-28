@@ -238,10 +238,12 @@ def test_read_write_fieldtrip(tmp_path):
     #  make the element non-nparray)
     unit_idx = 0
     n_spikes_first_unit = len(spk.time[unit_idx])
-    select_spike_idx = np.random.randint(high=n_spikes_first_unit)
+    select_spike_idx = np.random.randint(0, n_spikes_first_unit)
     spk_one_spike = spk.copy()
     spk_one_spike.time[0] = spk_one_spike.time[0][select_spike_idx]
     spk_one_spike.trial[0] = spk_one_spike.trial[0][select_spike_idx]
+    spk_one_spike.waveform = None
+    spk_one_spike.waveform_time = None
     io_roundtrip(spk_one_spike, filepath, kind='trials')
 
     # io roundtrip for Spikes
