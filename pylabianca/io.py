@@ -63,19 +63,6 @@ def read_fieldtrip(fname, data_name='spike', kind='raw', waveform=True):
     return spk
 
 
-def _ensure_no_unpacked(lst):
-    """
-    Turn non-array items of the list to array representation.
-
-    Using squeezeme=True in loadmat leads to [1, 1] arrays to be
-    sequeezed out (unpacked) from the array into single int/float value.
-    This function makes sure these cases are turned back to np.array()."""
-    for idx in range(len(lst)):
-        if not isinstance(lst[idx], np.ndarray):
-            lst[idx] = np.array([lst[idx]])
-    return lst
-
-
 def _read_ft_spikes_tri(data, cell_names, trial_info, cellinfo, waveform,
                         waveform_time):
     '''Read fieldtrip SpikeTrials format.
