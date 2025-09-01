@@ -391,8 +391,8 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
         after zscoring.
     per_cell : bool
         Whether to perform selection and groupby operations on each cell
-        separately. This is much slower, but necessary when the selection is
-        cell-specific, e.g. when selecting only cells that are
+        separately. This is much slower, but necessary when the groupby or
+        selection is cell-specific, e.g. when using only cells that are
         stimulus-selective (then the preferred stimulus is cell-specific).
 
     Returns
@@ -438,6 +438,9 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
             )
             frates.append(frate_cell)
 
+        # TODO: this was probably added for some reason
+        # but the consequence is that the None has to be handled in aggregate
+        # sub-function specially, maybe not using None is better?
         if len(frates) > 0:
             frates = xr.concat(frates, dim='cell')
             return frates
@@ -480,7 +483,7 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
         Aggregated firing rate data.
     """
 
-    if zscore:
+    if not isinstance(zscore, bool) or zscore:
         bsln = None if isinstance(zscore, bool) else zscore
         frate = zscore_xarray(frate, baseline=bsln)
 
@@ -555,13 +558,19 @@ def _aggregate_dict(frates, groupby=None, select=None,
 
     aggregated = list()
     keys = list(frates.keys())
+    zscore_dict = isinstance(zscore, dict)
+    if not zscore_dict:
+        use_zscore = zscore
 
     for key in keys:
         frate = frates[key]
+        if zscore_dict:
+            use_zscore = zscore[key]
+
         frate_agg = aggregate(
             frate, groupby=groupby, select=select,
-            per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
-            per_cell=per_cell
+            per_cell_query=per_cell_query, zscore=use_zscore,
+            baseline=baseline, per_cell=per_cell
         )
         if frate_agg is not None:
             aggregated.append(frate_agg)
