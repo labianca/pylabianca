@@ -127,7 +127,7 @@ def find_cells(inst, not_found='error', more_found='error', **features):
     feature_names = list(features.keys())
     n_features = len(feature_names)
 
-    # make sure is feature is present in cellinfo
+    # make sure every feature is present in cellinfo
     cellinfo_columns = cellinfo.columns.tolist()
     for name in feature_names:
         if name not in cellinfo_columns:
@@ -138,6 +138,8 @@ def find_cells(inst, not_found='error', more_found='error', **features):
             features[name] = np.array([features[name]])
         elif isinstance(features[name], (list, tuple)):
             features[name] = np.array(features[name])
+        elif isinstance(features[name], pd.core.series.Series):
+            features[name] = features[name].values
 
     cell_idx = list()
     n_comparisons = np.array([len(val) for val in features.values()])
