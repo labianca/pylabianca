@@ -233,6 +233,19 @@ def test_read_write_fieldtrip(tmp_path):
     spk_no_wave.waveform_time = None
     io_roundtrip(spk_no_wave, filepath, kind='trials')
 
+    # one unit has exactly one spike
+    # (this used to cause scipy.io.loadmat to squeeze out the value and
+    #  make the element non-nparray)
+    unit_idx = 0
+    n_spikes_first_unit = len(spk.time[unit_idx])
+    select_spike_idx = np.random.randint(0, n_spikes_first_unit)
+    spk_one_spike = spk.copy()
+    spk_one_spike.time[0] = spk_one_spike.time[0][select_spike_idx]
+    spk_one_spike.trial[0] = spk_one_spike.trial[0][select_spike_idx]
+    spk_one_spike.waveform = None
+    spk_one_spike.waveform_time = None
+    io_roundtrip(spk_one_spike, filepath, kind='trials')
+
     # io roundtrip for Spikes
     filepath = op.join(tmp_path, 'spikeRaw.mat')
     spk_raw = pln.utils.create_random_spikes(
@@ -283,12 +296,13 @@ def test_neuralynx_no_scaling_info(tmp_path):
         raw_header = read_raw_header(fid)
         records = read_records(fid, NCS_RECORD)
 
-    # Remove the ADBitVolts line
+    # Remove the ADBitVolts line and pad to correct length
     header_str = raw_header.decode('ascii', errors='ignore')
     header_lines = [line for line in header_str.splitlines()
                     if not line.strip().startswith("-ADBitVolts")]
     stripped_header = '\r\n'.join(header_lines).encode('ascii')
-    stripped_header = stripped_header[:HEADER_LENGTH] + b'\0' * (HEADER_LENGTH - len(stripped_header))
+    stripped_header = (stripped_header[:HEADER_LENGTH]
+                       + b'\0' * (HEADER_LENGTH - len(stripped_header)))
 
     new_fname = fname.replace('.ncs', '_no_scaling_info.ncs')
     output_file = op.join(tmp_path, new_fname)
@@ -302,3 +316,37 @@ def test_neuralynx_no_scaling_info(tmp_path):
 
     assert data['data'].dtype == np.int16
     assert (data['data'][:512] == records[0]['Samples']).all()
+
+
+def test_add_region_from_channel_ranges():
+    # create random spikes
+    spk = pln.utils.create_random_spikes(
+        n_cells=10, cell_names=list('ABCDEFGHIJ'))
+
+    # create cellinfo with channel numbers
+    ch_num = np.arange(1, 11)
+    cellinfo = pd.DataFrame(data={'channel': ch_num})
+    spk.cellinfo = cellinfo
+
+    # create a table with anatomy info
+    region_info = pd.DataFrame(
+        data={'channel start': [1, 5, 10], 'channel end': [4, 9, 10],
+            'region': ['AMY', 'HIP', 'ACC']})
+
+    # add anatomy info to spk
+    pln.io.add_region_from_channel_ranges(
+        spk, region_info, source_column='region', target_column='anat')
+
+    assert (spk.cellinfo.anat == ['AMY'] * 4 + ['HIP'] * 5 + ['ACC']).all()
+
+    # test the same, but now with some channel ranges missing
+    spk.cellinfo = spk.cellinfo.drop(columns='anat')
+    region_info_missing = region_info.drop(index=1)
+
+    pln.io.add_region_from_channel_ranges(
+        spk, region_info_missing, source_column='region', target_column='anat')
+
+    correct = np.array(['AMY'] * 4 + [np.nan] * 5 + ['ACC'], dtype=object)
+    not_nan = ~pd.isna(correct)
+    assert (spk.cellinfo.anat[not_nan] == correct[not_nan]).all()
+    assert (pd.isna(spk.cellinfo.anat[~not_nan])).all()
