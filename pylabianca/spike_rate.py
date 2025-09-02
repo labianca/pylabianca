@@ -2,6 +2,7 @@ import numpy as np
 
 from .analysis import _symmetric_window_samples, _gauss_kernel_samples
 from .utils import _deal_with_picks, _turn_spike_rate_to_xarray
+from .utils.base import _get_trial_boundaries_array
 
 
 # TODO: add n_jobs?
@@ -95,17 +96,41 @@ def _add_frate_info(arr, dep='rate'):
     return arr
 
 
-# ENH: speed up by using previous mask in the next step to pre-select spikes
+# ENH: use searchsorted and carry over indices within each trial
 def _compute_spike_rate_numpy(spike_times, spike_trials, times,
                               window_limits, win_len, n_trials):
     n_steps = len(times)
     frate = np.zeros((n_trials, n_steps))
+
+    # spike_times are sorted only within trials; get trial boundaries using
+    # the utility helper
+    tri_bounds, tri_ids = _get_trial_boundaries_array(spike_trials)
+
+    # Pre-slice spikes per trial once to avoid repeated slicing in the loop
+    spikes_per_trial = [
+        spike_times[tri_bounds[i]:tri_bounds[i + 1]]
+        for i in range(len(tri_ids))
+    ]
+    starts = np.zeros(len(tri_ids), dtype=int)
+    ends = np.zeros(len(tri_ids), dtype=int)
+
     for step_idx in range(n_steps):
         win_lims = times[step_idx] + window_limits
-        msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
-        tri = spike_trials[msk]
-        in_tri, count = np.unique(tri, return_counts=True)
-        frate[in_tri, step_idx] = count / win_len
+
+        for tri_idx, tri in enumerate(tri_ids):
+            spk = spikes_per_trial[tri_idx]
+
+            s = starts[tri_idx]
+            e = ends[tri_idx]
+
+            s += np.searchsorted(spk[s:], win_lims[0], side='left')
+            e = max(e, s)
+            e += np.searchsorted(spk[e:], win_lims[1], side='left')
+
+            starts[tri_idx] = s
+            ends[tri_idx] = e
+
+            frate[tri, step_idx] = (e - s) / win_len
 
     return frate
 
