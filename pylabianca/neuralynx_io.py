@@ -97,6 +97,100 @@ NEV_RECORD = np.dtype(
 )
 
 
+def load_ncs(file_path, load_time=True, rescale_data=True,
+             signal_scaling=MICROVOLT_SCALING):
+    # Load the given file as a Neuralynx .ncs continuous acquisition file and
+    # extract the contents
+    file_path = os.path.abspath(file_path)
+    with open(file_path, 'rb') as fid:
+        raw_header = read_raw_header(fid)
+        records = read_records(fid, NCS_RECORD)
+
+    header = parse_header(raw_header)
+    check_ncs_records(records)
+
+    # Reshape the data into a 1D array
+    # the shape before ravel should be:
+    # (NCS_SAMPLES_PER_RECORD * len(records), 1)
+    data = records['Samples'].ravel()
+    timestamp = records['TimeStamp']
+
+    n_records = len(records)
+    n_samples = data.shape[0]
+
+    if n_records > 0:
+        sampling_rate = records['SampleFreq'][0]
+        channel_number = records['ChannelNumber'][0]
+    else:
+        sampling_rate = np.nan
+        channel_number = 0
+
+    data, data_units = _handle_scaling(data, header, rescale_data,
+                                       signal_scaling)
+
+    # construct output
+    ncs = dict(file_path=file_path, raw_header=raw_header, header=header,
+               data=data, data_units=data_units, sampling_rate=sampling_rate,
+               timestamp=timestamp, channel_number=channel_number)
+
+    # Calculate the sample time points (if needed)
+    if load_time:
+        _add_time(ncs, timestamp, n_records, n_samples)
+
+    return ncs
+
+
+def load_nev(file_path):
+    # Load the given file as a Neuralynx .nev event file and extract the
+    # contents
+    file_path = os.path.abspath(file_path)
+    with open(file_path, 'rb') as fid:
+        raw_header = read_raw_header(fid)
+        records = read_records(fid, NEV_RECORD)
+
+    header = parse_header(raw_header)
+
+    # Check for the packet data size, which should be two. DISABLED because
+    # these seem to be set to 0 in our files.
+    # assert np.all(record['pkt_data_size'] == 2), 'Some packets have invalid data size'
+
+    events = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl', 'Extra',
+                      'EventString']]
+
+    # construct output
+    nev = dict(file_path=file_path, raw_header=raw_header,
+               header=header, records=records, events=events)
+
+    return nev
+
+
+def read_records(fid, record_dtype, record_skip=0, count=None):
+    # Read count records (default all) from the file object fid skipping the
+    # first record_skip records. Restores the position of the file object
+    # after reading.
+    if count is None:
+        count = -1
+
+    fid.seek(HEADER_LENGTH, 0)
+    fid.seek(record_skip * record_dtype.itemsize, 1)
+    rec = np.fromfile(fid, record_dtype, count=count)
+
+    return rec
+
+
+def estimate_record_count(file_path, record_dtype):
+    # Estimate the number of records from the file size
+    file_size = os.path.getsize(file_path)
+    file_size -= HEADER_LENGTH
+
+    if file_size % record_dtype.itemsize != 0:
+        warnings.warn(
+            'File size is not divisible by record size (some bytes '
+            'unaccounted for)')
+
+    return file_size / record_dtype.itemsize
+
+
 def read_header(file_path):
     '''Reads and parses the header of a Neuralynx file.
 
@@ -121,10 +215,8 @@ def read_header(file_path):
 def read_raw_header(fid):
     # Read the raw header data (16 kb) from the file object fid. Restores the
     # position in the file object after reading.
-    pos = fid.tell()
     fid.seek(0)
     raw_hdr = fid.read(HEADER_LENGTH).strip(b'\0')
-    fid.seek(pos)
 
     return raw_hdr
 
@@ -206,36 +298,6 @@ def parse_header(raw_hdr):
     return hdr
 
 
-def read_records(fid, record_dtype, record_skip=0, count=None):
-    # Read count records (default all) from the file object fid skipping the
-    # first record_skip records. Restores the position of the file object
-    # after reading.
-    if count is None:
-        count = -1
-
-    pos = fid.tell()
-    fid.seek(HEADER_LENGTH, 0)
-    fid.seek(record_skip * record_dtype.itemsize, 1)
-    rec = np.fromfile(fid, record_dtype, count=count)
-    fid.seek(pos)
-
-    return rec
-
-
-def estimate_record_count(file_path, record_dtype):
-    # Estimate the number of records from the file size
-    file_size = os.path.getsize(file_path)
-    file_size -= HEADER_LENGTH
-
-    if file_size % record_dtype.itemsize != 0:
-        warnings.warn(
-            'File size is not divisible by record size (some bytes '
-            'unaccounted for)')
-
-    return file_size / record_dtype.itemsize
-
-
-
 def check_ncs_records(records):
     # Check that all the records in the array are "similar"
     # (have the same sampling frequency etc.)
@@ -270,49 +332,6 @@ def check_ncs_records(records):
         return True
 
 
-def load_ncs(file_path, load_time=True, rescale_data=True,
-             signal_scaling=MICROVOLT_SCALING):
-    # Load the given file as a Neuralynx .ncs continuous acquisition file and
-    # extract the contents
-    file_path = os.path.abspath(file_path)
-    with open(file_path, 'rb') as fid:
-        raw_header = read_raw_header(fid)
-        records = read_records(fid, NCS_RECORD)
-
-    header = parse_header(raw_header)
-    check_ncs_records(records)
-
-    # Reshape the data into a 1D array
-    # the shape before ravel should be:
-    # (NCS_SAMPLES_PER_RECORD * len(records), 1)
-    data = records['Samples'].ravel()
-    timestamp = records['TimeStamp']
-
-    n_records = len(records)
-    n_samples = data.shape[0]
-
-    if n_records > 0:
-        sampling_rate = records['SampleFreq'][0]
-        channel_number = records['ChannelNumber'][0]
-    else:
-        sampling_rate = np.nan
-        channel_number = 0
-
-    data, data_units = _handle_scaling(data, header, rescale_data,
-                                       signal_scaling)
-
-    # construct output
-    ncs = dict(file_path=file_path, raw_header=raw_header, header=header,
-               data=data, data_units=data_units, sampling_rate=sampling_rate,
-               timestamp=timestamp, channel_number=channel_number)
-
-    # Calculate the sample time points (if needed)
-    if load_time:
-        _add_time(ncs, timestamp, n_records, n_samples)
-
-    return ncs
-
-
 def _handle_scaling(data, header, rescale_data, signal_scaling):
     if rescale_data:
         try:
@@ -343,30 +362,6 @@ def _add_time(ncs, timestamp, n_records, n_samples):
     ncs['time_units'] = u'µs'
 
 
-def load_nev(file_path):
-    # Load the given file as a Neuralynx .nev event file and extract the
-    # contents
-    file_path = os.path.abspath(file_path)
-    with open(file_path, 'rb') as fid:
-        raw_header = read_raw_header(fid)
-        records = read_records(fid, NEV_RECORD)
-
-    header = parse_header(raw_header)
-
-    # Check for the packet data size, which should be two. DISABLED because
-    # these seem to be set to 0 in our files.
-    # assert np.all(record['pkt_data_size'] == 2), 'Some packets have invalid data size'
-
-    events = records[['pkt_id', 'TimeStamp', 'event_id', 'ttl', 'Extra',
-                      'EventString']]
-
-    # construct output
-    nev = dict(file_path=file_path, raw_header=raw_header,
-               header=header, records=records, events=events)
-
-    return nev
-
-
 def write_ncs(filename, records, raw_header):
     """
     Write Neuralynx .ncs file with the given records and raw header.
@@ -393,3 +388,4 @@ def write_ncs(filename, records, raw_header):
     with open(filename, 'wb') as f:
         f.write(padded_header)
         records.tofile(f)
+
