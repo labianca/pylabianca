@@ -331,7 +331,7 @@ def test_add_region_from_channel_ranges():
     # create a table with anatomy info
     region_info = pd.DataFrame(
         data={'channel start': [1, 5, 10], 'channel end': [4, 9, 10],
-            'region': ['AMY', 'HIP', 'ACC']})
+              'region': ['AMY', 'HIP', 'ACC']})
 
     # add anatomy info to spk
     pln.io.add_region_from_channel_ranges(
