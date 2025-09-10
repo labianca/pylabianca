@@ -29,7 +29,6 @@ from __future__ import division
 import os
 import warnings
 import numpy as np
-import datetime
 
 HEADER_LENGTH = 16 * 1024  # 16 kilobytes of header
 NCS_SAMPLES_PER_RECORD = 512
@@ -110,8 +109,7 @@ def load_ncs(file_path, load_time=True, rescale_data=True,
     check_ncs_records(records)
 
     # Reshape the data into a 1D array
-    # the shape before ravel should be:
-    # (NCS_SAMPLES_PER_RECORD * len(records), 1)
+    # the shape before ravel should be: (NCS_SAMPLES_PER_RECORD * len(records), 1)
     data = records['Samples'].ravel()
     timestamp = records['TimeStamp']
 
@@ -265,9 +263,9 @@ def parse_header(raw_hdr):
         some_old_header_format = False
 
     # Process lines with file opening and closing times
+    time_fields = list()
     if not some_old_header_format:
         parse_rest_from = 1
-        time_fields = list()
         ix, hdr[u'TimeCreated'] = _get_field_value(hdr_lines, '-TimeCreated')
         time_fields.append(ix)
 
