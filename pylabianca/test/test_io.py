@@ -302,3 +302,40 @@ def test_neuralynx_no_scaling_info(tmp_path):
 
     assert data['data'].dtype == np.int16
     assert (data['data'][:512] == records[0]['Samples']).all()
+<<<<<<< Updated upstream
+=======
+
+
+def test_add_region_from_channel_ranges():
+    # create random spikes
+    spk = pln.utils.create_random_spikes(
+        n_cells=10, cell_names=list('ABCDEFGHIJ'))
+
+    # create cellinfo with channel numbers
+    ch_num = np.arange(1, 11)
+    cellinfo = pd.DataFrame(data={'channel': ch_num})
+    spk.cellinfo = cellinfo
+
+    # create a table with anatomy info
+    region_info = pd.DataFrame(
+        data={'channel start': [1, 5, 10], 'channel end': [4, 9, 10],
+              'region': ['AMY', 'HIP', 'ACC']})
+
+    # add anatomy info to spk
+    pln.io.add_region_from_channel_ranges(
+        spk, region_info, source_column='region', target_column='anat')
+
+    assert (spk.cellinfo.anat == ['AMY'] * 4 + ['HIP'] * 5 + ['ACC']).all()
+
+    # test the same, but now with some channel ranges missing
+    spk.cellinfo = spk.cellinfo.drop(columns='anat')
+    region_info_missing = region_info.drop(index=1)
+
+    pln.io.add_region_from_channel_ranges(
+        spk, region_info_missing, source_column='region', target_column='anat')
+
+    correct = np.array(['AMY'] * 4 + [np.nan] * 5 + ['ACC'], dtype=object)
+    not_nan = ~pd.isna(correct)
+    assert (spk.cellinfo.anat[not_nan] == correct[not_nan]).all()
+    assert (pd.isna(spk.cellinfo.anat[~not_nan])).all()
+>>>>>>> Stashed changes

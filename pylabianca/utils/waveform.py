@@ -169,6 +169,7 @@ def realign_waveforms(spk, picks=None, min_spikes=10, reject=True):
     reject : bool
         Also remove waveforms and
     '''
+    from .base import _deal_with_picks
     picks = _deal_with_picks(spk, picks)
     for cell_idx in picks:
         waveforms = spk.waveform[cell_idx]
