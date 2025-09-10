@@ -73,12 +73,13 @@ def _read_ft_spikes_tri(data, cell_names, trial_info, cellinfo, waveform,
         SpikeEpochs object.
     '''
 
-    time = data['time'].item()
-    trial = data['trial'].item() - 1
+    time = _ensure_all_list_elements_are_arrays(data['time'].item())
+    trial = _ensure_all_list_elements_are_arrays(data['trial'].item() - 1)
     trial_time = data['trialtime'].item()
 
     if 'timestamp' in data.dtype.names:
-        timestamps = data['timestamp'].item()
+        timestamps = _ensure_all_list_elements_are_arrays(
+            data['timestamp'].item())
     else:
         timestamps = None
 
@@ -107,7 +108,7 @@ def _read_ft_spikes_raw(data, cell_names, cellinfo, waveform,
         Spikes object.
 
     '''
-    timestamps = data['timestamp'].item()
+    timestamps = _ensure_all_list_elements_are_arrays(data['timestamp'].item())
     timestamps = _check_timestamps(timestamps)
     sfreq = data['hdr'].item()['FileHeader'].item()['Frequency'].item()
 
@@ -116,6 +117,21 @@ def _read_ft_spikes_raw(data, cell_names, cellinfo, waveform,
                  cellinfo=cellinfo, waveform=waveform,
                  waveform_time=waveform_time)
     return spk
+
+
+def _ensure_all_list_elements_are_arrays(lst):
+    '''
+    Ensure all elements in a list are numpy arrays.
+
+    This is used because sometimes the way matlab files are read by
+    scipy.loadmat with squeeze_me=True, some one-element arrays
+    are returned as scalars instead of arrays, which gives errors in Spikes
+    and SpikeEpochs constructors.
+    '''
+    for ix in range(len(lst)):
+        if not isinstance(lst[ix], np.ndarray):
+            lst[ix] = np.array([lst[ix]])
+    return lst
 
 
 def _check_timestamps(timestamps):
@@ -1143,10 +1159,10 @@ def add_region_from_channel_ranges(spk, channel_info, source_column='area',
         chan_num = _get_chan_num(chan)
         msk = (channel_info['channel start'] <= chan_num) & (
             channel_info['channel end'] >= chan_num)
-        region = channel_info.loc[msk, source_column].values[0]
-
-        cell_msk = spk.cellinfo.channel == chan
-        spk.cellinfo.loc[cell_msk, target_column] = region
+        if msk.any():
+            region = channel_info.loc[msk, source_column].values[0]
+            cell_msk = spk.cellinfo.channel == chan
+            spk.cellinfo.loc[cell_msk, target_column] = region
 
 
 def read_drop_info(path):
