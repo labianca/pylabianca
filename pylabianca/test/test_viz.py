@@ -66,7 +66,7 @@ def test_plot_shaded():
         assert (line1.get_ydata() == line2.get_ydata()).all()
 
     # make sure that length-one dimensions are dropped
-    xarr_one_cell = xarr1.isel(cell=2)
+    xarr_one_cell = xarr1.isel(cell=[2])
     pln.plot_shaded(xarr_one_cell)
 
 
