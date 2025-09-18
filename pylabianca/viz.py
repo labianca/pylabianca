@@ -70,7 +70,7 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 break
 
     # if reduce_dim is still None - use the first dim for 2d array
-    if reduce_dim is None and arr.dims > 1:
+    if reduce_dim is None and arr.ndim > 1:
         reduce_dim = arr.dims[0]
 
     if reduce_dim is not None:
