@@ -50,11 +50,17 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     ax : matplotlib.Axes
         Axis with the plot.
     '''
+    # squeeze length-one dimensions
+    msk_len_1 = np.array(arr.shape) == 1
+    if (msk_len_1).any():
+        to_squeeze = np.array(arr.dims)[np.array(arr.shape) == 1]
+        arr = arr.squeeze(to_squeeze)
+
     # auto-infer reduce_dim
     # ---------------------
     if reduce_dim is None:
         auto_reduce_dims = ['trial', 'fold', 'perm', 'permutation', 'cell',
-                            'spike']
+                            'spike', 'channel']
         if groupby is not None and groupby in auto_reduce_dims:
             auto_reduce_dims.remove(groupby)
 
@@ -64,11 +70,14 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 break
 
     # if reduce_dim is still None - use the first dim for 2d array
-    if reduce_dim is None:
+    if reduce_dim is None and arr.dims > 1:
         reduce_dim = arr.dims[0]
 
+    if reduce_dim is not None:
+        correct_ndim = 1
+
     # make sure enough dimensions to plot
-    plot_ndim = arr.ndim - 1  # -1 for reduce_dim
+    plot_ndim = arr.ndim - correct_ndim
     if groupby is not None and groupby in arr.dims:
         plot_ndim -= 1
 
