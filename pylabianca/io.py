@@ -531,6 +531,7 @@ def read_osort(path, waveform=True, channels='all', format='mm',
                          'mm format. mm format keeps the selected units only '
                          'during the export.')
 
+    old_matlab_file_format = True
     one_file = not op.isdir(path)
 
     if not one_file:
@@ -598,7 +599,22 @@ def read_osort(path, waveform=True, channels='all', format='mm',
     iter_over = tqdm(files) if progress else files
     for fname in iter_over:
         file_path = op.join(path, fname)
-        data = loadmat(file_path, squeeze_me=False, variable_names=var_names)
+        if old_matlab_file_format:
+            try:
+                data = loadmat(file_path, squeeze_me=False,
+                                variable_names=var_names)
+            except NotImplementedError:
+                old_matlab_file_format = False
+
+        if not old_matlab_file_format:
+            try:
+                from mat73 import loadmat
+            except ImportError:
+                raise RuntimeError('To open matlab files in the new format'
+                                   ' (>= 7.3) you need to install mat73.')
+
+            data = loadmat(file_path, only_include=var_names)
+
 
         # make sure the correct format was specified - if not,
         # there will be no variables in the data object - throw an
