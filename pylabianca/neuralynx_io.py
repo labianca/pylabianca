@@ -108,8 +108,8 @@ def load_ncs(file_path, load_time=True, rescale_data=True,
     header = parse_header(raw_header)
     check_ncs_records(records)
 
-    # Reshape the data into a 1D array
-    # the shape before ravel should be: (NCS_SAMPLES_PER_RECORD * len(records), 1)
+    # Reshape the data into a 1D array, the shape before ravel should be:
+    # (NCS_SAMPLES_PER_RECORD * len(records), 1)
     data = records['Samples'].ravel()
     timestamp = records['TimeStamp']
 
@@ -164,8 +164,7 @@ def load_nev(file_path):
 
 def read_records(fid, record_dtype, record_skip=0, count=None):
     # Read count records (default all) from the file object fid skipping the
-    # first record_skip records. Restores the position of the file object
-    # after reading.
+    # first record_skip records.
     if count is None:
         count = -1
 
@@ -181,6 +180,8 @@ def estimate_record_count(file_path, record_dtype):
     file_size = os.path.getsize(file_path)
     file_size -= HEADER_LENGTH
 
+    if file_size < 0:
+        raise ValueError(f"Too small to be a valid .ncs file: {file_path}")
     if file_size % record_dtype.itemsize != 0:
         warnings.warn(
             'File size is not divisible by record size (some bytes '
