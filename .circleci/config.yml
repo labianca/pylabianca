@@ -20,7 +20,7 @@ jobs:
             mamba env create -f environment.yml
             source activate pylabianca
             if [ << parameters.use_numba >> == "yes" ]; then
-              mamba install numba -y;
+              mamba install numba=0.61.2 -y;
             fi
             if [ << parameters.mne_version >> == "current" ]; then
               pip install mne
