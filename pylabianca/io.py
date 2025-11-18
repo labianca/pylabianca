@@ -43,6 +43,8 @@ def read_fieldtrip(fname, data_name='spike', kind='raw', waveform=True):
     data = loadmat(fname, squeeze_me=True, variable_names=data_name)[data_name]
 
     cell_names = data['label'].item()
+    if isinstance(cell_names, str):
+        cell_names = [cell_names]
 
     if waveform:
         waveform, waveform_time = _get_waveforms(data)
@@ -128,6 +130,10 @@ def _ensure_all_list_elements_are_arrays(lst):
     are returned as scalars instead of arrays, which gives errors in Spikes
     and SpikeEpochs constructors.
     '''
+    if isinstance(lst, np.ndarray) and not lst.dtype == object:
+        # 1-element cell arrays will get unpacked int its contents by .item()
+        lst = [lst]
+
     for ix in range(len(lst)):
         if not isinstance(lst[ix], np.ndarray):
             lst[ix] = np.array([lst[ix]])
@@ -269,10 +275,20 @@ def _write_fieldtrip_trials(spk, filepath):
 
     # Loop over cells
     n_units = spk.n_units()
-    for cell_idx in range(n_units):
-        spikeTrials['trial'].append(spk.trial[cell_idx] + 1)  # py -> mat idx
-        spikeTrials['time'].append(spk.time[cell_idx])
-        spikeTrials['label'].append(spk.cell_names[cell_idx])
+    if n_units > 1:
+        for cell_idx in range(n_units):
+            # + 1 is for py -> mat idx
+            spikeTrials['trial'].append(spk.trial[cell_idx] + 1)
+            spikeTrials['time'].append(spk.time[cell_idx])
+            spikeTrials['label'].append(spk.cell_names[cell_idx])
+    elif n_units == 1:
+        for label in ['trial', 'time', 'label']:
+            spikeTrials[label] = np.array([None], dtype=object)
+
+        # + 1 is for py -> mat idx
+        spikeTrials['trial'][0] = spk.trial[0] + 1
+        spikeTrials['time'][0] = spk.time[0]
+        spikeTrials['label'][0] = spk.cell_names[0]
 
     spikeTrials['trialtime'] = np.tile(spk.time_limits, (spk.n_trials, 1))
 
