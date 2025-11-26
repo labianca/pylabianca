@@ -99,6 +99,8 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
         coords = _inherit_metadata(
             coords, spike_epochs.metadata, dimname, tri=tri)
 
+    # TODO: it seems that this copy_cellinfo part
+    # could also use _inherit_metadata
     if copy_cellinfo:
         if cell_names is not None and spike_epochs.cellinfo is not None:
             ch_idx = _deal_with_picks(spike_epochs, cell_names)
@@ -162,18 +164,20 @@ def cellinfo_from_xarray(xarr):
     return cellinfo
 
 
-def _inherit_metadata(coords, metadata, dimname, tri=None):
+def _inherit_metadata(coords, metadata, dim_name, tri=None):
+    '''Inherit metadata from a DataFrame to xarray coordinates.'''
     if metadata is not None:
         for col in metadata.columns:
             if tri is None:
-                coords[col] = (dimname, metadata[col])
+                coords[col] = (dim_name, metadata[col])
             else:
-                coords[col] = (dimname, metadata[col].iloc[tri])
+                coords[col] = (dim_name, metadata[col].iloc[tri])
     return coords
 
 
 def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
                                   copy_coords=None):
+    '''Inherit metadata from one xarray to another.'''
     if copy_coords is None:
         copy_coords = find_nested_dims(xarr_from, dimname)
     if len(copy_coords) > 0:
