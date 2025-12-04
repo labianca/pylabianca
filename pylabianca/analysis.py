@@ -479,9 +479,9 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
     frate : xarray.DataArray
         Aggregated firing rate data.
     """
-
-    if zscore:
-        bsln = None if isinstance(zscore, bool) else zscore
+    is_zscore_bool = isinstance(zscore, bool)
+    if not is_zscore_bool or zscore:
+        bsln = None if is_zscore_bool else zscore
         frate = zscore_xarray(frate, baseline=bsln)
 
     if select is not None:
