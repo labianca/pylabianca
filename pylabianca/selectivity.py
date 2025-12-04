@@ -9,12 +9,12 @@ from .utils import (find_nested_dims, cellinfo_from_xarray,
 
 
 # TODO: ! adapt for multiple cells
+# TODO: make more universal (do not require 'time' and 'trial' dimensions)
 # TODO: ensure same ``frate`` explanation for all functions
 #         Xarray with spike rate  or spike density containing ``'cell'``,
 #        ``'trial'`` and ``'time'`` dimensions.
 #       - obtained with SpikeEpochs.spike_rate or SpikeEpochs.spike_density
 #       - dimensions: ..., ..., ...
-# TODO: make more universal (do not require 'time' and 'trial' dimensions)
 def explained_variance(frate, groupby, kind='omega'):
     """Calculate percentage of explained variance (PEV) effect size.
 

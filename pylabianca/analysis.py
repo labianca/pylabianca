@@ -168,13 +168,17 @@ def spike_centered_windows(spk, arr, pick=None, time=None, sfreq=None,
 # TODO: differentiate between shuffling spike-trials vs just metadata
 #       -> an argument for that?
 #       -> or just name this shuffle_spikes
+# TODO - what about trials without spikes, are they filled sometimes?
 def shuffle_trials(spk, drop_timestamps=True, drop_waveforms=True):
-    '''Create a copy of the SpikeEpochs object with shuffled trials.
+    '''Shuffle the trial membership of spikes.
+    Returns a copy of the SpikeEpochs object.
 
-    Here the spike-trial relationship is shuffled, not trial metadata.
-    Shuffling spikes is more costly than simply shuffling metadata, but it is
-    necessary when the spike-trial relationship is important (for example in
-    spike-triggered averaging).
+    Here the spike-trial membership is shuffled, not trial metadata.
+    Each block of spikes coming from same trial gets a new trial number
+    assigned. In terms of abolishing the spikes - metadata relationship this
+    is analogous to shuffling the trial metadata. Shuffling spikes is also
+    more costly than shuffling metadata, but it is necessary in some cases (for
+    example to create null distribution for spike-triggered averaging).
 
     Parameters
     ----------
@@ -237,6 +241,65 @@ def shuffle_trials(spk, drop_timestamps=True, drop_waveforms=True):
 
                 start_idx += n_spk
     return new_spk
+
+
+def rotate_spikes(spk, drop_timestamps=True, drop_waveforms=True):
+    '''Move spike times in each trial by a random offset, wrapping around the
+    trial limits.
+
+    The goal of this randomization is to abolish any time-locked effects with
+    minimal effect on various statistical properties of the spike train
+    (inter-spike intervals and their order).
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        SpikeEpochs object.
+    drop_timestamps : bool
+        If True, timestamps are not copied to the new object.
+    drop_waveforms : bool
+        If True, waveforms are not copied to the new object.
+
+    Returns
+    -------
+    new_spk : SpikeEpochs
+        SpikeEpochs object with shuffled trials.
+    '''
+    if not (drop_timestamps and drop_waveforms):
+        raise NotImplementedError
+
+    n_tri = spk.n_trials
+    n_cells = spk.n_units()
+
+    new_spk = spk.copy()
+    new_spk.timestamps = None
+    new_spk.waveforms = None
+
+    trial_time = spk.time_limits[1] - spk.time_limits[0]
+    offset = np.random.rand(n_cells, n_tri) * trial_time
+
+    for cell_idx in range(n_cells):
+        boundaries, trial_ids = _get_trial_boundaries(spk, cell_idx)
+        for tri_idx in range(len(trial_ids)):
+            idx0, idx1 = boundaries[tri_idx:tri_idx + 2]
+            spike_times = spk.time[cell_idx][idx0:idx1]
+            trial = trial_ids[tri_idx]
+
+            this_offset = offset[cell_idx, trial]
+            new_spike_times = spike_times + this_offset
+            out_of_range = new_spike_times >= spk.time_limits[1]
+            if out_of_range.any():
+                out_by = new_spike_times[out_of_range] - spk.time_limits[1]
+                new_spike_times[out_of_range] = spk.time_limits[0] + out_by
+                # TODO: we could be smarter and rely on the fact that all
+                #       spikes moved outside trial limits will be at the
+                #       end of trial block
+                new_spike_times = np.sort(new_spike_times)
+
+            new_spk.time[cell_idx][idx0:idx1] = new_spike_times
+            offset[cell_idx, trial] = this_offset
+
+    return new_spk, offset
 
 
 # TODO: change name to something more descriptive like "select_data"?
