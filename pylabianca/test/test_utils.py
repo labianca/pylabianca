@@ -7,6 +7,7 @@ import pytest
 import pylabianca as pln
 from pylabianca.utils import (_get_trial_boundaries, find_cells,
                               create_random_spikes, _inherit_metadata)
+from pylabianca.testing import gen_random_xarr
 
 
 def test_trial_boundaries():
@@ -250,7 +251,6 @@ def test_turn_spike_rate_to_xarray():
 
 def test_find_nested_dims():
     import xarray as xr
-    from pylabianca.testing import gen_random_xarr
 
     n_cells, n_trials, n_times = 5, 24, 100
     tri_coord = np.random.choice(list('abcd'), size=n_trials)
@@ -264,3 +264,49 @@ def test_find_nested_dims():
     assert isinstance(sub_dims, list)
     assert len(sub_dims) == 1
     assert 'cond' in sub_dims
+
+
+def test_assign_session_coord():
+    """Test assign_session_coord function with various scenarios."""
+    import xarray as xr
+
+    # Test 1: Basic functionality with cell dimension
+    n_cells, n_trials, n_times = 5, 24, 100
+    xarr = gen_random_xarr(n_cells, n_trials, n_times)
+    session_name = 'session_A'
+
+    result = pln.utils.xarr.assign_session_coord(xarr, session_name)
+    assert 'session' in result.coords
+    assert (result.coords['session'].values == session_name).all()
+    assert len(result.coords['session']) == n_cells
+
+    # Test 2: Custom ses_coord name
+    custom_coord_name = 'my_session'
+    result = pln.utils.xarr.assign_session_coord(
+        xarr, session_name, ses_coord=custom_coord_name
+    )
+    assert custom_coord_name in result.coords
+    assert (result.coords[custom_coord_name].values == session_name).all()
+
+    # Test 3: DeprecationWarning when using ses_name parameter
+    with pytest.warns(DeprecationWarning, match='ses_name is deprecated'):
+        result = pln.utils.xarr.assign_session_coord(
+            xarr, session_name, ses_name='deprecated_session'
+        )
+    assert 'deprecated_session' in result.coords
+
+    # Test 4: Function works when cell is a coordinate but not in dims
+    # (simulating arr.isel(cell=1))
+    xarr_selected = xarr.isel(cell=1)
+    assert 'cell' in xarr_selected.coords
+    assert 'cell' not in xarr_selected.dims
+
+    result = pln.utils.xarr.assign_session_coord(xarr_selected, session_name)
+    assert 'session' in result.coords
+    # When cell is not in dims, n_cells should be 1
+    assert len(result.coords['session']) == 1
+    assert result.coords['session'].values[0] == session_name
+
+    # Test 5: ValueError when dim_name not found
+    with pytest.raises(ValueError, match='Could not find dim_name'):
+        pln.utils.xarr.assign_session_coord(xarr, session_name, dim_name='nonexistent')

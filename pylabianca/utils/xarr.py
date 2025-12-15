@@ -204,9 +204,41 @@ def find_nested_dims(arr, dim_name):
     return names
 
 
-# CONSIDER: ses_name -> ses_coord ?
-def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
-    n_cells = len(arr.coords[dim_name])
+def assign_session_coord(arr, ses, dim_name='cell', ses_coord='session',
+                         ses_name=None):
+    '''Assign a coordinate with session info to all cells.
+
+    Parameters
+    ----------
+    arr : xarray.DataArray
+        Input xarray.
+    ses : str
+        Session name to assign.
+    dim_name : str
+        Name of the dimension corresponding to cells.
+    ses_name : str
+        Name of the session coordinate to create.
+
+    Returns
+    -------
+    arr : xarray.DataArray
+        Xarray with session coordinate assigned.
+    '''
+    # deprecate ses_name in favor of ses_coord
+    if ses_name is not None:
+        ses_coord = ses_name
+        raise DeprecationWarning(
+            'ses_name is deprecated. Use ses_coord instead.')
+
+    # check dim_name
+    if dim_name in arr.dims:
+        n_cells = len(arr.coords[dim_name])
+    elif dim_name in arr.coords:
+        n_cells = 1
+    else:
+        raise ValueError(f'Could not find dim_name "{dim_name}" in arr.dims'
+                         'or arr.coords.')
+
     sub_dim = [ses] * n_cells
-    arr = arr.assign_coords({ses_name: (dim_name, sub_dim)})
+    arr = arr.assign_coords({ses_coord: (dim_name, sub_dim)})
     return arr
