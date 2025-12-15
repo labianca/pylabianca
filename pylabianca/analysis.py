@@ -358,6 +358,9 @@ def _get_arr(arr, sub_ses, ses_coord='sub'):
 # - [ ] better argument names:
 #     -> is per_cell_query (per_cell_select etc.) even needed is we
 #        have per_cell=True and pass to specific subfunction?
+#        (I don't know what I meant by "pass to psecific subfunction"..)
+# - [ ] select vs per_cell_query behavior -> first one is done after zscoring
+#       the second one before
 # ? option to pass the baseline calculated from a different period
 def aggregate(frate, groupby=None, select=None, per_cell_query=None,
               zscore=False, baseline=False, per_cell=False):
