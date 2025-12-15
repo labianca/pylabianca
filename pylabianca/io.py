@@ -343,7 +343,7 @@ def _waveform_to_ft(spk, spikeTrials):
         n_units = spk.n_units()
         spikeTrials['waveform'] = np.empty(n_units, dtype='object')
         for cell_idx in range(n_units):
-            # add "leads" dimention
+            # add "leads" dimension
             this_waveform = spk.waveform[cell_idx]
             if this_waveform is not None:
                 this_waveform = this_waveform.T[None, :]
