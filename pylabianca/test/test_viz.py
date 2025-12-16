@@ -93,8 +93,11 @@ def test_plot_shaded_colors():
         assert (ax.collections[idx].get_facecolor()[0, :3] == color_rgb).all()
 
 
-# TODO: could split this into two text with pytest parametrization
-def test_plot_shaded_colors_and_title():
+# tests
+
+
+@pytest.fixture
+def grouped_data():
     conditions = ['A', 'B', 'C']
     n_trials_per_cond = 10
     conditions = np.tile(conditions, (n_trials_per_cond, 1))
@@ -115,62 +118,73 @@ def test_plot_shaded_colors_and_title():
             np.random.rand(n_trials_per_cond, n_time_msk)
         )
 
-    data = xr.DataArray(
+    return xr.DataArray(
         data,
         dims=('trial', 'time'),
         coords={'time': time, 'cond': ('trial', conditions)}
     )
 
-    # test that title is not set to last groupby value
-    ax = pln.plot_shaded(data, groupby='cond')
+
+def test_plot_shaded_title_not_last_groupby(grouped_data):
+    ax = pln.plot_shaded(grouped_data, groupby='cond')
     ttl = ax.get_title()
-    assert not (ttl == 'cond = C')
+    assert ttl != 'cond = C'
 
-    # test that string colors work
-    ax = pln.plot_shaded(
-        data, groupby='cond',
-        colors={'A': 'cornflowerblue', 'B': 'magenta', 'C': 'lawngreen'})
 
-    correct_colors = [
-        (0.39215686274509803, 0.5843137254901961, 0.9294117647058824),
-        (1.0, 0.0, 1.0),
-        (0.48627450980392156, 0.9882352941176471, 0.0)
-    ]
+@pytest.mark.parametrize(
+    "colors",
+    [
+        ['cornflowerblue', 'magenta', 'lawngreen'],
+        {'A': 'cornflowerblue', 'B': 'magenta', 'C': 'lawngreen'},
+        'magenta',
+    ],
+)
+def test_plot_shaded_color_inputs(grouped_data, colors):
+    kwargs = {"colors": colors}
+    if not isinstance(colors, str):
+        kwargs["groupby"] = "cond"
+    ax = pln.plot_shaded(grouped_data, **kwargs)
 
-    for line, expected_color in zip(ax.lines, correct_colors):
-        assert line.get_color() == expected_color
+    if isinstance(colors, dict):
+        expected = [
+            plt.cm.colors.to_rgb(colors[c]) for c in sorted(colors)
+        ]
+    elif isinstance(colors, str):
+        expected = [plt.cm.colors.to_rgb(colors)]
+    else:
+        expected = [plt.cm.colors.to_rgb(c) for c in colors]
 
-    for shade, expected_color in zip(ax.collections, correct_colors):
-        assert (shade.get_facecolor()[0, :3] == expected_color).all()
+    for line, exp_col in zip(ax.lines, expected):
+        assert line.get_color() == exp_col
 
-    # one color string
-    ax = pln.plot_shaded(data, colors='magenta')
-    assert ax.lines[0].get_color() == correct_colors[1]
-    assert (ax.collections[0].get_facecolor()[0, :3]
-            == correct_colors[1]).all()
+    for shade, exp_col in zip(ax.collections, expected):
+        assert (shade.get_facecolor()[0, :3] == exp_col).all()
 
-    # test errors
-    msg = r"Missing colors for: \['C'\]"
-    with pytest.raises(ValueError, match=msg):
-        pln.plot_shaded(
-            data, groupby='cond',
-            colors={'A': 'cornflowerblue', 'B': 'magenta'}
+    if isinstance(colors, list):
+        msg = 'Expected 3 colors, got 2.'
+        with pytest.raises(ValueError, match=msg):
+            pln.plot_shaded(
+                grouped_data, groupby='cond',
+                colors=['cornflowerblue', 'magenta']
+            )
+
+    if isinstance(colors, dict):
+        msg = r"Missing colors for: \['C'\]"
+        with pytest.raises(ValueError, match=msg):
+            pln.plot_shaded(
+                grouped_data, groupby='cond',
+                colors={'A': 'cornflowerblue', 'B': 'magenta'}
+            )
+
+        msg = (
+            'colors must be a string, list, tuple, np.ndarray, or dict, '
+            "got <class 'set'>."
         )
-
-    msg = 'Expected 3 colors, got 2.'
-    with pytest.raises(ValueError, match=msg):
-        pln.plot_shaded(
-            data, groupby='cond',
-            colors=['cornflowerblue', 'magenta']
-        )
-
-    msg = ('colors must be a string, list, tuple, np.ndarray, or dict, '
-           "got <class 'set'>.")
-    with pytest.raises(TypeError, match=msg):
-        pln.plot_shaded(
-            data, groupby='cond',
-            colors={'cornflowerblue', 'magenta', 'lawngreen'}
-        )
+        with pytest.raises(TypeError, match=msg):
+            pln.plot_shaded(
+                grouped_data, groupby='cond',
+                colors={'cornflowerblue', 'magenta', 'lawngreen'}
+            )
 
 
 def test_plot_raster():
