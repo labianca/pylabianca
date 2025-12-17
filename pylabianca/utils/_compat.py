@@ -7,7 +7,7 @@ def dict_to_xarray(*args, **kwargs):
 
     # raise deprecation warning
     warnings.warn('This function has moved. Use `pylabianca.analysis.dict_'
-                  'to_xarray` instead.', DeprecationWarning)
+                  'to_xarray` instead.', FutureWarning, stacklevel=2)
 
     from ..analysis import dict_to_xarray as _dict_to_xarray
     return _dict_to_xarray(*args, **kwargs)
@@ -19,7 +19,7 @@ def xarray_to_dict(*args, **kwargs):
 
     # raise deprecation warning
     warnings.warn('This function has moved. Use `pylabianca.analysis.xarray_'
-                  'to_dict` instead.', DeprecationWarning)
+                  'to_dict` instead.', FutureWarning, stacklevel=2)
 
     from ..analysis import xarray_to_dict as _xarray_to_dict
     return _xarray_to_dict(*args, **kwargs)
@@ -31,7 +31,7 @@ def spike_centered_windows(*args, **kwargs):
 
     # raise deprecation warning
     warnings.warn('This function has moved. Use `pylabianca.analysis.spike_'
-                  'centered_windows` instead.', DeprecationWarning)
+                  'centered_windows` instead.', FutureWarning, stacklevel=2)
 
     from ..analysis import spike_centered_windows as _spike_centered_windows
     return _spike_centered_windows(*args, **kwargs)
@@ -43,7 +43,7 @@ def shuffle_trials(*args, **kwargs):
 
     # raise deprecation warning
     warnings.warn('This function has moved. Use `pylabianca.analysis.shuffle_'
-                  'trials` instead.', DeprecationWarning)
+                  'trials` instead.', FutureWarning, stacklevel=2)
 
     from ..analysis import shuffle_trials as _shuffle_trials
     return _shuffle_trials(*args, **kwargs)
@@ -54,7 +54,7 @@ def read_drop_info(*args, **kwargs):
 
     # raise deprecation warning
     warnings.warn('This function has moved. Use `pylabianca.io.read_drop_'
-                  'info` instead.', DeprecationWarning)
+                  'info` instead.', FutureWarning, stacklevel=2)
 
     from ..io import read_drop_info as _read_drop_info
     return _read_drop_info(*args, **kwargs)

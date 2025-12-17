@@ -288,8 +288,8 @@ def test_assign_session_coord():
     assert custom_coord_name in result.coords
     assert (result.coords[custom_coord_name].values == session_name).all()
 
-    # Test 3: DeprecationWarning when using ses_name parameter
-    with pytest.warns(DeprecationWarning, match='ses_name is deprecated'):
+    # Test 3: FutureWarning when using ses_name parameter
+    with pytest.warns(FutureWarning, match='ses_name is deprecated'):
         result = pln.utils.xarr.assign_session_coord(
             xarr, session_name, ses_name='deprecated_session'
         )

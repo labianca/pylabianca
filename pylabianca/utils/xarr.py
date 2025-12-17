@@ -227,8 +227,8 @@ def assign_session_coord(arr, ses, dim_name='cell', ses_coord='session',
     # deprecate ses_name in favor of ses_coord
     if ses_name is not None:
         ses_coord = ses_name
-        raise DeprecationWarning(
-            'ses_name is deprecated. Use ses_coord instead.')
+        warnings.warn('ses_name is deprecated. Use ses_coord instead.',
+                      FutureWarning, stacklevel=2)
 
     # check dim_name
     if dim_name in arr.dims:
