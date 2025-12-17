@@ -187,7 +187,7 @@ def test_xarr_dct_conversion():
     compare_dicts(x_dct1, x_dct2)
 
     # make sure we can do the same via pln.utils,
-    # but with a deprecation warning
+    # but with a FutureWarning
     with pytest.warns(FutureWarning):
         xarr3 = pln.utils.dict_to_xarray(x_dct1)
         x_dct3 = pln.utils.xarray_to_dict(xarr3)
