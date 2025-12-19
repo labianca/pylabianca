@@ -248,6 +248,9 @@ def test_xarr_dct_conversion():
     assert np.isnan(xarr.coords['cell_dist'].data).sum() == n_cells2
 
 
+# TODO - extract the dict-of-xarray creating and put separately
+# TODO - separate the extract_data tests and aggregation
+# TODO - there are test for dict_to_xarray here too
 def test_extract_data_and_aggregate():
     '''Test extract_data and some basic dict -> xarray operations.'''
 
@@ -329,6 +332,7 @@ def test_extract_data_and_aggregate():
     assert (frates_agg_one.data == frates_agg[:n_cells_one].data).all()
 
 
+# TODO - add some docstring informing what this is for
 def group_by_hand(xarr):
     arr_list = list()
     labels1 = list()
@@ -382,6 +386,13 @@ def test_aggregate_options():
     xarr_agg_hand = group_by_hand(xarr_z)
     xarr_agg_hand = xarr_agg_hand.transpose(*xarr_agg.dims)
     assert (xarr_agg.data == xarr_agg_hand).all()
+
+    # zscore passing xarray to aggregate
+    xarr_agg2 = pln.aggregate(
+        xarr, ['cnd1', 'cnd2'], zscore=baseline_arr, select=None,
+        baseline=None
+    )
+    assert (xarr_agg.data == xarr_agg2.data).all()
 
     # select and baseline
     xarr.name = 'data'
