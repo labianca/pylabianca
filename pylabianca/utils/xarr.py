@@ -237,6 +237,7 @@ def assign_session_coord(arr, ses, dim_name='cell', ses_coord='session',
         n_cells = len(arr.coords[dim_name])
     elif dim_name in arr.coords:
         n_cells = 1
+        arr = arr.expand_dims(dim_name, axis=0)
     else:
         raise ValueError(f'Could not find dim_name "{dim_name}" in arr.dims'
                          'or arr.coords.')
