@@ -343,7 +343,7 @@ def _waveform_to_ft(spk, spikeTrials):
         n_units = spk.n_units()
         spikeTrials['waveform'] = np.empty(n_units, dtype='object')
         for cell_idx in range(n_units):
-            # add "leads" dimention
+            # add "leads" dimension
             this_waveform = spk.waveform[cell_idx]
             if this_waveform is not None:
                 this_waveform = this_waveform.T[None, :]
@@ -554,8 +554,10 @@ def read_osort(path, waveform=True, channels='all', format='mm',
         files.sort()
 
         # select files based on channels and format
-        if not channels == 'all':
-            if isinstance(channels, str):
+        chan_str = isinstance(channels, str)
+        all_channels = chan_str and channels == 'all'
+        if not all_channels:
+            if chan_str:
                 channels = [channels]
             channels_check = [ch + '_' for ch in channels]
             check_channel = lambda f: any([ch in f for ch in channels_check])

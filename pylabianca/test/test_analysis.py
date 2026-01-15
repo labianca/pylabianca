@@ -53,7 +53,7 @@ def test_spike_centered_windows():
 
     # make sure that using pln.utils version raises warning,
     # but gives the same result
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         spk_cent3 = pln.utils.spike_centered_windows(
             spk, xarr, winlen=0.01)
 
@@ -187,8 +187,8 @@ def test_xarr_dct_conversion():
     compare_dicts(x_dct1, x_dct2)
 
     # make sure we can do the same via pln.utils,
-    # but with a deprecation warning
-    with pytest.warns(DeprecationWarning):
+    # but with a FutureWarning
+    with pytest.warns(FutureWarning):
         xarr3 = pln.utils.dict_to_xarray(x_dct1)
         x_dct3 = pln.utils.xarray_to_dict(xarr3)
 
