@@ -6,7 +6,7 @@ import numpy as np
 # TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
-                labels=True, **kwargs):
+                labels=True, col=None, row=None, **kwargs):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -42,14 +42,66 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         is ``None`` which uses the default matplotlib color cycle.
     labels : bool
         Whether to add labels to the axes.
+    col : str | None
+        Dimension to use for creating column facets. Each unique value in this
+        dimension will be plotted in a separate column. Default is ``None``.
+    row : str | None
+        Dimension to use for creating row facets. Each unique value in this
+        dimension will be plotted in a separate row. Default is ``None``.
     kwargs : dict
         Additional keyword arguments for the plot.
 
     Returns
     -------
-    ax : matplotlib.Axes
-        Axis with the plot.
+    ax : matplotlib.Axes | numpy.ndarray
+        Axis with the plot. If ``col`` or ``row`` are specified, returns an
+        array of axes.
     '''
+    # Handle faceting by col and row
+    if col is not None or row is not None:
+        import matplotlib.pyplot as plt
+
+        # Get unique values for row and col dimensions
+        row_vals = [None] if row is None else list(arr.coords[row].values)
+        col_vals = [None] if col is None else list(arr.coords[col].values)
+
+        n_rows = len(row_vals)
+        n_cols = len(col_vals)
+
+        # Create subplot grid
+        fig, axes = plt.subplots(
+            n_rows, n_cols, figsize=(5 * n_cols, 4 * n_rows),
+            squeeze=False, sharex=True, sharey=True)
+
+        # Plot each facet
+        for i, row_val in enumerate(row_vals):
+            for j, col_val in enumerate(col_vals):
+                # Select data for this facet
+                arr_facet = arr
+                if row_val is not None:
+                    arr_facet = arr_facet.sel({row: row_val})
+                if col_val is not None:
+                    arr_facet = arr_facet.sel({col: col_val})
+
+                # Plot in the corresponding subplot
+                ax_ij = axes[i, j]
+                plot_shaded(arr_facet, reduce_dim=reduce_dim, groupby=groupby,
+                           ax=ax_ij, x_dim=x_dim, legend=legend,
+                           legend_pos=legend_pos, colors=colors, labels=labels,
+                           col=None, row=None, **kwargs)
+
+                # Add titles for facets
+                title_parts = []
+                if col_val is not None:
+                    title_parts.append(f'{col} = {col_val}')
+                if row_val is not None:
+                    title_parts.append(f'{row} = {row_val}')
+                if title_parts:
+                    ax_ij.set_title(', '.join(title_parts))
+
+        plt.tight_layout()
+        return axes if axes.size > 1 else axes[0, 0]
+
     # squeeze length-one dimensions
     msk_len_1 = np.array(arr.shape) == 1
     if (msk_len_1).any():
