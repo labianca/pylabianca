@@ -554,8 +554,10 @@ def read_osort(path, waveform=True, channels='all', format='mm',
         files.sort()
 
         # select files based on channels and format
-        if not channels == 'all':
-            if isinstance(channels, str):
+        chan_str = isinstance(channels, str)
+        all_channels = chan_str and channels == 'all'
+        if not all_channels:
+            if chan_str:
                 channels = [channels]
             channels_check = [ch + '_' for ch in channels]
             check_channel = lambda f: any([ch in f for ch in channels_check])
