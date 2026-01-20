@@ -451,7 +451,16 @@ def test_plot_shaded_col_row_facets():
     assert axes.shape == (1, n_cond)
     _test_axes(axes[0, :], use_data, times, groupby='hemisphere')
 
-    # Test 5: Single facet (should return single axis)
+    # Test 5: Faceting should also work for "nested" coords
+    # -----------------------------------------------------
+    next_axes = pln.plot_shaded(use_data, col='hemisphere',
+                                groupby='condition')
+    assert (next_axes[0, 0].lines[0].get_ydata()
+            == axes[0, 0].lines[0].get_ydata()).all()
+    assert (next_axes[0, 0].lines[1].get_ydata()
+            == axes[0, 1].lines[0].get_ydata()).all()
+
+    # Test 6: Single facet (should return single axis)
     # ------------------------------------------------
     arr_single = xarr.sel(condition=['A'])
     result = pln.plot_shaded(arr_single.sel(subject='S1'), col='condition')
@@ -459,7 +468,7 @@ def test_plot_shaded_col_row_facets():
     # Should return a single axis, not an array
     assert isinstance(result, plt.Axes)
 
-    # Test 6: Axes should share x and y limits
+    # Test 7: Axes should share x and y limits
     # ----------------------------------------
     axes = pln.plot_shaded(xarr, row='condition', col='subject')
 
@@ -471,7 +480,7 @@ def test_plot_shaded_col_row_facets():
     assert all(xlim == x_lims[0] for xlim in x_lims)
     assert all(ylim == y_lims[0] for ylim in y_lims)
 
-    # Test 7: Faceting works with colors parameter
+    # Test 8: Faceting works with colors parameter
     # --------------------------------------------
     colors_dict = {'A': 'crimson', 'B': 'cornflowerblue'}
     axes = pln.plot_shaded(
