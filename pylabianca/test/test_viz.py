@@ -345,96 +345,98 @@ def test_add_highlights():
 def test_plot_shaded_col_row_facets():
     """Test col and row faceting in plot_shaded."""
     # Create test data with multiple dimensions
-    n_trials, n_times = 50, 100
+    n_trials, n_times, n_cond, n_subj = 50, 100, 2, 3
     times = np.linspace(-0.5, 1.5, num=n_times)
 
     # Create data with different effects for different conditions and subjects
     np.random.seed(42)
-    data = np.random.randn(n_trials, n_times, 2, 3)
-    data = gaussian_filter1d(data, sigma=5, axis=1)
+    data = np.random.randn(n_trials, n_times, n_cond, n_subj)
 
     # Add different effects for each condition
     data[:, 40:60, 0, :] += 2.0  # condition A has positive bump
     data[:, 40:60, 1, :] -= 1.5  # condition B has negative bump
 
+    data = gaussian_filter1d(data, sigma=5, axis=1)
+
     xarr = xr.DataArray(
         data,
         dims=['trial', 'time', 'condition', 'subject'],
         coords={
-            'trial': np.arange(n_trials),
             'time': times,
             'condition': ['A', 'B'],
             'subject': ['S1', 'S2', 'S3']
-        }
+        },
+        name='fr'
     )
+
+    def _test_axes(axes, data, times, subject=None, groupby=None):
+        axes = axes.ravel()
+        if groupby is not None:
+            grp_vals = data.coords[groupby].values
+            grp_uni = np.unique(grp_vals)
+            n_grp = len(grp_uni)
+        else:
+            n_grp = 1
+
+        for idx, cond in enumerate(['A', 'B']):
+            ax = axes[idx]
+            ax_data = data.sel(condition=cond)
+
+            # Check that the line data matches
+            assert len(ax.lines) == n_grp
+            for line_idx, line in enumerate(ax.lines):
+                if groupby is None:
+                    expected_data = ax_data
+                else:
+                    query_str = f'{groupby} == "{grp_uni[line_idx]}"'
+                    expected_data = ax_data.query(trial=query_str)
+
+                expected_data = expected_data.mean(dim='trial')
+                assert (line.get_xdata() == times).all()
+                assert np.allclose(line.get_ydata(), expected_data.values, atol=1e-10)
+
+            # Check title
+            title = ax.get_title()
+            assert f'condition = {cond}' in title
+            if subject is not None:
+                assert f'subject = {subject}' in title
+
+            # Check that legend exists
+            if groupby is not None:
+                legend = ax.get_legend()
+                assert legend is not None
+                legend_labels = [txt.get_text() for txt in legend.get_texts()]
+                for val in grp_vals:
+                    assert val in legend_labels
 
     # Test 1: Column faceting only
     # -----------------------------
-    axes = pln.plot_shaded(xarr.sel(subject='S1'), col='condition')
+    use_data = xarr.sel(subject='S1')
+    axes = pln.plot_shaded(use_data, col='condition')
 
-    # Should return 2D array with shape (1, 2)
-    assert axes.shape == (1, 2)
-
-    # Check that each subplot has the correct data
-    for j, cond in enumerate(['A', 'B']):
-        ax = axes[0, j]
-        expected_data = xarr.sel(subject='S1', condition=cond).mean(dim='trial')
-
-        # Check that the line data matches
-        assert len(ax.lines) == 1
-        line = ax.lines[0]
-        assert (line.get_xdata() == times).all()
-        assert np.allclose(line.get_ydata(), expected_data.values, atol=1e-10)
-
-        # Check title
-        title = ax.get_title()
-        assert f'condition = {cond}' in title
+    # test shape and data
+    assert axes.shape == (1, n_cond)
+    _test_axes(axes[0, :], use_data, times)
 
     # Test 2: Row faceting only
     # -------------------------
-    axes = pln.plot_shaded(xarr.sel(subject='S1'), row='condition')
+    use_data = xarr.sel(subject='S2')
+    axes = pln.plot_shaded(use_data, row='condition')
 
-    # Should return 2D array with shape (2, 1)
-    assert axes.shape == (2, 1)
-
-    # Check that each subplot has the correct data
-    for i, cond in enumerate(['A', 'B']):
-        ax = axes[i, 0]
-        expected_data = xarr.sel(subject='S1', condition=cond).mean(dim='trial')
-
-        # Check that the line data matches
-        assert len(ax.lines) == 1
-        line = ax.lines[0]
-        assert (line.get_xdata() == times).all()
-        assert np.allclose(line.get_ydata(), expected_data.values, atol=1e-10)
-
-        # Check title
-        title = ax.get_title()
-        assert f'condition = {cond}' in title
+    # test shape and data
+    assert axes.shape == (n_cond, 1)
+    _test_axes(axes[:, 0], use_data, times)
 
     # Test 3: Both row and column faceting
     # ------------------------------------
     axes = pln.plot_shaded(xarr, row='condition', col='subject')
 
-    # Should return 2D array with shape (2, 3)
-    assert axes.shape == (2, 3)
-
-    # Check that each subplot has the correct data
-    for i, cond in enumerate(['A', 'B']):
-        for j, subj in enumerate(['S1', 'S2', 'S3']):
-            ax = axes[i, j]
-            expected_data = xarr.sel(condition=cond, subject=subj).mean(dim='trial')
-
-            # Check that the line data matches
-            assert len(ax.lines) == 1
-            line = ax.lines[0]
-            assert (line.get_xdata() == times).all()
-            assert np.allclose(line.get_ydata(), expected_data.values, atol=1e-10)
-
-            # Check title contains both facet variables
-            title = ax.get_title()
-            assert f'condition = {cond}' in title
-            assert f'subject = {subj}' in title
+    # test shape and data
+    assert axes.shape == (n_cond, n_subj)
+    for j, subj in enumerate(['S1', 'S2', 'S3']):
+        ax_row = axes[:, j]
+        use_data = xarr.sel(subject=subj)
+        _test_axes(ax_row, use_data, times, subject=subj)
 
     # Test 4: Faceting with groupby
     # -----------------------------
@@ -442,35 +444,12 @@ def test_plot_shaded_col_row_facets():
     hemisphere = xr.DataArray(['left', 'right'] * 25, dims=['trial'])
     xarr_grouped = xarr.assign_coords(hemisphere=hemisphere)
 
-    axes = pln.plot_shaded(
-        xarr_grouped.sel(subject='S1'), col='condition', groupby='hemisphere'
-    )
+    use_data = xarr_grouped.sel(subject='S1')
+    axes = pln.plot_shaded(use_data, col='condition', groupby='hemisphere')
 
-    # Should return 2D array with shape (1, 2)
-    assert axes.shape == (1, 2)
-
-    # Check that each subplot has 2 lines (one per hemisphere)
-    for j, cond in enumerate(['A', 'B']):
-        ax = axes[0, j]
-        assert len(ax.lines) == 2
-
-        # Check that each line has correct data
-        for k, hem in enumerate(['left', 'right']):
-            line = ax.lines[k]
-            hem_trials = np.where(hemisphere.values == hem)[0]
-            expected_data = xarr.sel(
-                subject='S1', condition=cond, trial=hem_trials
-            ).mean(dim='trial')
-
-            assert (line.get_xdata() == times).all()
-            assert np.allclose(line.get_ydata(), expected_data.values, atol=1e-10)
-
-        # Check that legend exists
-        legend = ax.get_legend()
-        assert legend is not None
-        legend_labels = [txt.get_text() for txt in legend.get_texts()]
-        assert 'left' in legend_labels
-        assert 'right' in legend_labels
+    # test shape and data
+    assert axes.shape == (1, n_cond)
+    _test_axes(axes[0, :], use_data, times, groupby='hemisphere')
 
     # Test 5: Single facet (should return single axis)
     # ------------------------------------------------
@@ -501,14 +480,15 @@ def test_plot_shaded_col_row_facets():
     )
 
     # Check colors are applied correctly in each facet
-    for j, cond in enumerate(['A', 'B']):
-        ax = axes[0, j]
+    expected_colors = [
+        plt.cm.colors.to_rgb('crimson'),
+        plt.cm.colors.to_rgb('cornflowerblue')
+    ]
+    for idx, _ in enumerate(['A', 'B']):
+        ax = axes[0, idx]
         assert len(ax.lines) == 2
 
         # Check line colors
-        expected_colors = [
-            plt.cm.colors.to_rgb('crimson'),
-            plt.cm.colors.to_rgb('cornflowerblue')
-        ]
         for line, exp_color in zip(ax.lines, expected_colors):
             assert line.get_color() == exp_color
+
