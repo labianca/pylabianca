@@ -3,7 +3,11 @@ import numpy as np
 
 # TODO: title is now removed, so for groupby it would be good to specify the
 #       groupby coord name in legend "title"
+# TODO: when using col and row consider placing the legend in only one of
+#       the subplots or outside (on the margins)
 # TODO: allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
+# TODO: check if using some functionality from seaborn makes sense
+#       seaborn.axisgrid.FacetGrid, seaborn._core.subplots
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
                 labels=True, col=None, row=None, **kwargs):
@@ -74,8 +78,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
             squeeze=False, sharex=True, sharey=True)
 
         # Plot each facet
-        for i, row_val in enumerate(vals['row']):
-            for j, col_val in enumerate(vals['col']):
+        for row_idx, row_val in enumerate(vals['row']):
+            for col_idx, col_val in enumerate(vals['col']):
                 # Select data for this facet
                 arr_facet = arr
                 if has['row']:
@@ -86,7 +90,7 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                         arr_facet, col, col_val, is_dim['col'], parent['col'])
 
                 # Plot in the corresponding subplot
-                ax_ij = axes[i, j]
+                ax_ij = axes[row_idx, col_idx]
                 plot_shaded(arr_facet, reduce_dim=reduce_dim, groupby=groupby,
                            ax=ax_ij, x_dim=x_dim, legend=legend,
                            legend_pos=legend_pos, colors=colors, labels=labels,
@@ -318,13 +322,13 @@ def check_coord(xarr, coord_name):
         has_coord = coord_name in xarr.coords
 
         if not has_coord:
-            raise ValueError(f'Coordinate {coord_name} not found.')
+            raise ValueError(f'Coordinate "{coord_name}" not found.')
 
         parent_coord = xarr.coords[coord_name].dims
         n_parents = len(parent_coord)
         if not n_parents == 1:
-            raise ValueError(f'Coordinate {coord_name} does not have exactly'
-                              ' 1 dimention attached (has dims: '
+            raise ValueError(f'Coordinate "{coord_name}" does not have exactly'
+                              ' 1 dimension attached (has dims: '
                              f'{parent_coord}).')
 
         return (has_coord, is_dim, parent_coord[0],

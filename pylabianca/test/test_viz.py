@@ -482,10 +482,11 @@ def test_plot_shaded_col_row_facets():
 
     # Test 8: Faceting works with colors parameter
     # --------------------------------------------
+    use_data = xarr_grouped.sel(subject='S3')
     colors_dict = {'A': 'crimson', 'B': 'cornflowerblue'}
     axes = pln.plot_shaded(
-        xarr_grouped.sel(subject='S1'), col='condition',
-        groupby='hemisphere', colors={'left': 'crimson', 'right': 'cornflowerblue'}
+        use_data, col='condition', groupby='hemisphere',
+        colors={'left': 'crimson', 'right': 'cornflowerblue'}
     )
 
     # Check colors are applied correctly in each facet
@@ -500,4 +501,17 @@ def test_plot_shaded_col_row_facets():
         # Check line colors
         for line, exp_color in zip(ax.lines, expected_colors):
             assert line.get_color() == exp_color
+
+    # Test 9: ValueErrors are raised
+    # ------------------------------
+    msg_to_match = 'Coordinate "krecik" not found.'
+    with pytest.raises(ValueError, match=msg_to_match):
+        pln.plot_shaded(use_data, col='krecik', groupby='condition')
+
+    krecik = np.random.rand(n_trials, n_subj)
+    use_data = xarr_grouped.assign_coords(
+        krecik=(('trial', 'subject'), krecik))
+    msg_to_match = 'Coordinate "krecik" does not have exactly 1 dimension'
+    with pytest.raises(ValueError, match=msg_to_match):
+        pln.plot_shaded(use_data, col='krecik', groupby='condition')
 
