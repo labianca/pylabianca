@@ -26,6 +26,7 @@ jobs:
               pip install mne
             else
               pip install mne==<< parameters.mne_version >>;
+              mamba install numpy==2.2.6
             fi
             pip install borsar elephant neo quantities statsmodels --no-deps
             mamba install pytest -y;

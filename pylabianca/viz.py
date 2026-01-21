@@ -1,12 +1,16 @@
 import numpy as np
 
 
-# TODO - title is now removed, so for groupby it would be good to specify the
-#        groupby coord name in legend "title"
-# TODO - allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
+# TODO: title is now removed, so for groupby it would be good to specify the
+#       groupby coord name in legend "title"
+# TODO: when using col and row consider placing the legend in only one of
+#       the subplots or outside (on the margins)
+# TODO: allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
+# TODO: check if using some functionality from seaborn makes sense
+#       seaborn.axisgrid.FacetGrid, seaborn._core.subplots
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
-                labels=True, **kwargs):
+                labels=True, col=None, row=None, **kwargs):
     '''Plot spike rate with standard error of the mean.
 
     Parameters
@@ -42,14 +46,68 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         is ``None`` which uses the default matplotlib color cycle.
     labels : bool
         Whether to add labels to the axes.
+    col : str | None
+        Dimension to use for creating column facets. Each unique value in this
+        dimension will be plotted in a separate column. Default is ``None``.
+    row : str | None
+        Dimension to use for creating row facets. Each unique value in this
+        dimension will be plotted in a separate row. Default is ``None``.
     kwargs : dict
         Additional keyword arguments for the plot.
 
     Returns
     -------
-    ax : matplotlib.Axes
-        Axis with the plot.
+    ax : matplotlib.Axes | numpy.ndarray
+        Axis with the plot. If ``col`` or ``row`` are specified, returns an
+        array of axes.
     '''
+    # Handle faceting by col and row
+    if col is not None or row is not None:
+        import matplotlib.pyplot as plt
+
+        # Get unique values for row and col dimensions
+        n, has, is_dim, parent, vals = dict(), dict(), dict(), dict(), dict()
+        for ori, coord in zip(['col', 'row'], [col, row]):
+            has[ori], is_dim[ori], parent[ori], vals[ori] = check_coord(
+                arr, coord)
+            n[ori] = len(vals[ori])
+
+        # Create subplot grid
+        _, axes = plt.subplots(
+            n['row'], n['col'], figsize=(5 * n['col'], 4 * n['row']),
+            squeeze=False, sharex=True, sharey=True)
+
+        # Plot each facet
+        for row_idx, row_val in enumerate(vals['row']):
+            for col_idx, col_val in enumerate(vals['col']):
+                # Select data for this facet
+                arr_facet = arr
+                if has['row']:
+                    arr_facet = _select_by_coord(
+                        arr_facet, row, row_val, is_dim['row'], parent['row'])
+                if has['col']:
+                    arr_facet = _select_by_coord(
+                        arr_facet, col, col_val, is_dim['col'], parent['col'])
+
+                # Plot in the corresponding subplot
+                ax_ij = axes[row_idx, col_idx]
+                plot_shaded(arr_facet, reduce_dim=reduce_dim, groupby=groupby,
+                           ax=ax_ij, x_dim=x_dim, legend=legend,
+                           legend_pos=legend_pos, colors=colors, labels=labels,
+                           col=None, row=None, **kwargs)
+
+                # Add titles for facets
+                title_parts = []
+                if col_val is not None:
+                    title_parts.append(f'{col} = {col_val}')
+                if row_val is not None:
+                    title_parts.append(f'{row} = {row_val}')
+                if title_parts:
+                    ax_ij.set_title(', '.join(title_parts))
+
+        plt.tight_layout()
+        return axes if axes.size > 1 else axes[0, 0]
+
     # squeeze length-one dimensions
     msk_len_1 = np.array(arr.shape) == 1
     if (msk_len_1).any():
@@ -251,6 +309,42 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         ax.legend(title=f'{groupby}:', loc=pos)
 
     return ax
+
+
+def check_coord(xarr, coord_name):
+    if coord_name is None:
+        return False, False, None, [None]
+
+    is_dim = coord_name in xarr.dims
+    if is_dim:
+        return True, is_dim, None, np.unique(xarr.coords[coord_name].values)
+    else:
+        has_coord = coord_name in xarr.coords
+
+        if not has_coord:
+            raise ValueError(f'Coordinate "{coord_name}" not found.')
+
+        parent_coord = xarr.coords[coord_name].dims
+        n_parents = len(parent_coord)
+        if not n_parents == 1:
+            raise ValueError(f'Coordinate "{coord_name}" does not have exactly'
+                              ' 1 dimension attached (has dims: '
+                             f'{parent_coord}).')
+
+        return (has_coord, is_dim, parent_coord[0],
+                np.unique(xarr.coords[coord_name].values))
+
+
+def _select_by_coord(arr, coord, val, is_dim, parent_coord):
+    if is_dim:
+        return arr.sel({coord: val})
+    else:
+        if isinstance(val, str):
+            query = f'{coord} == "{val}"'
+        else:
+            query = f'{coord} == {val}'
+
+        return arr.query({parent_coord: query})
 
 
 def _verify_color(color):
@@ -913,10 +1007,10 @@ def align_axes_limits(axes=None, ylim=True, xlim=False):
             set_lim[lim](limits[lim])
 
 
-# TODO - move this to separate submodule .waveform ?
-# TODO - the API could be better / simplified: low level function that
-#        takes just waveform array and high-level function that takes
-#        Spikes object and cell indices (currently only one cell is supported)
+# TODO: move this to separate submodule .waveform ?
+# TODO: the API could be better / simplified: low level function that
+#       takes just waveform array and high-level function that takes
+#       Spikes object and cell indices (currently only one cell is supported)
 def calculate_perceptual_waveform_density(spk, cell_idx, take_n=15):
     """
     Experimental measure of "perceptual" waveform density.
