@@ -149,9 +149,9 @@ class SpikeEpochs():
         if tmin is None and tmax is None:
             raise TypeError('You have to specify tmin and/or tmax.')
 
-        if tmin is None:
+        if tmin is None or tmin < self.time_limits[0]:
             tmin = self.time_limits[0]
-        if tmax is None:
+        if tmax is None or tmax > self.time_limits[1]:
             tmax = self.time_limits[1]
 
         has_waveform = self.waveform is not None
