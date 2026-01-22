@@ -132,6 +132,8 @@ def df_from_xarray_coords(xarr, dim):
     '''
     import pandas as pd
     use_dims = find_nested_dims(xarr, dim)
+    if dim not in use_dims:
+        use_dims = [dim] + use_dims
 
     if len(use_dims) > 1:
         df = {dim: xarr.coords[dim].values for dim in use_dims}
