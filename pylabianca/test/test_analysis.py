@@ -248,6 +248,7 @@ def test_xarr_dct_conversion():
     assert np.isnan(xarr.coords['cell_dist'].data).sum() == n_cells2
 
 
+# TODO - could use gen_random_xarr
 def test_extract_data_and_aggregate():
     '''Test extract_data and some basic dict -> xarray operations.'''
 
@@ -348,7 +349,6 @@ def group_by_hand(xarr):
     return arr_out
 
 
-
 def test_aggregate_options():
     from pylabianca.analysis import _aggregate_xarray
 
@@ -399,6 +399,30 @@ def test_aggregate_options():
     xarr_agg_hand -= bsln
     xarr_agg_hand = xarr_agg_hand.transpose(*xarr_agg.dims)
     assert (xarr_agg.data == xarr_agg_hand).all()
+
+
+def test_aggregate_baseline():
+    from pylabianca.testing import gen_random_xarr
+
+    keys = list('ABC')
+    n_cells = [10, 5, 8]
+    arr_dct = {key: gen_random_xarr(n_c, 25, 100)
+               for key, n_c in zip(keys, n_cells)}
+
+    bsln = arr_dct['A']
+    match_str = 'the `zscore` can\'t be a DataArray'
+    with pytest.raises(TypeError, match=match_str):
+        pln.aggregate(arr_dct, zscore=bsln)
+
+    # when some keys are not present in zscore - error
+    bsln = {k: arr_dct[k] for k in ['A', 'B']}
+    match_str = ("Following keys are present in `frates` dictionary, but "
+                 "absent in `zscore`: ['C']")
+    with pytest.raises(TypeError, match=match_str):
+        pln.aggregate(arr_dct, zscore=bsln)
+
+    # everything is matching - check the same as doing element by element
+    # TODO
 
 
 def test_aggregate_per_cell():
