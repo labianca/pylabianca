@@ -352,16 +352,13 @@ def _get_arr(arr, sub_ses, ses_coord='sub'):
     return arr
 
 
-# TODO: stimulus selectivity should be added to the xarray -
-#       it can be done as cell x trial coordinate, this could be a function
-#       in .selectivity module
+# TODO: 
 # - [ ] better argument names:
 #     -> is per_cell_query (per_cell_select etc.) even needed is we
 #        have per_cell=True and pass to specific subfunction?
 #        (I don't know what I meant by "pass to psecific subfunction"..)
 # - [ ] select vs per_cell_query behavior -> first one is done after zscoring
 #       the second one before
-# ? option to pass the baseline calculated from a different period
 def aggregate(frate, groupby=None, select=None, per_cell_query=None,
               zscore=False, baseline=False, per_cell=False):
     """
@@ -553,13 +550,31 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
 
 # TODO: this could be changed and used with apply_dict / dict_apply
 #       the dict apply function could have output='xarray' option
+# - [ ] we need a separate function that checks whehter input is dict of
+#       xr.DataArray objects
 def _aggregate_dict(frates, groupby=None, select=None,
                     per_cell_query=None, zscore=False, baseline=False,
                     per_cell=False):
     import xarray as xr
 
-    aggregated = list()
     keys = list(frates.keys())
+
+    # zscore can't be an array, must be a dict of arrays, with matching keys
+    msg = ('When aggregating a dictionary of DataArrays, the '
+           '`zscore` can\'t be a DataArray, but a matching '
+           'dictionary of DataArrays.')
+    if isinstance(zscore, xr.DataArray):
+        raise TypeError(msg)
+    if isinstance(zscore, dict):
+        zscore_keys = zscore.keys()
+        missing_keys = [key for key in keys if key not in zscore_keys]
+        if len(missing_keys):
+            use_msg = msg + (' Following keys are present in `frates` '
+                             'dictionary, but absent in `zscore`: '
+                             + str(missing_keys))
+            raise TypeError(use_msg)
+
+    aggregated = list()
 
     for key in keys:
         frate = frates[key]
