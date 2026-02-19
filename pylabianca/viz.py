@@ -803,8 +803,11 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
     if isinstance(arr, np.ndarray):
         x_coords = arr
     elif has_xarray and isinstance(arr, xr.DataArray):
-        last_dim = arr.dims[-1]
-        x_coords = arr.coords[last_dim].values
+        if 'time' in arr.dims:
+            use_dim = 'time'
+        else:
+            use_dim = arr.dims[-1]
+        x_coords = arr.coords[use_dim].values
     else:
         raise RuntimeError('The `arr` has to be either a numpy array or'
                            'xarray.DataArray.')

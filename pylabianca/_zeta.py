@@ -229,7 +229,7 @@ def _get_times_and_trials(spk, pick, tmin, tmax, subsample, backend):
 
 def gumbel(mean, std, x):
     """"Calculate p-value and z-score for maximum value of N samples drawn from
-    a Gaussian
+    a Gaussian.
 
     Parameters
     ----------
