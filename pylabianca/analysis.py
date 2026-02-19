@@ -627,7 +627,8 @@ def zscore_xarray(arr, groupby='cell', baseline=None):
     return arr
 
 
-def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub'):
+def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub',
+                   ses_name=None):
     '''Convert dictionary to xarray.DataArray.
 
     Parameters
@@ -659,6 +660,8 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub'):
     import xarray as xr
 
     assert isinstance(data, dict)
+    _check_ses_coord(None, ses_coord, ses_name)
+
     keys = list(data.keys())
     all_xarr = [isinstance(data[sb], (xr.DataArray, xr.Dataset))
                 for sb in keys]
@@ -719,8 +722,19 @@ def _get_missing_value(dtype):
         return None
 
 
+def _check_ses_coord(arr, ses_coord, ses_name):
+    if ses_name is not None:
+        warning.warn("`ses_name` has been renamed to `ses_coord`",
+                     FutureWarning)
+
+    if arr is not None:
+        if ses_coord not in arr.coords:
+            raise ValueError('provided `ses_coord` is not present in DataArray'
+                            ' coordinates.')
+
+
 def xarray_to_dict(xarr, ses_coord='sub', reduce_coords=True,
-                   ensure_correct_reduction=True):
+                   ensure_correct_reduction=True, ses_name=None):
     '''Convert multi-session xarray to dictionary of session -> xarray pairs.
 
     Note, that it is assumed that each session is a contiguous block in the
@@ -753,8 +767,14 @@ def xarray_to_dict(xarr, ses_coord='sub', reduce_coords=True,
     xarr_dct : dict
         Dictionary with session names as keys and xarrays as values.
     '''
+    import xarray as xr
     xarr_dct = dict()
 
+    if not isinstance(xarr, (xr.DataArray, xr.Dataset)):
+        raise TypeError('`xarr` has to be either xarray.DataArray or '
+                        'xarray.Dataset.')
+
+    _check_ses_coord(xarr, ses_coord, ses_name)
     sessions, ses_idx = np.unique(xarr.coords[ses_coord].values, return_index=True)
 
     sort_idx = np.argsort(ses_idx)
