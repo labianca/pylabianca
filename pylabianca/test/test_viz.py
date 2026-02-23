@@ -93,8 +93,11 @@ def test_plot_shaded_colors():
         assert (ax.collections[idx].get_facecolor()[0, :3] == color_rgb).all()
 
 
-# TODO: could split this into two text with pytest parametrization
-def test_plot_shaded_colors_and_title():
+# tests
+
+
+@pytest.fixture
+def grouped_data():
     conditions = ['A', 'B', 'C']
     n_trials_per_cond = 10
     conditions = np.tile(conditions, (n_trials_per_cond, 1))
@@ -115,62 +118,73 @@ def test_plot_shaded_colors_and_title():
             np.random.rand(n_trials_per_cond, n_time_msk)
         )
 
-    data = xr.DataArray(
+    return xr.DataArray(
         data,
         dims=('trial', 'time'),
         coords={'time': time, 'cond': ('trial', conditions)}
     )
 
-    # test that title is not set to last groupby value
-    ax = pln.plot_shaded(data, groupby='cond')
+
+def test_plot_shaded_title_not_last_groupby(grouped_data):
+    ax = pln.plot_shaded(grouped_data, groupby='cond')
     ttl = ax.get_title()
-    assert not (ttl == 'cond = C')
+    assert ttl != 'cond = C'
 
-    # test that string colors work
-    ax = pln.plot_shaded(
-        data, groupby='cond',
-        colors={'A': 'cornflowerblue', 'B': 'magenta', 'C': 'lawngreen'})
 
-    correct_colors = [
-        (0.39215686274509803, 0.5843137254901961, 0.9294117647058824),
-        (1.0, 0.0, 1.0),
-        (0.48627450980392156, 0.9882352941176471, 0.0)
-    ]
+@pytest.mark.parametrize(
+    "colors",
+    [
+        ['cornflowerblue', 'magenta', 'lawngreen'],
+        {'A': 'cornflowerblue', 'B': 'magenta', 'C': 'lawngreen'},
+        'magenta',
+    ],
+)
+def test_plot_shaded_color_inputs(grouped_data, colors):
+    kwargs = {"colors": colors}
+    if not isinstance(colors, str):
+        kwargs["groupby"] = "cond"
+    ax = pln.plot_shaded(grouped_data, **kwargs)
 
-    for line, expected_color in zip(ax.lines, correct_colors):
-        assert line.get_color() == expected_color
+    if isinstance(colors, dict):
+        expected = [
+            plt.cm.colors.to_rgb(colors[c]) for c in sorted(colors)
+        ]
+    elif isinstance(colors, str):
+        expected = [plt.cm.colors.to_rgb(colors)]
+    else:
+        expected = [plt.cm.colors.to_rgb(c) for c in colors]
 
-    for shade, expected_color in zip(ax.collections, correct_colors):
-        assert (shade.get_facecolor()[0, :3] == expected_color).all()
+    for line, exp_col in zip(ax.lines, expected):
+        assert line.get_color() == exp_col
 
-    # one color string
-    ax = pln.plot_shaded(data, colors='magenta')
-    assert ax.lines[0].get_color() == correct_colors[1]
-    assert (ax.collections[0].get_facecolor()[0, :3]
-            == correct_colors[1]).all()
+    for shade, exp_col in zip(ax.collections, expected):
+        assert (shade.get_facecolor()[0, :3] == exp_col).all()
 
-    # test errors
-    msg = r"Missing colors for: \['C'\]"
-    with pytest.raises(ValueError, match=msg):
-        pln.plot_shaded(
-            data, groupby='cond',
-            colors={'A': 'cornflowerblue', 'B': 'magenta'}
+    if isinstance(colors, list):
+        msg = 'Expected 3 colors, got 2.'
+        with pytest.raises(ValueError, match=msg):
+            pln.plot_shaded(
+                grouped_data, groupby='cond',
+                colors=['cornflowerblue', 'magenta']
+            )
+
+    if isinstance(colors, dict):
+        msg = r"Missing colors for: \['C'\]"
+        with pytest.raises(ValueError, match=msg):
+            pln.plot_shaded(
+                grouped_data, groupby='cond',
+                colors={'A': 'cornflowerblue', 'B': 'magenta'}
+            )
+
+        msg = (
+            'colors must be a string, list, tuple, np.ndarray, or dict, '
+            "got <class 'set'>."
         )
-
-    msg = 'Expected 3 colors, got 2.'
-    with pytest.raises(ValueError, match=msg):
-        pln.plot_shaded(
-            data, groupby='cond',
-            colors=['cornflowerblue', 'magenta']
-        )
-
-    msg = ('colors must be a string, list, tuple, np.ndarray, or dict, '
-           "got <class 'set'>.")
-    with pytest.raises(TypeError, match=msg):
-        pln.plot_shaded(
-            data, groupby='cond',
-            colors={'cornflowerblue', 'magenta', 'lawngreen'}
-        )
+        with pytest.raises(TypeError, match=msg):
+            pln.plot_shaded(
+                grouped_data, groupby='cond',
+                colors={'cornflowerblue', 'magenta', 'lawngreen'}
+            )
 
 
 def test_plot_raster():
@@ -326,3 +340,178 @@ def test_add_highlights():
     checks = compare_box_ranges(ax, ranges)
     assert len(checks) == 1
     assert checks[0].sum() == 2
+
+
+def test_plot_shaded_col_row_facets():
+    """Test col and row faceting in plot_shaded."""
+    # Create test data with multiple dimensions
+    n_trials, n_times, n_cond, n_subj = 50, 100, 2, 3
+    times = np.linspace(-0.5, 1.5, num=n_times)
+
+    # Create data with different effects for different conditions and subjects
+    np.random.seed(42)
+    data = np.random.randn(n_trials, n_times, n_cond, n_subj)
+
+    # Add different effects for each condition
+    data[:, 40:60, 0, :] += 2.0  # condition A has positive bump
+    data[:, 40:60, 1, :] -= 1.5  # condition B has negative bump
+
+    data = gaussian_filter1d(data, sigma=5, axis=1)
+
+    xarr = xr.DataArray(
+        data,
+        dims=['trial', 'time', 'condition', 'subject'],
+        coords={
+            'time': times,
+            'condition': ['A', 'B'],
+            'subject': ['S1', 'S2', 'S3']
+        },
+        name='fr'
+    )
+
+    def _test_axes(axes, data, times, subject=None, groupby=None):
+        axes = axes.ravel()
+        if groupby is not None:
+            grp_vals = data.coords[groupby].values
+            grp_uni = np.unique(grp_vals)
+            n_grp = len(grp_uni)
+        else:
+            n_grp = 1
+
+        for idx, cond in enumerate(['A', 'B']):
+            ax = axes[idx]
+            ax_data = data.sel(condition=cond)
+
+            # Check that the line data matches
+            assert len(ax.lines) == n_grp
+            for line_idx, line in enumerate(ax.lines):
+                if groupby is None:
+                    expected_data = ax_data
+                else:
+                    query_str = f'{groupby} == "{grp_uni[line_idx]}"'
+                    expected_data = ax_data.query(trial=query_str)
+
+                expected_data = expected_data.mean(dim='trial')
+                assert (line.get_xdata() == times).all()
+                assert np.allclose(line.get_ydata(), expected_data.values, atol=1e-10)
+
+            # Check title
+            title = ax.get_title()
+            assert f'condition = {cond}' in title
+            if subject is not None:
+                assert f'subject = {subject}' in title
+
+            # Check that legend exists
+            if groupby is not None:
+                legend = ax.get_legend()
+                assert legend is not None
+                legend_labels = [txt.get_text() for txt in legend.get_texts()]
+                for val in grp_vals:
+                    assert val in legend_labels
+
+    # Test 1: Column faceting only
+    # -----------------------------
+    use_data = xarr.sel(subject='S1')
+    axes = pln.plot_shaded(use_data, col='condition')
+
+    # test shape and data
+    assert axes.shape == (1, n_cond)
+    _test_axes(axes[0, :], use_data, times)
+
+    # Test 2: Row faceting only
+    # -------------------------
+    use_data = xarr.sel(subject='S2')
+    axes = pln.plot_shaded(use_data, row='condition')
+
+    # test shape and data
+    assert axes.shape == (n_cond, 1)
+    _test_axes(axes[:, 0], use_data, times)
+
+    # Test 3: Both row and column faceting
+    # ------------------------------------
+    axes = pln.plot_shaded(xarr, row='condition', col='subject')
+
+    # test shape and data
+    assert axes.shape == (n_cond, n_subj)
+    for j, subj in enumerate(['S1', 'S2', 'S3']):
+        ax_row = axes[:, j]
+        use_data = xarr.sel(subject=subj)
+        _test_axes(ax_row, use_data, times, subject=subj)
+
+    # Test 4: Faceting with groupby
+    # -----------------------------
+    # Add a hemisphere coordinate to trials for grouping
+    hemisphere = xr.DataArray(['left', 'right'] * 25, dims=['trial'])
+    xarr_grouped = xarr.assign_coords(hemisphere=hemisphere)
+
+    use_data = xarr_grouped.sel(subject='S1')
+    axes = pln.plot_shaded(use_data, col='condition', groupby='hemisphere')
+
+    # test shape and data
+    assert axes.shape == (1, n_cond)
+    _test_axes(axes[0, :], use_data, times, groupby='hemisphere')
+
+    # Test 5: Faceting should also work for "nested" coords
+    # -----------------------------------------------------
+    next_axes = pln.plot_shaded(use_data, col='hemisphere',
+                                groupby='condition')
+    assert (next_axes[0, 0].lines[0].get_ydata()
+            == axes[0, 0].lines[0].get_ydata()).all()
+    assert (next_axes[0, 0].lines[1].get_ydata()
+            == axes[0, 1].lines[0].get_ydata()).all()
+
+    # Test 6: Single facet (should return single axis)
+    # ------------------------------------------------
+    arr_single = xarr.sel(condition=['A'])
+    result = pln.plot_shaded(arr_single.sel(subject='S1'), col='condition')
+
+    # Should return a single axis, not an array
+    assert isinstance(result, plt.Axes)
+
+    # Test 7: Axes should share x and y limits
+    # ----------------------------------------
+    axes = pln.plot_shaded(xarr, row='condition', col='subject')
+
+    # Get all x and y limits
+    x_lims = [ax.get_xlim() for ax in axes.ravel()]
+    y_lims = [ax.get_ylim() for ax in axes.ravel()]
+
+    # All should be the same (shared axes)
+    assert all(xlim == x_lims[0] for xlim in x_lims)
+    assert all(ylim == y_lims[0] for ylim in y_lims)
+
+    # Test 8: Faceting works with colors parameter
+    # --------------------------------------------
+    use_data = xarr_grouped.sel(subject='S3')
+    colors_dict = {'A': 'crimson', 'B': 'cornflowerblue'}
+    axes = pln.plot_shaded(
+        use_data, col='condition', groupby='hemisphere',
+        colors={'left': 'crimson', 'right': 'cornflowerblue'}
+    )
+
+    # Check colors are applied correctly in each facet
+    expected_colors = [
+        plt.cm.colors.to_rgb('crimson'),
+        plt.cm.colors.to_rgb('cornflowerblue')
+    ]
+    for idx, _ in enumerate(['A', 'B']):
+        ax = axes[0, idx]
+        assert len(ax.lines) == 2
+
+        # Check line colors
+        for line, exp_color in zip(ax.lines, expected_colors):
+            assert line.get_color() == exp_color
+
+    # Test 9: ValueErrors are raised
+    # ------------------------------
+    msg_to_match = 'Coordinate "krecik" not found.'
+    with pytest.raises(ValueError, match=msg_to_match):
+        pln.plot_shaded(use_data, col='krecik', groupby='condition')
+
+    krecik = np.random.rand(n_trials, n_subj)
+    use_data = xarr_grouped.assign_coords(
+        krecik=(('trial', 'subject'), krecik))
+    msg_to_match = 'Coordinate "krecik" does not have exactly 1 dimension'
+    with pytest.raises(ValueError, match=msg_to_match):
+        pln.plot_shaded(use_data, col='krecik', groupby='condition')
+
