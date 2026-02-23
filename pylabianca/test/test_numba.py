@@ -23,7 +23,7 @@ def test_numba_select_spikes():
     from pylabianca._numba import _select_spikes_numba
 
     def select_spikes(spikes, trials, tri_sel):
-        msk = np.in1d(trials, tri_sel)
+        msk = np.isin(trials, tri_sel)
         return spikes[msk]
 
     spikes = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
