@@ -27,6 +27,7 @@ jobs:
             else
               pip install mne==<< parameters.mne_version >>;
               pip install --upgrade setuptools==81.0.0
+              mamba install numpy==1.26
             fi
             pip install borsar elephant neo quantities statsmodels --no-deps
             mamba install pytest -y;
