@@ -24,7 +24,8 @@ def _deal_with_picks(spk, picks):
         # pick all cells by default
         picks = np.arange(len(spk.cell_names))
         return picks
-    if isinstance(picks, (list, np.ndarray, pd.Series)):
+    if isinstance(picks, (list, np.ndarray, pd.Series,
+                          pd.arrays.StringArray)):
         if len(picks) == 0:
             raise ValueError('No cells selected.')
         if isinstance(picks[0], str):
@@ -37,7 +38,8 @@ def _deal_with_picks(spk, picks):
             picks = np.where(picks)[0]
         elif isinstance(picks, pd.Series):
             picks = picks.values
-    if not isinstance(picks, (list, np.ndarray, pd.Series)):
+    if not isinstance(picks, (list, np.ndarray, pd.Series,
+                              pd.arrays.StringArray)):
         if isinstance(picks, str):
             has_str = True
         picks = [picks]
