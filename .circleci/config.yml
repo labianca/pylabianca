@@ -26,8 +26,6 @@ jobs:
               pip install mne
             else
               pip install mne==<< parameters.mne_version >>;
-              pip install --upgrade setuptools==81.0.0
-              mamba install "numpy<=1.26.4"
             fi
             pip install borsar elephant neo quantities statsmodels --no-deps
             mamba install pytest -y;
@@ -51,4 +49,4 @@ workflows:
           matrix:
             parameters:
               use_numba: ["yes", "no"]
-              mne_version: ["current", "1.5.1", "1.0.3"]
+              mne_version: ["current", "1.9.0", "1.6.1"]
