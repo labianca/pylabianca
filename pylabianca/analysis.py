@@ -352,7 +352,7 @@ def _get_arr(arr, sub_ses, ses_coord='sub'):
     return arr
 
 
-# TODO: 
+# TODO:
 # - [ ] better argument names:
 #     -> is per_cell_query (per_cell_select etc.) even needed is we
 #        have per_cell=True and pass to specific subfunction?

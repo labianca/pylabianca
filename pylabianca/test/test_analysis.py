@@ -1,4 +1,5 @@
 import os.path as op
+import re
 import time
 import numpy as np
 import pandas as pd
@@ -418,7 +419,7 @@ def test_aggregate_baseline():
     bsln = {k: arr_dct[k] for k in ['A', 'B']}
     match_str = ("Following keys are present in `frates` dictionary, but "
                  "absent in `zscore`: ['C']")
-    with pytest.raises(TypeError, match=match_str):
+    with pytest.raises(TypeError, match=re.escape(match_str)):
         pln.aggregate(arr_dct, zscore=bsln)
 
     # everything is matching - check the same as doing element by element
