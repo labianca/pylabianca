@@ -53,7 +53,7 @@ def test_selectivity_continuous():
 
     # at least 3 out of 4 should be in the selective list
     selective_are = np.where((results['stat'] > results['thresh']).values)[0]
-    assert np.in1d(selective_should_be, selective_are).mean() > 0.7
+    assert np.isin(selective_should_be, selective_are).mean() > 0.7
 
     # add cellinfo and make sure it is retained in results
     n_cells = spk_epochs.n_units()
