@@ -563,9 +563,9 @@ def _aggregate_dict(frates, groupby=None, select=None,
     msg = ('When aggregating a dictionary of DataArrays, the '
            '`zscore` can\'t be a DataArray, but a matching '
            'dictionary of DataArrays.')
-    if isinstance(zscore, xr.DataArray):
-        raise TypeError(msg)
-    if isinstance(zscore, dict):
+    zscore_dict = isinstance(zscore, dict)
+
+    if zscore_dict:
         zscore_keys = zscore.keys()
         missing_keys = [key for key in keys if key not in zscore_keys]
         if len(missing_keys):
@@ -573,14 +573,17 @@ def _aggregate_dict(frates, groupby=None, select=None,
                              'dictionary, but absent in `zscore`: '
                              + str(missing_keys))
             raise TypeError(use_msg)
+    elif isinstance(zscore, xr.DataArray):
+        raise TypeError(msg)
 
     aggregated = list()
 
     for key in keys:
         frate = frates[key]
+        zscr = zscore[key] if zscore_dict else zscore
         frate_agg = aggregate(
             frate, groupby=groupby, select=select,
-            per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
+            per_cell_query=per_cell_query, zscore=zscr, baseline=baseline,
             per_cell=per_cell
         )
         if frate_agg is not None:
