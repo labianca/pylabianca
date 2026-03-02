@@ -423,7 +423,17 @@ def test_aggregate_baseline():
         pln.aggregate(arr_dct, zscore=bsln)
 
     # everything is matching - check the same as doing element by element
-    # TODO
+    bsln = {k: arr_dct[k] for k in list('ABC')}
+    agg = pln.aggregate(arr_dct, zscore=bsln)
+
+    zscored_arr = {key: pln.analysis.zscore_xarray(
+            arr_dct[key], baseline=bsln[key])
+        for key in arr_dct.keys()
+    }
+    agg_comp = pln.aggregate(zscored_arr)
+
+    for arr1, arr2 in zip(agg, agg_comp):
+        assert (arr1.values == arr2.values).all()
 
 
 def test_aggregate_per_cell():
