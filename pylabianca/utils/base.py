@@ -24,7 +24,8 @@ def _deal_with_picks(spk, picks):
         # pick all cells by default
         picks = np.arange(len(spk.cell_names))
         return picks
-    if isinstance(picks, (list, np.ndarray, pd.Series)):
+    if isinstance(picks, (list, np.ndarray, pd.Series,
+                          pd.arrays.StringArray)):
         if len(picks) == 0:
             raise ValueError('No cells selected.')
         if isinstance(picks[0], str):
@@ -37,7 +38,8 @@ def _deal_with_picks(spk, picks):
             picks = np.where(picks)[0]
         elif isinstance(picks, pd.Series):
             picks = picks.values
-    if not isinstance(picks, (list, np.ndarray, pd.Series)):
+    if not isinstance(picks, (list, np.ndarray, pd.Series,
+                              pd.arrays.StringArray)):
         if isinstance(picks, str):
             has_str = True
         picks = [picks]
@@ -138,6 +140,8 @@ def find_cells(inst, not_found='error', more_found='error', **features):
             features[name] = np.array([features[name]])
         elif isinstance(features[name], (list, tuple)):
             features[name] = np.array(features[name])
+        elif isinstance(features[name], pd.arrays.StringArray):
+            features[name] = np.asarray(features[name], dtype=str)
 
     cell_idx = list()
     n_comparisons = np.array([len(val) for val in features.values()])
@@ -160,7 +164,12 @@ def find_cells(inst, not_found='error', more_found='error', **features):
 
     masks = list()
     for key, val in features.items():
-        msk = cellinfo[key].values[:, None] == val[None, :]
+        cmp_data = cellinfo[key].values
+
+        if isinstance(cmp_data, pd.arrays.StringArray):
+            cmp_data = np.asarray(cmp_data, dtype=str)
+
+        msk = cmp_data[:, None] == val[None, :]
         masks.append(msk)
     masks = np.stack(masks, axis=2)
     match_all = masks.all(axis=2)

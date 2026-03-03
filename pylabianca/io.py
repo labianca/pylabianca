@@ -924,6 +924,8 @@ def read_spikes_neo(reader, waveform=True, min_spikes=10):
 
     cell_info = cell_info.loc[use_cells, :]
     cell_names = cell_info.name.values.copy()
+    if isinstance(cell_names, pd.arrays.StringArray):
+        cell_names = np.asarray(cell_names)
 
     if waveform:
         waveform_samples = np.array([x.shape[-1] for x in waveforms

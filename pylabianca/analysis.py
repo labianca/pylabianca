@@ -352,14 +352,13 @@ def _get_arr(arr, sub_ses, ses_coord='sub'):
     return arr
 
 
-# TODO: stimulus selectivity should be added to the xarray -
-#       it can be done as cell x trial coordinate, this could be a function
-#       in .selectivity module
-# - [ ] is per_cell_query (per_cell_select etc.) even needed is we
-#       have per_cell=True
+# TODO:
+# - [ ] better argument names:
+#     -> is per_cell_query (per_cell_select etc.) even needed is we
+#        have per_cell=True and pass to specific subfunction?
+#        (I don't know what I meant by "pass to psecific subfunction"..)
 # - [ ] select vs per_cell_query behavior -> first one is done after zscoring
 #       the second one before
-# ? option to pass the baseline calculated from a different period
 def aggregate(frate, groupby=None, select=None, per_cell_query=None,
               zscore=False, baseline=False, per_cell=False):
     """
@@ -551,19 +550,40 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
 
 # TODO: this could be changed and used with apply_dict / dict_apply
 #       the dict apply function could have output='xarray' option
+# - [ ] we need a separate function that checks whehter input is dict of
+#       xr.DataArray objects
 def _aggregate_dict(frates, groupby=None, select=None,
                     per_cell_query=None, zscore=False, baseline=False,
                     per_cell=False):
     import xarray as xr
 
-    aggregated = list()
     keys = list(frates.keys())
+
+    # zscore can't be an array, must be a dict of arrays, with matching keys
+    msg = ('When aggregating a dictionary of DataArrays, the '
+           '`zscore` can\'t be a DataArray, but a matching '
+           'dictionary of DataArrays.')
+    zscore_dict = isinstance(zscore, dict)
+
+    if zscore_dict:
+        zscore_keys = zscore.keys()
+        missing_keys = [key for key in keys if key not in zscore_keys]
+        if len(missing_keys):
+            use_msg = msg + (' Following keys are present in `frates` '
+                             'dictionary, but absent in `zscore`: '
+                             + str(missing_keys))
+            raise TypeError(use_msg)
+    elif isinstance(zscore, xr.DataArray):
+        raise TypeError(msg)
+
+    aggregated = list()
 
     for key in keys:
         frate = frates[key]
+        zscr = zscore[key] if zscore_dict else zscore
         frate_agg = aggregate(
             frate, groupby=groupby, select=select,
-            per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
+            per_cell_query=per_cell_query, zscore=zscr, baseline=baseline,
             per_cell=per_cell
         )
         if frate_agg is not None:
@@ -625,7 +645,8 @@ def zscore_xarray(arr, groupby='cell', baseline=None):
     return arr
 
 
-def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub'):
+def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub',
+                   ses_name=None):
     '''Convert dictionary to xarray.DataArray.
 
     Parameters
@@ -657,6 +678,8 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub'):
     import xarray as xr
 
     assert isinstance(data, dict)
+    _check_ses_coord(None, ses_coord, ses_name)
+
     keys = list(data.keys())
     all_xarr = [isinstance(data[sb], (xr.DataArray, xr.Dataset))
                 for sb in keys]
@@ -717,8 +740,19 @@ def _get_missing_value(dtype):
         return None
 
 
+def _check_ses_coord(arr, ses_coord, ses_name):
+    if ses_name is not None:
+        warning.warn("`ses_name` has been renamed to `ses_coord`",
+                     FutureWarning)
+
+    if arr is not None:
+        if ses_coord not in arr.coords:
+            raise ValueError('provided `ses_coord` is not present in DataArray'
+                            ' coordinates.')
+
+
 def xarray_to_dict(xarr, ses_coord='sub', reduce_coords=True,
-                   ensure_correct_reduction=True):
+                   ensure_correct_reduction=True, ses_name=None):
     '''Convert multi-session xarray to dictionary of session -> xarray pairs.
 
     Note, that it is assumed that each session is a contiguous block in the
@@ -751,8 +785,14 @@ def xarray_to_dict(xarr, ses_coord='sub', reduce_coords=True,
     xarr_dct : dict
         Dictionary with session names as keys and xarrays as values.
     '''
+    import xarray as xr
     xarr_dct = dict()
 
+    if not isinstance(xarr, (xr.DataArray, xr.Dataset)):
+        raise TypeError('`xarr` has to be either xarray.DataArray or '
+                        'xarray.Dataset.')
+
+    _check_ses_coord(xarr, ses_coord, ses_name)
     sessions, ses_idx = np.unique(xarr.coords[ses_coord].values, return_index=True)
 
     sort_idx = np.argsort(ses_idx)
@@ -789,3 +829,63 @@ def xarray_to_dict(xarr, ses_coord='sub', reduce_coords=True,
         xarr_dct[ses] = arr
 
     return xarr_dct
+
+
+# this rotate_spikes function was added and is likely in git stash (have to check)
+def rotate_spikes(spk, drop_timestamps=True, drop_waveforms=True):
+    '''Move spike times in each trial by a random offset, wrapping around the
+    trial limits.
+
+    The goal of this randomization is to abolish any time-locked effects with
+    minimal effect on various statistical properties of the spike train
+    (inter-spike intervals and their order).
+
+    Parameters
+    ----------
+    spk : SpikeEpochs
+        SpikeEpochs object.
+    drop_timestamps : bool
+        If True, timestamps are not copied to the new object.
+    drop_waveforms : bool
+        If True, waveforms are not copied to the new object.
+
+    Returns
+    -------
+    new_spk : SpikeEpochs
+        SpikeEpochs object with shuffled trials.
+    '''
+    if not (drop_timestamps and drop_waveforms):
+        raise NotImplementedError
+
+    n_tri = spk.n_trials
+    n_cells = spk.n_units()
+
+    new_spk = spk.copy()
+    new_spk.timestamps = None
+    new_spk.waveforms = None
+
+    trial_time = spk.time_limits[1] - spk.time_limits[0]
+    offset = np.random.rand(n_cells, n_tri) * trial_time
+
+    for cell_idx in range(n_cells):
+        boundaries, trial_ids = _get_trial_boundaries(spk, cell_idx)
+        for tri_idx in range(len(trial_ids)):
+            idx0, idx1 = boundaries[tri_idx:tri_idx + 2]
+            spike_times = spk.time[cell_idx][idx0:idx1]
+            trial = trial_ids[tri_idx]
+
+            this_offset = offset[cell_idx, trial]
+            new_spike_times = spike_times + this_offset
+            out_of_range = new_spike_times >= spk.time_limits[1]
+            if out_of_range.any():
+                out_by = new_spike_times[out_of_range] - spk.time_limits[1]
+                new_spike_times[out_of_range] = spk.time_limits[0] + out_by
+                # TODO: we could be smarter and rely on the fact that all
+                #       spikes moved outside trial limits will be at the
+                #       end of trial block
+                new_spike_times = np.sort(new_spike_times)
+
+            new_spk.time[cell_idx][idx0:idx1] = new_spike_times
+            offset[cell_idx, trial] = this_offset
+
+    return new_spk, offset

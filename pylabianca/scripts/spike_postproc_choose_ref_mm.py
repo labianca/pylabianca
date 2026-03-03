@@ -168,7 +168,7 @@ for _, row in channel_info_sel.iterrows():
     packs.append(this_pack)
 
 unit_channel = spk.cellinfo.channel.str.slice(1).astype('int')
-units_in_pack = [np.where(np.in1d(unit_channel, pack))[0]
+units_in_pack = [np.where(np.isin(unit_channel, pack))[0]
                  for pack in packs]
 
 # calculate measures
