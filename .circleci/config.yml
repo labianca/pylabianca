@@ -20,13 +20,13 @@ jobs:
             mamba env create -f environment.yml
             source activate pylabianca
             if [ << parameters.use_numba >> == "yes" ]; then
-              mamba install numba==0.61.2 -y;
+              mamba install numba
             fi
             if [ << parameters.mne_version >> == "current" ]; then
               pip install mne
             else
               pip install mne==<< parameters.mne_version >>;
-              mamba install numpy==2.2.6
+              mamba install "scipy<=1.16.2"
             fi
             pip install borsar elephant neo quantities statsmodels --no-deps
             mamba install pytest -y;
@@ -50,4 +50,4 @@ workflows:
           matrix:
             parameters:
               use_numba: ["yes", "no"]
-              mne_version: ["current", "1.5.1", "1.0.3"]
+              mne_version: ["current", "1.9.0", "1.6.1"]

@@ -137,6 +137,7 @@ def get_condition_indices_and_unique(cnd_values):
 
 
 def _prepare_ZETA_numpy_and_numba(spk, compare, tmax):
+    import pandas as pd
     from .spikes import SpikeEpochs
     if not isinstance(spk, SpikeEpochs):
         raise TypeError('Currently ``spk`` must be a SpikeEpochs instance.'
@@ -145,6 +146,9 @@ def _prepare_ZETA_numpy_and_numba(spk, compare, tmax):
 
     assert compare in spk.metadata.columns
     condition_values = spk.metadata[compare].values
+
+    if isinstance(condition_values, pd.arrays.StringArray):
+        condition_values = np.asarray(condition_values, dtype=str)
 
     if condition_values.dtype == 'object':
         condition_values = condition_values.astype('str')
@@ -229,7 +233,7 @@ def _get_times_and_trials(spk, pick, tmin, tmax, subsample, backend):
 
 def gumbel(mean, std, x):
     """"Calculate p-value and z-score for maximum value of N samples drawn from
-    a Gaussian
+    a Gaussian.
 
     Parameters
     ----------

@@ -140,7 +140,7 @@ first_pack_channel = first_channel + np.arange(0, n_packs) * 8
 # find which units belong to which pack
 unit_channel = spk.cellinfo.channel.str.slice(1).astype('int')
 
-units_in_pack = [np.where(np.in1d(unit_channel, frst + np.arange(8)))[0]
+units_in_pack = [np.where(np.isin(unit_channel, frst + np.arange(8)))[0]
                  for frst in first_pack_channel]
 
 
