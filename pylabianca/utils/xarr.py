@@ -103,9 +103,11 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     if copy_cellinfo:
         if cell_names is not None and spike_epochs.cellinfo is not None:
             ch_idx = _deal_with_picks(spike_epochs, cell_names)
-            for col in spike_epochs.cellinfo.columns:
+            cellinfo = _turn_StringArray_columns_into_object(
+                spike_epochs.cellinfo)
+            for col in cellinfo.columns:
                 coords[col] = (
-                    'cell', spike_epochs.cellinfo[col].iloc[ch_idx])
+                    'cell', cellinfo[col].iloc[ch_idx])
 
     firing = xr.DataArray(frate, dims=dims, coords=coords,
                           attrs=attrs)
@@ -163,14 +165,54 @@ def cellinfo_from_xarray(xarr):
     return cellinfo
 
 
+# TODO: rename to _inherit_metadata_from_dataframe
+# TODO: add inherit_metadata public function (useful in many places)
 def _inherit_metadata(coords, metadata, dimname, tri=None):
     if metadata is not None:
+        metadata = _turn_StringArray_columns_into_object(metadata)
         for col in metadata.columns:
+            this_data = metadata[col]
             if tri is None:
-                coords[col] = (dimname, metadata[col])
+                coords[col] = (dimname, this_data.values)
             else:
-                coords[col] = (dimname, metadata[col].iloc[tri])
+                coords[col] = (dimname, this_data.iloc[tri].values)
     return coords
+
+
+def _turn_StringArray_columns_into_object(df):
+    if df is None:
+        return df
+
+    dtp = df.dtypes
+    conv = dtp[dtp == 'string']
+
+    if conv.shape[0] > 0:
+        convert_types = {col: 'object' for col in conv.index}
+        df = df.astype(convert_types)
+
+    return df
+
+
+def remove_StringArrays(spk):
+    """Remove StringArrays from spikes object.
+
+    pandas StringArrays cause various issues - for example in xarray
+    - and don't offer much benefit for our usecase.
+
+    Parameters
+    ----------
+    spk : Spikes | SpikeEpochs
+        Spikes object to purge of pandas StringArrays.
+
+    Returns
+    -------
+    spk : Spikes | SpikeEpochs
+        Spikes object with pandas StringArrays turned to numpy object arrays
+        in `.metadata` and `.cellinfo` fields.
+    """
+    spk.metadata = _turn_StringArray_columns_into_object(spk.metadata)
+    spk.cellinfo = _turn_StringArray_columns_into_object(spk.cellinfo)
+    return spk
 
 
 def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
