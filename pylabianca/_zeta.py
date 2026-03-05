@@ -62,7 +62,7 @@ def cumulative_n_conditions(spikes, n_trials, reference_time,
             spk, reference_time, n_tri)
 
     reduced_fraction = reduction(fractions)
-    reduced_fraction -= reduced_fraction.mean()
+    # reduced_fraction -= reduced_fraction.mean()
 
     return reduced_fraction
 
