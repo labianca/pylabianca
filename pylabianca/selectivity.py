@@ -652,7 +652,8 @@ def compute_time_in_window(df_cluster, window_of_interest):
 # CONSIDER renaming return_dist to return_traces / return_dict, etc.
 def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
               n_permutations=100, significance='gumbel', return_dist=False,
-              subsample=1, reduction=None, permute_independently=False):
+              subsample=1, reduction=None, permute_independently=False,
+              remove_mean=True):
     """ZETA test for comparing cumulative spike distributions between
     conditions.
 
@@ -759,7 +760,9 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         permutation_diffs = list()
         reference_times = list()
 
+    real_val = np.zeros(n_cells)
     real_abs_max = np.zeros(n_cells)
+    perm_val = np.zeros((n_cells, n_permutations))
     perm_abs_max = np.zeros((n_cells, n_permutations))
 
     # prepare random states for the permutations
@@ -799,10 +802,25 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
                 rnd, n_samples, reduction=reduction)
 
         # center the cumulative diffs and find max(abs) values
+        # centering is done earlier, actually
         # TODO: could be done earlier (so for numba - within the
         #       compiled function)
-        real_abs_max[pick_idx] = np.max(np.abs(fraction_diff))
-        perm_abs_max[pick_idx] = np.max(np.abs(permutations), axis=-1)
+        if remove_mean:
+            fraction_diff -= fraction_diff.mean()
+            permutations -= permutations.mean(axis=1)[:, None]
+
+        abs_fraction_diff = np.abs(fraction_diff)
+        abs_fraction_diff_perm = np.abs(permutations)
+        max_idx_real = np.argmax(abs_fraction_diff)
+        max_idx_perm = np.argmax(abs_fraction_diff_perm, axis=-1)
+
+        perm_indexer = np.arange(n_permutations)
+        real_val[pick_idx] = fraction_diff[max_idx_real]
+        perm_val[pick_idx, :] = permutations[
+            perm_indexer, max_idx_perm]
+        real_abs_max[pick_idx] = abs_fraction_diff[max_idx_real]
+        perm_abs_max[pick_idx] = abs_fraction_diff_perm[
+            perm_indexer, max_idx_perm]
 
         if return_dist:
             cumulative_diffs.append(fraction_diff)
@@ -831,6 +849,7 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
 
         other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
                      max=real_abs_max, perm_max=perm_abs_max,
+                     val=real_val, perm_val=perm_val,
                      ref_time=reference_times, perm_vec=perm_vec)
         return z_scores, p_values, other
 
