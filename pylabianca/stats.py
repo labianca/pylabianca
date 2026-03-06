@@ -2,8 +2,7 @@ import numpy as np
 
 
 # TODO: move to borsar
-# CONSIDER: n_perm=0 returns just the statistic, it will make selectivity
-#           code a bit easier
+# TODO: support xarrays and dimension reorg
 def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
                      return_pvalue=True, return_distribution=True, n_jobs=1):
     '''Perform permutation test on the data.
@@ -26,7 +25,7 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
     return_distribution : bool
         Whether to return the permutation distribution.
     n_jobs : int
-        Number of jobs to run in parallel.
+        Number of jobs to run the permutations in parallel.
 
     Returns
     -------

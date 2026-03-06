@@ -12,6 +12,7 @@
 * API: removed, now unnecessary, `ignore_below` argument of `pylabianca.selectivity.depth_of_selectivity()` function. It was used to ignore firing rate values below a certain threshold, but the issue of very small non-zero values was previously fixed (numerical error likely stemming from the fact convolution used fft under the hood).
 * API: removed `min_Hz` argument of `pylabianca.selectivity.compute_selectivity_continuous()`. It was used to ignore average firing rate values below a certain threshold, but such selection should be done by the user before calling the function.
 * API: removed `pylabianca.utils.find_cells_by_cluster_id()` in favor of a more universal `pylabianca.utils.find_cells()`. Instead of doing `pln.utils.find_cells_by_cluster_id([254], channel='A15')` and then `pln.utils.find_cells_by_cluster_id([1854], channel='A23')` one can use `pln.utils.find_cells(cluster=[254, 1854], channel=['A15', 'A23'])`.
+* API: `pylabianca.utils.assign_session_coord()` and therefore `pylabianca.analysis.extract_data()`, `pylabianca.analysis.dict_to_xarray()` and `pylabianca.analysis.xarray_to_dict()` now use `ses_coord` argument instead of previously named `ses_name`. `ses_name` still works, but will be deprecated in the next version.
 
 <br/>
 
@@ -31,6 +32,7 @@
 * ENH: added `pylabianca.selectivity.compute_selectivity_multisession()` to compute selectivity on a multisession dictionary (session name -> xarray). The output is an xarray.Dataset with concatenated session selectivity results (the order of the sessions in the output xarray.Dataset is the same as in the input dictionary).
 * ENH: added `pylabianca.stats.find_percentile_threshold()` used to calculate significance threshold for given statistic based on percentile of the permutation distribution.
 * ENH: `pylabianca.selectivity.compute_selectivity_continuous()` now can be also run with `n_perm=0`, returning only the selectivity statistics, without the permutation distribution or permutation-based threshold. Also `pylabianca.stats.permutation_test()` can now be run with `n_perm=0`, returning only the statistic values without the permutation distribution or permutation-based threshold.
+* ENH: `pylabianca.viz.plot_shaded()` now allows to facet by condition into rows and columns using `row` and `col` arguments
 * ENH: allow passing colors by name to `colors` in `pylabianca.viz.plot_shaded()`.
 
 <br/>
@@ -54,6 +56,9 @@
 * FIX: `pylabianca.viz.plot_waveform()` (as well as `.plot_waveform()` methods of `Spikes` and `SpikeEpochs`) now produces a clearer error when no waveforms are present in the data.
 * FIX: fixed `pval_text=False` still giving p value text (but without text boxes) in `pylabianca.viz.add_highlights()`
 * FIX: using `pylabianca.stats.cluster_based_test()` would often give (1, n) shaped clusters and passing these to `pylabianca.viz.add_highlighs()` lead to errors. This has now been fixed - such clusters would be ravel()'ed into 1d representation.
+* FIX: `pylabianca.io.read_spikes_neo()` started raising errors on new pandas version when reading fieldtrip example spike data. Newer pandas for some reason started to generate StringArray columns when converting the header to pandas dataframe (although the docs seem to suggest that StringArray is experimental), which lead to TypeError when creating the `pylabinaca.Spikes()` object. This is now fixed.
+* FIX: `pylabianca.viz.add_highlights()` now correctly uses 'time' dimension as x coordinate, even if it is not the last dimension in the DataArray
+* FIX: `pylabianca.analysis.aggregate()` now works with `xarray.DataArray` input to `zscore` (previously it would raise an error). When aggregating a dictionary of DataArrays `zscore` (if in the form of arrays) has to be a matching dictionary of DataArrays as well.
 
 <br/>
 
