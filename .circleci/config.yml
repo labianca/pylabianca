@@ -24,6 +24,7 @@ jobs:
             else
               export XARRAY_VER="2023.10.1"
               export SCIPY_VER="<=1.16.2"
+            fi
 
             envsubst < environment.template.yml > environment_ci.yml
             mamba env create -f environment_ci.yml
@@ -36,7 +37,6 @@ jobs:
               pip install mne
             else
               pip install mne==<< parameters.mne_version >>;
-              mamba install "scipy<=1.16.2"
             fi
 
             pip install borsar elephant neo quantities statsmodels --no-deps
