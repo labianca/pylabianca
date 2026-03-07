@@ -594,3 +594,41 @@ def test_to_neo_and_to_spiketools():
 
     assert n_spk.sum(axis=1)[0] == len(spk_neo)
     assert (spk_neo.magnitude == np.sort(np.concatenate(spk_lst))).all()
+
+
+def test_pandas_StringArray_compatibility():
+    # 1. test passing StringArray cellinfo
+    cell_names = np.array(list('abcd'), dtype=object)
+    cell_names_sa = pd.arrays.StringArray(cell_names)
+    timestamps = [np.random.randint(1000, size=10) for _ in range(4)]
+
+    # cell names have to be changed to numpy object array,
+    # at least now, otherwise we get errors
+    spk1 = pln.Spikes(timestamps, sfreq=25, cell_names=cell_names)
+    spk2 = pln.Spikes(timestamps, sfreq=25, cell_names=cell_names_sa)
+
+    assert (spk2.cell_names == spk1.cell_names).all()
+    assert spk1.cell_names.dtype == spk2.cell_names.dtype
+
+    # 2. test passing cellinfo that contains StringArray column
+    regions = np.array(['AMY', 'OFC', 'HIP', 'ACC'], dtype=object)
+    cluster_id = np.array([2534, 1190, 4458, 2323])
+    cellinfo = pd.DataFrame({'cluster': cluster_id,
+                            'anat': pd.arrays.StringArray(regions)})
+    spk1 = pln.Spikes(timestamps, sfreq=25, cell_names=cell_names,
+                      cellinfo=cellinfo)
+
+    # make sure we don't change the dataframe dtype when it is not needed
+    assert isinstance(
+        spk1.cellinfo.loc[:, 'anat'].values, pd.arrays.StringArray)
+
+    fr = spk1.to_epochs(0.25).spike_rate()
+    # and that spike rate does not change it either
+    assert isinstance(spk1.cellinfo.loc[:, 'anat'].values, pd.arrays.StringArray)
+
+    # although the xarray's type is object (otherwise we would get errors in multiple places
+    assert fr.coords['anat'].dtype == object
+
+    # using remove_StringArrays we can purge Spike objects from StringArrays
+    pln.utils.xarr.remove_StringArrays(spk1)
+    assert (spk1.cellinfo.loc[:, 'anat'].values.dtype == object)
