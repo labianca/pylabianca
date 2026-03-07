@@ -210,7 +210,8 @@ def remove_StringArrays(spk):
         Spikes object with pandas StringArrays turned to numpy object arrays
         in `.metadata` and `.cellinfo` fields.
     """
-    spk.metadata = _turn_StringArray_columns_into_object(spk.metadata)
+    if hasattr(spk, 'metadata'):
+        spk.metadata = _turn_StringArray_columns_into_object(spk.metadata)
     spk.cellinfo = _turn_StringArray_columns_into_object(spk.cellinfo)
     return spk
 
