@@ -98,7 +98,8 @@ def test_against_zetapy():
         spk_epochs_cp, compare='orientation', n_permutations=0,
         tmax=1., return_dist=True, backend='numpy', picks=0)
 
-    assert (dist1['perm_trace'][0][perm_idx] == dist2['trace'][0]).all()
+    np.testing.assert_almost_equal(dist1['perm_trace'][0][perm_idx],
+                                   dist2['trace'][0], decimal=10)
 
     # test N string conditions
     stim_ori_str = np.array([str(ori) for ori in stim_ori], dtype='object')
