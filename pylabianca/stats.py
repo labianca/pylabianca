@@ -4,7 +4,8 @@ import numpy as np
 # TODO: move to borsar
 # TODO: support xarrays and dimension reorg
 def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
-                     return_pvalue=True, return_distribution=True, n_jobs=1):
+                     return_pvalue=True, return_distribution=True,
+                     permutation_vectors=False, n_jobs=1):
     '''Perform permutation test on the data.
 
     Parameters
@@ -24,6 +25,13 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
         Whether to return p values.
     return_distribution : bool
         Whether to return the permutation distribution.
+    permutation_vectors : bool
+        Whether to return permutation vectors that allow to reconstruct
+        condition labels for each permutation. This is useful when
+        defining selectivity using multiple criteria apart from result of
+        one statistical test (for example: multiple tests or additional
+        criteria, like increase in post-stimulus firing rate for the preferred
+        condition.
     n_jobs : int
         Number of jobs to run the permutations in parallel.
 
@@ -40,6 +48,10 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
     '''
     import borsar
 
+    if permutation_vectors and not return_distribution:
+        raise ValueError('permutation_vectors=True requires setting '
+                         'return_distribution=True')
+
     n_groups = len(arrays)
     tail = 'both' if n_groups == 2 else 'pos'
     stat_fun = borsar.stats._find_stat_fun(n_groups=n_groups, paired=paired,
@@ -50,10 +62,15 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
         arrays = [x.values for x in arrays]
 
     if n_perm > 0:
-        thresh, dist = borsar.stats._compute_threshold_via_permutations(
+        out = borsar.stats._compute_threshold_via_permutations(
             arrays, paired=paired, tail=tail, stat_fun=stat_fun,
             return_distribution=True, n_permutations=n_perm, progress=progress,
-            n_jobs=n_jobs)
+            return_permutations=permutation_vectors, n_jobs=n_jobs)
+
+        if permutation_vectors:
+            thresh, dist, perm_vec = out
+        else:
+            thresh, dist = out
     else:
         return_pvalue = False
         return_distribution = False
@@ -99,6 +116,9 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
 
         if return_pvalue:
             out['pval'] = pval
+
+        if permutation_vectors:
+            out['perm_vec'] = perm_vec
 
         return out
     else:
