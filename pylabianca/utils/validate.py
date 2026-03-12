@@ -122,7 +122,12 @@ def _handle_cell_names(cell_names, time):
             str_type = np.str_
 
         if not is_list_or_array(cell_names, dtype=(str_type, np.object_)):
-            raise ValueError('cell_names has to be list or object array.')
+            import pandas as pd
+            is_stringarray = isinstance(cell_names, pd.arrays.StringArray)
+            if is_stringarray:
+                cell_names = cell_names.to_numpy()
+            else:
+                raise ValueError('cell_names has to be list or object array.')
         if not is_iterable_of_strings(cell_names):
             raise ValueError('All elements of cell_names have to be strings.')
         cell_names = np.asarray(cell_names)

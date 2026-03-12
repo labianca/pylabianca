@@ -623,6 +623,7 @@ def test_pandas_StringArray_compatibility():
         spk1.cellinfo.loc[:, 'anat'].values, pd.arrays.StringArray)
 
     fr = spk1.to_epochs(0.25).spike_rate()
+
     # and that spike rate does not change it either
     assert isinstance(spk1.cellinfo.loc[:, 'anat'].values,
                       pd.arrays.StringArray)
