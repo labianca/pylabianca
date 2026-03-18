@@ -600,7 +600,8 @@ def test_pandas_StringArray_compatibility():
     # 1. test passing StringArray cellinfo
     cell_names = np.array(list('abcd'), dtype=object)
     cell_names_sa = pd.arrays.StringArray(cell_names)
-    timestamps = [np.random.randint(1000, size=10) for _ in range(4)]
+    timestamps = [np.sort(np.random.randint(1000, size=10))
+                  for _ in range(4)]
 
     # cell names have to be changed to numpy object array,
     # at least now, otherwise we get errors
@@ -613,8 +614,10 @@ def test_pandas_StringArray_compatibility():
     # 2. test passing cellinfo that contains StringArray column
     regions = np.array(['AMY', 'OFC', 'HIP', 'ACC'], dtype=object)
     cluster_id = np.array([2534, 1190, 4458, 2323])
-    cellinfo = pd.DataFrame({'cluster': cluster_id,
-                            'anat': pd.arrays.StringArray(regions)})
+    cellinfo = pd.DataFrame(
+            {'cluster': cluster_id,
+             'anat': pd.arrays.StringArray(regions)}
+    )
     spk1 = pln.Spikes(timestamps, sfreq=25, cell_names=cell_names,
                       cellinfo=cellinfo)
 

@@ -1,5 +1,6 @@
 import numpy as np
 import xarray as xr
+import pytest
 
 from functools import partial
 from scipy.ndimage import gaussian_filter1d
@@ -66,8 +67,9 @@ def test_cluster_based_test_from_permutations():
 
     # standard cluster-based test
     n_permutations = 250
-    _, clst, pval = pln.stats.cluster_based_test(
-        arr, compare='cond', n_permutations=n_permutations)
+    _, clst, _ = pln.stats.cluster_based_test(
+        arr, compare='cond', n_permutations=n_permutations,
+        return_clusters=False)
 
     # compute the effect
     cond = conditions.copy()
@@ -126,3 +128,68 @@ def test_find_percentile_threshold():
     assert thresh.dims == ('tail', 'cell', 'time')
     assert thresh.coords['tail'][0].item() == 'neg'
     assert (thresh.data == np.percentile(data, [2.3], axis=0)).all()
+
+
+def test_cluster_based_test_return_clusters_object():
+    from borsar.cluster.obj import Clusters
+
+    n_trials, n_cells, n_times = 40, 5, 60
+    times = np.linspace(-0.5, 1.5, num=n_times)
+    cells = np.array(['cell_a', 'cell_b', 'cell_c', 'cell_d', 'cell_e'])
+
+    data = np.random.randn(n_trials, n_cells, n_times)
+    conditions = np.array([1] * (n_trials // 2) + [2] * (n_trials // 2))
+    np.random.shuffle(conditions)
+
+    effect_cond_mask = conditions == 1
+    data[effect_cond_mask, 1:4, 20:35] += 1.0
+
+    arr = xr.DataArray(
+        data, dims=['trial', 'cell', 'time'],
+        coords={'time': times, 'cell': cells, 'cond': ('trial', conditions)}
+    )
+
+    np.random.seed(12)
+    with pytest.warns(FutureWarning, match='will change in the next version'):
+        stat, clusters, pval = pln.stats.cluster_based_test(
+            arr, compare='cond', n_permutations=100, progress=False)
+
+    np.random.seed(12)
+    clst = pln.stats.cluster_based_test(
+        arr, compare='cond', n_permutations=100, progress=False,
+        return_clusters=True)
+
+    assert isinstance(clst, Clusters)
+    assert clst.dimnames == ['cell', 'time']
+    np.testing.assert_array_equal(clst.dimcoords[0], cells)
+    np.testing.assert_array_equal(clst.dimcoords[1], times)
+
+    np.testing.assert_allclose(clst.stat, stat)
+    np.testing.assert_array_equal(clst.clusters, clusters)
+    np.testing.assert_array_equal(clst.pvals, pval)
+
+
+def test_infer_cluster_dimnames_coords_respects_compare_dim():
+    n_cells, n_trials, n_times = 4, 20, 11
+    cells = np.array(['c1', 'c2', 'c3', 'c4'])
+    times = np.linspace(-0.1, 0.4, n_times)
+    cond = np.array([0] * (n_trials // 2) + [1] * (n_trials // 2))
+
+    frate = xr.DataArray(
+        np.random.randn(n_cells, n_trials, n_times),
+        dims=['cell', 'trial', 'time'],
+        coords={'cell': cells, 'time': times, 'cond': ('trial', cond),
+                'region': ('cell', ['A', 'B', 'A', 'C'])}
+    )
+
+    dimnames, dimcoords = pln.stats._infer_cluster_coords(frate, 'cond')
+
+    assert dimnames == ['cell', 'time']
+    np.testing.assert_array_equal(dimcoords[0], cells)
+    np.testing.assert_array_equal(dimcoords[1], times)
+
+    # make sure an error is raised
+    frate = frate.drop_vars('cond')
+    msg = 'Could not find the reduced dimension'
+    with pytest.raises(RuntimeError, match=msg):
+        dimnames, dimcoords = pln.stats._infer_cluster_coords(frate, 'cond')

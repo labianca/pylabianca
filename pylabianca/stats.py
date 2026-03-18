@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 
 
@@ -111,7 +112,8 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
 # TODO: auto-infer paired from xarray
 def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                        paired=False, stat_fun=None, n_permutations=1_000,
-                       n_stat_permutations=0, tail=None, progress=True):
+                       n_stat_permutations=0, tail=None, progress=True,
+                       return_clusters=None):
     '''Perform cluster-based tests on firing rate data.
 
     Performs cluster-based test (ANOVA or t test, depending on the data) on
@@ -135,6 +137,9 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         p value used as a cluster-entry threshold. The default is ``0.05``.
     paired : bool
         Whether a paired (repeated measures) or unpaired test should be used.
+    return_clusters : bool
+        Whether to return a ``borsar.Clusters`` object instead of a
+        ``(stat, clusters, pval)`` tuple.
 
     Returns
     -------
@@ -146,6 +151,14 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         List of p values from anova.
     '''
     from borsar.cluster import permutation_cluster_test_array
+
+    if return_clusters is None:
+        return_clusters = False
+        warnings.warn('The default behavior of returning (stats, clusters, '
+                      'pvals) tuple will change in the next version to '
+                      'returning one `borsar.Clusters` object. To retain the'
+                      ' old behavior use `return_clusters=False`.',
+                      FutureWarning)
 
     # TODO: check if theres is a condition dimension (if so -> paired)
     arrays = [arr.values for _, arr in frate.groupby(compare)]
@@ -160,7 +173,37 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         n_permutations=n_permutations, n_stat_permutations=n_stat_permutations,
         progress=progress)
 
+    if return_clusters:
+        from borsar.cluster.obj import Clusters
+
+        dimnames, dimcoords = _infer_cluster_coords(frate, compare)
+        return Clusters(stat, clusters=clusters, pvals=pval,
+                        dimnames=dimnames, dimcoords=dimcoords)
+
     return stat, clusters, pval
+
+
+# TODO: this might later need checking against other xarray helpers
+#       to de-duplicate (and some code present in selectivity module
+#       for xarray construction!)
+def _infer_cluster_coords(xarr, compare):
+    dimnames = None
+
+    # infer reduced dimension from compare coordinate / dimension
+    if compare in xarr.coords:
+        compare_dims = xarr.coords[compare].dims
+        assert len(compare_dims) == 1
+        compare = compare_dims[0]
+
+    n_orig_dims = len(xarr.dims)
+    dimnames = [dim for dim in xarr.dims if dim != compare]
+
+    if len(dimnames) == n_orig_dims:
+        raise RuntimeError('Could not find the reduced dimension.')
+
+    coords = [xarr.coords[dim_name].values for dim_name in dimnames]
+
+    return dimnames, coords
 
 
 # ENH: move to sarna/borsar sometime

@@ -32,6 +32,7 @@
 * ENH: added `pylabianca.selectivity.compute_selectivity_multisession()` to compute selectivity on a multisession dictionary (session name -> xarray). The output is an xarray.Dataset with concatenated session selectivity results (the order of the sessions in the output xarray.Dataset is the same as in the input dictionary).
 * ENH: added `pylabianca.stats.find_percentile_threshold()` used to calculate significance threshold for given statistic based on percentile of the permutation distribution.
 * ENH: `pylabianca.selectivity.compute_selectivity_continuous()` now can be also run with `n_perm=0`, returning only the selectivity statistics, without the permutation distribution or permutation-based threshold. Also `pylabianca.stats.permutation_test()` can now be run with `n_perm=0`, returning only the statistic values without the permutation distribution or permutation-based threshold.
+* ENH: `pylabianca.cluster_based_test()` can now return `borsar.Clusters` object instead of ``(stat, clusters, pval)`` tuple. This behavior is optional and can be controlled by setting `return_clusters=True` (defaults to False but will change to True in the next version).
 * ENH: `pylabianca.viz.plot_shaded()` now allows to facet by condition into rows and columns using `row` and `col` arguments
 * ENH: allow passing colors by name to `colors` in `pylabianca.viz.plot_shaded()`.
 
