@@ -67,8 +67,9 @@ def test_cluster_based_test_from_permutations():
 
     # standard cluster-based test
     n_permutations = 250
-    _, clst, pval = pln.stats.cluster_based_test(
-        arr, compare='cond', n_permutations=n_permutations)
+    _, clst, _ = pln.stats.cluster_based_test(
+        arr, compare='cond', n_permutations=n_permutations,
+        return_clusters=False)
 
     # compute the effect
     cond = conditions.copy()
@@ -149,8 +150,9 @@ def test_cluster_based_test_return_clusters_object():
     )
 
     np.random.seed(12)
-    stat, clusters, pval = pln.stats.cluster_based_test(
-        arr, compare='cond', n_permutations=100, progress=False)
+    with pytest.warns(FutureWarning, match='will change in the next version'):
+        stat, clusters, pval = pln.stats.cluster_based_test(
+            arr, compare='cond', n_permutations=100, progress=False)
 
     np.random.seed(12)
     clst = pln.stats.cluster_based_test(

@@ -1,3 +1,4 @@
+import warnings
 import numpy as np
 
 
@@ -112,7 +113,7 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
 def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                        paired=False, stat_fun=None, n_permutations=1_000,
                        n_stat_permutations=0, tail=None, progress=True,
-                       return_clusters=False):
+                       return_clusters=None):
     '''Perform cluster-based tests on firing rate data.
 
     Performs cluster-based test (ANOVA or t test, depending on the data) on
@@ -150,6 +151,14 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         List of p values from anova.
     '''
     from borsar.cluster import permutation_cluster_test_array
+
+    if return_clusters is None:
+        return_clusters = False
+        warnings.warn('The default behavior of returning (stats, clusters, '
+                      'pvals) tuple will change in the next version to '
+                      'returning one `borsar.Clusters` object. To retain the'
+                      ' old behavior use `return_clusters=False`.',
+                      FutureWarning)
 
     # TODO: check if theres is a condition dimension (if so -> paired)
     arrays = [arr.values for _, arr in frate.groupby(compare)]
