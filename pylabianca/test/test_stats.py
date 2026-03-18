@@ -1,5 +1,6 @@
 import numpy as np
 import xarray as xr
+import pytest
 
 from functools import partial
 from scipy.ndimage import gaussian_filter1d
@@ -184,3 +185,9 @@ def test_infer_cluster_dimnames_coords_respects_compare_dim():
     assert dimnames == ['cell', 'time']
     np.testing.assert_array_equal(dimcoords[0], cells)
     np.testing.assert_array_equal(dimcoords[1], times)
+
+    # make sure an error is raised
+    frate = frate.drop_vars('cond')
+    msg = 'Could not find the reduced dimension'
+    with pytest.raises(RuntimeError, match=msg):
+        dimnames, dimcoords = pln.stats._infer_cluster_coords(frate, 'cond')
