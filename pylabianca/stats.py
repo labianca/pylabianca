@@ -112,7 +112,7 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
 def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                        paired=False, stat_fun=None, n_permutations=1_000,
                        n_stat_permutations=0, tail=None, progress=True,
-                       return_clusters_object=False):
+                       return_clusters=False):
     '''Perform cluster-based tests on firing rate data.
 
     Performs cluster-based test (ANOVA or t test, depending on the data) on
@@ -136,7 +136,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         p value used as a cluster-entry threshold. The default is ``0.05``.
     paired : bool
         Whether a paired (repeated measures) or unpaired test should be used.
-    return_clusters_object : bool
+    return_clusters : bool
         Whether to return a ``borsar.Clusters`` object instead of a
         ``(stat, clusters, pval)`` tuple.
 
@@ -164,69 +164,39 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         n_permutations=n_permutations, n_stat_permutations=n_stat_permutations,
         progress=progress)
 
-    if return_clusters_object:
+    if return_clusters:
         from borsar.cluster.obj import Clusters
 
-        dimnames, dimcoords = _infer_cluster_dimnames_coords(
-            frate, stat, compare=compare)
+        dimnames, dimcoords = _infer_cluster_coords(frate, compare)
         return Clusters(stat, clusters=clusters, pvals=pval,
                         dimnames=dimnames, dimcoords=dimcoords)
 
     return stat, clusters, pval
 
 
-def _infer_cluster_dimnames_coords(frate, stat, compare=None):
-    import xarray as xr
-    from .utils.xarr import _inherit_metadata_from_xarray
-
+# TODO: this might later need checking against other xarray helpers
+#       to de-duplicate
+def _infer_cluster_coords(frate, compare):
     dimnames = None
 
     # infer reduced dimension from compare coordinate / dimension
-    if compare is not None:
-        if compare in frate.coords:
-            compare_dims = frate.coords[compare].dims
-            if len(compare_dims) == 1:
-                reduced_dim = compare_dims[0]
-                dimnames = [dim for dim in frate.dims if dim != reduced_dim]
-        elif compare in frate.dims:
-            dimnames = [dim for dim in frate.dims if dim != compare]
+    if compare in xarr.coords:
+        compare_dims = xarr.coords[compare].dims
+        assert len(compare_dims) == 1
+        compare = compare_dims[0]
+
+    dimnames = [dim for dim in xarr.dims if dim != compare]
 
     # fallback: find dimension removal that matches statistic shape
-    if dimnames is None or tuple(frate.sizes[dim] for dim in dimnames) != stat.shape:
-        matching = list()
-        for dim in frate.dims:
-            this_dimnames = [d for d in frate.dims if d != dim]
-            this_shape = tuple(frate.sizes[d] for d in this_dimnames)
-            if this_shape == stat.shape:
-                matching.append(this_dimnames)
-
-        if len(matching) == 1:
-            dimnames = matching[0]
-
-    # final fallback
-    if dimnames is None or len(dimnames) != stat.ndim:
-        if stat.ndim <= len(frate.dims):
-            dimnames = list(frate.dims[-stat.ndim:])
-        else:
-            dimnames = [f'dim_{idx}' for idx in range(stat.ndim)]
+    if len(dimnames) == 0:
+        # raise error
+        raise RuntimeError('Could not find the reduced dimension')
 
     coords = dict()
-    for dim_idx, dim_name in enumerate(dimnames):
-        if dim_name in frate.coords and frate.coords[dim_name].dims == (dim_name,):
-            coord = frate.coords[dim_name].values
-            if len(coord) == stat.shape[dim_idx]:
-                coords[dim_name] = coord
-                continue
-        coords[dim_name] = np.arange(stat.shape[dim_idx])
+    for dim_name in dimnames:
+        coords[dim_name] = xarr.coords[dim_name].values
 
-    stat_xarr = xr.DataArray(stat, dims=dimnames, coords=coords)
-
-    # inherit all nested coordinates attached to each stat dimension
-    for dimname in dimnames:
-        stat_xarr = _inherit_metadata_from_xarray(frate, stat_xarr, dimname)
-
-    dimcoords = [stat_xarr.coords[dimname].values for dimname in dimnames]
-    return dimnames, dimcoords
+    return dimnames, coords
 
 
 # ENH: move to sarna/borsar sometime

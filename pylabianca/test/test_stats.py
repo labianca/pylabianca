@@ -143,8 +143,7 @@ def test_cluster_based_test_return_clusters_object():
     data[effect_cond_mask, 1:4, 20:35] += 1.0
 
     arr = xr.DataArray(
-        data,
-        dims=['trial', 'cell', 'time'],
+        data, dims=['trial', 'cell', 'time'],
         coords={'time': times, 'cell': cells, 'cond': ('trial', conditions)}
     )
 
@@ -153,18 +152,18 @@ def test_cluster_based_test_return_clusters_object():
         arr, compare='cond', n_permutations=100, progress=False)
 
     np.random.seed(12)
-    clusters_obj = pln.stats.cluster_based_test(
+    clst = pln.stats.cluster_based_test(
         arr, compare='cond', n_permutations=100, progress=False,
-        return_clusters_object=True)
+        return_clusters=True)
 
-    assert isinstance(clusters_obj, Clusters)
-    assert clusters_obj.dimnames == ['cell', 'time']
-    np.testing.assert_array_equal(clusters_obj.dimcoords[0], cells)
-    np.testing.assert_array_equal(clusters_obj.dimcoords[1], times)
+    assert isinstance(clst, Clusters)
+    assert clst.dimnames == ['cell', 'time']
+    np.testing.assert_array_equal(clst.dimcoords[0], cells)
+    np.testing.assert_array_equal(clst.dimcoords[1], times)
 
-    np.testing.assert_allclose(clusters_obj.stat, stat)
-    np.testing.assert_array_equal(clusters_obj.clusters, clusters)
-    np.testing.assert_array_equal(clusters_obj.pvals, pval)
+    np.testing.assert_allclose(clst.stat, stat)
+    np.testing.assert_array_equal(clst.clusters, clusters)
+    np.testing.assert_array_equal(clst.pvals, pval)
 
 
 def test_infer_cluster_dimnames_coords_respects_compare_dim():
@@ -176,17 +175,11 @@ def test_infer_cluster_dimnames_coords_respects_compare_dim():
     frate = xr.DataArray(
         np.random.randn(n_cells, n_trials, n_times),
         dims=['cell', 'trial', 'time'],
-        coords={
-            'cell': cells,
-            'time': times,
-            'cond': ('trial', cond),
-            'region': ('cell', ['A', 'B', 'A', 'C'])
-        }
+        coords={'cell': cells, 'time': times, 'cond': ('trial', cond),
+                'region': ('cell', ['A', 'B', 'A', 'C'])}
     )
 
-    stat = np.random.randn(n_cells, n_times)
-    dimnames, dimcoords = pln.stats._infer_cluster_dimnames_coords(
-        frate, stat, compare='cond')
+    dimnames, dimcoords = pln.stats._infer_cluster_coords(frate, 'cond')
 
     assert dimnames == ['cell', 'time']
     np.testing.assert_array_equal(dimcoords[0], cells)
