@@ -176,7 +176,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
 # TODO: this might later need checking against other xarray helpers
 #       to de-duplicate
-def _infer_cluster_coords(frate, compare):
+def _infer_cluster_coords(xarr, compare):
     dimnames = None
 
     # infer reduced dimension from compare coordinate / dimension
