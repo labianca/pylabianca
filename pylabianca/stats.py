@@ -175,7 +175,8 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
 
 # TODO: this might later need checking against other xarray helpers
-#       to de-duplicate
+#       to de-duplicate (and some code present in selectivity module
+#       for xarray construction!)
 def _infer_cluster_coords(xarr, compare):
     dimnames = None
 
@@ -187,14 +188,10 @@ def _infer_cluster_coords(xarr, compare):
 
     dimnames = [dim for dim in xarr.dims if dim != compare]
 
-    # fallback: find dimension removal that matches statistic shape
     if len(dimnames) == 0:
-        # raise error
         raise RuntimeError('Could not find the reduced dimension')
 
-    coords = dict()
-    for dim_name in dimnames:
-        coords[dim_name] = xarr.coords[dim_name].values
+    coords = [xarr.coords[dim_name].values for dim_name in dimnames]
 
     return dimnames, coords
 
