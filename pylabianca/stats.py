@@ -186,9 +186,10 @@ def _infer_cluster_coords(xarr, compare):
         assert len(compare_dims) == 1
         compare = compare_dims[0]
 
+    n_orig_dims = len(xarr.dims)
     dimnames = [dim for dim in xarr.dims if dim != compare]
 
-    if len(dimnames) == 0:
+    if len(dimnames) == n_orig_dims:
         raise RuntimeError('Could not find the reduced dimension.')
 
     coords = [xarr.coords[dim_name].values for dim_name in dimnames]
