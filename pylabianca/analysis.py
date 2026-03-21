@@ -3,7 +3,8 @@ import numpy as np
 from .utils import (
     _get_trial_boundaries, _deal_with_picks, find_index, parse_sub_ses)
 from .utils.xarr import (
-    find_nested_dims, _inherit_metadata, assign_session_coord)
+    _ensure_queryable_xarray, find_nested_dims, _inherit_metadata,
+    assign_session_coord)
 from .utils.validate import _validate_xarray_for_aggregation
 
 
@@ -726,6 +727,110 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub',
 
     arr = xr.concat(arr_list, dim=dim_name, combine_attrs='override')
     return arr
+
+
+def apply_dict(data, fun=None, select=None, query=None, inplace=False,
+               reset_index=True, return_type='dict', ses_coord='sub'):
+    """Apply selection and a function to each xarray in a session dictionary.
+
+    This helper is intended for the common ``session -> xarray`` structure used
+    across ``pylabianca``. It can be used to filter the xarrays before applying
+    a function, and optionally concatenate the results into a single xarray.
+
+    Parameters
+    ----------
+    data : dict of xarray.DataArray | dict of xarray.Dataset
+        Dictionary where keys are subject / session names and values are
+        xarray objects.
+    fun : callable | None
+        Function applied to each selected xarray. The function must accept a
+        single xarray argument. If ``None``, only selection is applied.
+        Additional arguments can be supplied with :func:`functools.partial`.
+    select : str | dict | None
+        Convenience selection passed to ``.query()``. If ``select`` is not a
+        dictionary, it is interpreted as a query for the ``'trial'``
+        dimension.
+    query : dict | None
+        Additional query dictionary passed to ``.query()`` before ``select``.
+        Keys specify dimensions and values are query strings understood by
+        xarray.
+    inplace : bool
+        If ``True``, modify the input dictionary in place. If ``False``, a new
+        dictionary is returned. Defaults to ``False``.
+    reset_index : bool
+        Whether to reset the ``'trial'`` index after trial selection. This is
+        only used when the effective selection contains the ``'trial'`` key.
+        Defaults to ``True``.
+    return_type : {'dict', 'xarray'}
+        Output type to return. If ``'dict'``, return a dictionary with
+        per-session results. If ``'xarray'``, concatenate the results with
+        :func:`pylabianca.analysis.dict_to_xarray`. Defaults to ``'dict'``.
+    ses_coord : str
+        Name of the session coordinate to add when ``return_type='xarray'``.
+        Defaults to ``'sub'``.
+
+    Returns
+    -------
+    out : dict | xarray.DataArray | xarray.Dataset
+        Processed dictionary or concatenated xarray, depending on
+        ``return_type``.
+    """
+    import xarray as xr
+
+    if not isinstance(data, dict):
+        raise TypeError(f'`data` must be a dictionary. Got {type(data)}.')
+
+    if return_type not in ('dict', 'xarray'):
+        raise ValueError(
+            '`return_type` must be either "dict" or "xarray". '
+            f'Got {return_type}.'
+        )
+
+    all_xarr = [isinstance(val, (xr.DataArray, xr.Dataset))
+                for val in data.values()]
+    if not all(all_xarr):
+        bad_type = type(next(val for val in data.values()
+                             if not isinstance(val, (xr.DataArray,
+                                                     xr.Dataset))))
+        raise TypeError(
+            'All values in `data` must be xarray.DataArray or xarray.Dataset. '
+            f'Found {bad_type}.'
+        )
+
+    if query is not None and not isinstance(query, dict):
+        raise TypeError(
+            f'`query` must be a dictionary passed to `.query()`. Got '
+            f'{type(query)}.'
+        )
+
+    if select is not None and not isinstance(select, dict):
+        select = {'trial': select}
+
+    out = data if inplace else dict()
+
+    for key, arr in data.items():
+        this_arr = arr
+
+        if query is not None:
+            this_arr = _ensure_queryable_xarray(this_arr)
+            this_arr = this_arr.query(query)
+
+        if select is not None:
+            this_arr = _ensure_queryable_xarray(this_arr)
+            this_arr = this_arr.query(select)
+
+            if reset_index and 'trial' in select and 'trial' in this_arr.coords:
+                this_arr = this_arr.reset_index('trial', drop=True)
+
+        if fun is not None:
+            this_arr = fun(this_arr)
+
+        out[key] = this_arr
+
+    if return_type == 'xarray':
+        out = dict_to_xarray(out, ses_coord=ses_coord)
+
+    return out
 
 
 def _get_missing_value(dtype):
