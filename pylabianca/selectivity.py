@@ -70,7 +70,7 @@ def explained_variance(frate, groupby, kind='omega'):
     else:
         df = n_groups - 1
         n_trials = len(frate.coords['trial'])
-        MSE = SS_within.sum(axis=0) / n_trials
+        MSE = SS_within.sum(axis=0) / (n_trials - n_groups)
         es = (SS_between - df * MSE) / (SS_total + MSE)
         es.name = 'omega squared'
 

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy import stats
 import xarray as xr
 
 import pylabianca as pln
@@ -10,6 +11,23 @@ from pylabianca.selectivity import (
     compute_selectivity_continuous, compute_selectivity_multisession)
 
 import pytest
+
+
+def _effect_size_from_f_statistic(*groups, kind='omega'):
+    f_stat, _ = stats.f_oneway(*groups)
+    n_groups = len(groups)
+    n_obs = sum(len(group) for group in groups)
+    df_between = n_groups - 1
+    df_within = n_obs - n_groups
+
+    if kind == 'eta':
+        numerator = f_stat * df_between
+        denominator = numerator + df_within
+    else:
+        numerator = df_between * (f_stat - 1)
+        denominator = f_stat * df_between + df_within + 1
+
+    return numerator / denominator
 
 
 def test_selectivity_continuous():
@@ -369,3 +387,143 @@ def test_selectivity_multisession():
         msk = ses_id == sel.coords['sub'].values
         assert msk.any()
         assert msk.sum() == cells_per_session
+
+
+def test_explained_variance_matches_anova_reference():
+    trial_groups = np.array(['A'] * 3 + ['B'] * 2 + ['C'] * 4)
+    trial_idx = np.arange(trial_groups.size)
+
+    data = np.array([
+        [1.0, 1.5],
+        [2.0, 2.5],
+        [3.0, 3.5],
+        [4.5, 4.0],
+        [5.5, 5.0],
+        [7.0, 5.5],
+        [8.0, 6.0],
+        [9.0, 6.5],
+        [10.0, 7.0],
+    ])
+    frate = xr.DataArray(
+        data, dims=['trial', 'time'],
+        coords={
+            'trial': trial_idx,
+            'time': [0.0, 0.25],
+            'cond': ('trial', trial_groups),
+        }
+    )
+
+    eta = pln.selectivity.explained_variance(frate, 'cond', kind='eta')
+    omega = pln.selectivity.explained_variance(frate, 'cond', kind='omega')
+
+    eta_expected = []
+    omega_expected = []
+    for time_idx in range(frate.sizes['time']):
+        time_groups = [
+            frate.sel(time=frate.time[time_idx]).values[trial_groups == label]
+            for label in np.unique(trial_groups)
+        ]
+        eta_expected.append(
+            _effect_size_from_f_statistic(*time_groups, kind='eta'))
+        omega_expected.append(
+            _effect_size_from_f_statistic(*time_groups, kind='omega'))
+
+    np.testing.assert_allclose(eta.values, eta_expected)
+    np.testing.assert_allclose(omega.values, omega_expected)
+    assert eta.name == 'eta squared'
+    assert omega.name == 'omega squared'
+
+    frate_single_time = frate.sel(time=0.0).drop_vars('time')
+    eta_single = pln.selectivity.explained_variance(
+        frate_single_time, 'cond', kind='eta')
+    omega_single = pln.selectivity.explained_variance(
+        frate_single_time, 'cond', kind='omega')
+
+    np.testing.assert_allclose(eta_single.item(), eta_expected[0])
+    np.testing.assert_allclose(omega_single.item(), omega_expected[0])
+
+
+def test_explained_variance_matches_pingouin_eta_squared():
+    pg = pytest.importorskip(
+        'pingouin',
+        reason='pingouin provides an external one-way ANOVA eta-squared '
+               'reference')
+
+    trial_groups = np.array(['A'] * 3 + ['B'] * 2 + ['C'] * 4)
+    trial_idx = np.arange(trial_groups.size)
+    data = np.array([
+        [1.0, 1.5],
+        [2.0, 2.5],
+        [3.0, 3.5],
+        [4.5, 4.0],
+        [5.5, 5.0],
+        [7.0, 5.5],
+        [8.0, 6.0],
+        [9.0, 6.5],
+        [10.0, 7.0],
+    ])
+    frate = xr.DataArray(
+        data, dims=['trial', 'time'],
+        coords={
+            'trial': trial_idx,
+            'time': [0.0, 0.25],
+            'cond': ('trial', trial_groups),
+        }
+    )
+
+    eta = pln.selectivity.explained_variance(frate, 'cond', kind='eta')
+
+    eta_expected = []
+    for time_idx in range(frate.sizes['time']):
+        long_df = pd.DataFrame({
+            'frate': frate.isel(time=time_idx).values,
+            'cond': trial_groups,
+        })
+        eta_expected.append(
+            pg.anova(data=long_df, dv='frate', between='cond', effsize='n2')
+            .loc[0, 'n2'])
+
+    np.testing.assert_allclose(eta.values, eta_expected)
+
+
+def test_depth_of_selectivity_covers_obvious_and_corner_cases():
+    trial_groups = np.array(['A', 'A', 'B', 'B', 'C', 'C'])
+    trial_idx = np.arange(trial_groups.size)
+
+    baseline = np.array([2.0, 2.5, 2.0, 2.5, 2.0, 2.5])
+    with_effect = baseline.copy()
+    with_effect[:2] += 6.0
+
+    frate = xr.DataArray(
+        np.stack([baseline, with_effect], axis=1),
+        dims=['trial', 'time'],
+        coords={
+            'trial': trial_idx,
+            'time': [0.0, 0.25],
+            'cond': ('trial', trial_groups),
+        }
+    )
+
+    dos, avg_by_probe = pln.selectivity.depth_of_selectivity(frate, 'cond')
+
+    assert dos.sel(time=0.0).item() == pytest.approx(0.0)
+    assert dos.sel(time=0.25).item() > dos.sel(time=0.0).item()
+    assert avg_by_probe.dims == ('cond', 'time')
+
+    selective = xr.DataArray(
+        [5.0, 5.0, 0.0, 0.0, 0.0, 0.0],
+        dims=['trial'],
+        coords={'trial': trial_idx, 'cond': ('trial', trial_groups)}
+    )
+    dos_selective, avg_selective = pln.selectivity.depth_of_selectivity(
+        selective, 'cond')
+    assert dos_selective.item() == pytest.approx(1.0)
+    np.testing.assert_allclose(avg_selective.values, [5.0, 0.0, 0.0])
+
+    zeros = xr.DataArray(
+        np.zeros(trial_groups.size), dims=['trial'],
+        coords={'trial': trial_idx, 'cond': ('trial', trial_groups)}
+    )
+    zero_dos, zero_avg = pln.selectivity.depth_of_selectivity(zeros, 'cond')
+    assert zero_dos == 0
+    np.testing.assert_allclose(zero_avg.values, 0.0)
