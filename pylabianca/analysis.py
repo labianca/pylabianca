@@ -729,13 +729,14 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub',
     return arr
 
 
-def apply_dict(data, fun=None, select=None, query=None, inplace=False,
-               reset_index=True, return_type='dict', ses_coord='sub'):
-    """Apply selection and a function to each xarray in a session dictionary.
+def apply_dict(data, fun=None, select=None, inplace=False, reset_index=True,
+               return_type='dict', ses_coord='sub'):
+    """Apply a function to each item in a key -> xarray dictionary.
 
-    This helper is intended for the common ``session -> xarray`` structure used
-    across ``pylabianca``. It can be used to filter the xarrays before applying
-    a function, and optionally concatenate the results into a single xarray.
+    This helper is intended for the common ``session -> xarray`` dictionary
+    structure used across ``pylabianca``. It can be used to filter the xarrays
+    before applying a function, and optionally concatenate the results into a
+    single xarray.
 
     Parameters
     ----------
@@ -747,13 +748,9 @@ def apply_dict(data, fun=None, select=None, query=None, inplace=False,
         single xarray argument. If ``None``, only selection is applied.
         Additional arguments can be supplied with :func:`functools.partial`.
     select : str | dict | None
-        Convenience selection passed to ``.query()``. If ``select`` is not a
+        Optional selection. If ``select`` is not None and not a
         dictionary, it is interpreted as a query for the ``'trial'``
         dimension.
-    query : dict | None
-        Additional query dictionary passed to ``.query()`` before ``select``.
-        Keys specify dimensions and values are query strings understood by
-        xarray.
     inplace : bool
         If ``True``, modify the input dictionary in place. If ``False``, a new
         dictionary is returned. Defaults to ``False``.
@@ -797,12 +794,6 @@ def apply_dict(data, fun=None, select=None, query=None, inplace=False,
             f'Found {bad_type}.'
         )
 
-    if query is not None and not isinstance(query, dict):
-        raise TypeError(
-            f'`query` must be a dictionary passed to `.query()`. Got '
-            f'{type(query)}.'
-        )
-
     if select is not None and not isinstance(select, dict):
         select = {'trial': select}
 
@@ -811,15 +802,11 @@ def apply_dict(data, fun=None, select=None, query=None, inplace=False,
     for key, arr in data.items():
         this_arr = arr
 
-        if query is not None:
-            this_arr = _ensure_queryable_xarray(this_arr)
-            this_arr = this_arr.query(query)
-
         if select is not None:
             this_arr = _ensure_queryable_xarray(this_arr)
             this_arr = this_arr.query(select)
 
-            if reset_index and 'trial' in select and 'trial' in this_arr.coords:
+            if reset_index and 'trial' in select:
                 this_arr = this_arr.reset_index('trial', drop=True)
 
         if fun is not None:

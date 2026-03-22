@@ -8,7 +8,7 @@ def _ensure_queryable_xarray(arr):
     import xarray as xr
 
     if isinstance(arr, xr.DataArray) and arr.name is None:
-        arr = arr.rename('data')
+        arr.name = 'data'
     return arr
 
 

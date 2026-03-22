@@ -1,3 +1,5 @@
+from functools import partial
+
 import os.path as op
 import re
 import time
@@ -510,3 +512,99 @@ def test_zscore_xarray():
          / xarr_np[:, :, time_idx].std(axis=(1, 2), keepdims=True)
     )
     assert np.allclose(xarr_z2.data, xarr_np_z2, atol=1e-6)
+
+
+def test_apply_dict():
+    from pylabianca.testing import create_multisession_data
+
+    n_sessions = 3
+    frates = create_multisession_data(
+        n_sessions, cells_per_session=(5, 25), out='fr')
+
+    # LATER: check if this was actually needed, was done in code refactored
+    #        into create_multisession_data
+    # if idx == 0:
+    #   fr.name = None
+    selected = pln.apply_dict(
+        frates, select={'trial': 'block == 1 & emo != "neutral"'}
+    )
+    assert selected is not frates
+
+    for session, original in frates.items():
+        expected = (
+            original if original.name is not None
+            else original.rename('data')
+        )
+        expected = expected.query({'trial': 'block == 1'})
+        expected = expected.query({'trial': 'emo != "neutral"'})
+        expected = expected.reset_index('trial', drop=True)
+
+        xr.testing.assert_identical(selected[session], expected)
+        assert np.array_equal(
+            selected[session].coords['trial'].values,
+            np.arange(selected[session].sizes['trial'])
+        )
+
+    assert frates[sessions[0]].name is None
+
+    selected_no_reset = pln.apply_dict(
+        frates, select='emo != "neutral"', reset_index=False
+    )
+    for session in sessions:
+        ses = selected_no_reset[session]
+        expected_trials = np.where(ses.emo.values != "neutral")
+        assert np.array_equal(
+            selected_no_reset[session].coords['trial'].values, expected_trials
+        )
+
+    frates_inplace = {
+        key: val.copy(deep=True) for key, val in frates.items()
+    }
+    inplace_out = pln.apply_dict(
+        frates_inplace, select='emo == "sad"', inplace=True
+    )
+    assert inplace_out is frates_inplace
+
+    for session, arr in inplace_out.items():
+        expected = (
+            frates[session] if frates[session].name is not None
+            else frates[session].rename('data')
+        )
+        expected = expected.query({'trial': 'emo == "sad"'})
+        expected = expected.reset_index('trial', drop=True)
+        xr.testing.assert_identical(arr, expected)
+
+    # apply DoS to each session
+    dos_dict = pln.apply_dict(
+        frates,
+        fun=partial(pln.selectivity.depth_of_selectivity, groupby='emo')
+    )
+    for session, arr in frates.items():
+        expected = pln.selectivity.depth_of_selectivity(arr, groupby='emo')
+        assert isinstance(dos_dict[session], tuple)
+        xr.testing.assert_identical(dos_dict[session][0], expected[0])
+        xr.testing.assert_identical(dos_dict[session][1], expected[1])
+
+    dos_xarray = pln.apply_dict(
+        frates,
+        fun=lambda arr: pln.selectivity.depth_of_selectivity(
+            arr, groupby='emo'
+        )[0],
+        return_type='xarray',
+        ses_coord='session'
+    )
+    expected_xarray = pln.dict_to_xarray(
+        {
+            key: pln.selectivity.depth_of_selectivity(val, groupby='emo')[0]
+            for key, val in frates.items()
+        },
+        ses_coord='session'
+    )
+    xr.testing.assert_identical(dos_xarray, expected_xarray)
+    assert 'session' in dos_xarray.coords
+
+    with pytest.raises(ValueError, match='`return_type` must be either'):
+        pln.apply_dict(frates, return_type='array')
+
+    with pytest.raises(TypeError, match='`query` must be a dictionary'):
+        pln.apply_dict(frates, query='emo == "sad"')

@@ -1,5 +1,3 @@
-from functools import partial
-
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -338,20 +336,11 @@ def test_compute_percent_selective():
 
 
 def test_selectivity_multisession():
+    from pylabianca.testing import create_multisession_data
+
     n_sessions = 6
-    cells_per_session = 20
-
-    frs = dict()
-    for ses_idx in range(n_sessions):
-        session_id = f'sub{ses_idx + 1:02d}'
-
-        spk_epochs = create_random_spikes(
-            n_cells=cells_per_session, n_trials=60, n_spikes=(10, 50))
-        emo = np.random.choice(['sad', 'happy', 'neutral'], size=60)
-        spk_epochs.metadata = pd.DataFrame({'emo': emo})
-
-        frs[session_id] = spk_epochs.spike_rate(tmin=0.1, tmax=1.1, step=False)
-
+    frs = create_multisession_data(
+        n_sessions, cells_per_session=(5, 25), out='fr')
     sel = compute_selectivity_multisession(
         frs, compare='emo', n_perm=100, n_jobs=n_sessions
     )
@@ -361,7 +350,7 @@ def test_selectivity_multisession():
     assert sel['dist'].dims == ('perm', 'cell',)
 
     # make sure we have the right number of cells
-    n_cells = cells_per_session * n_sessions
+    n_cells = np.sum([fr.cell.shape[0] for fr in frs.values()])
     assert sel['stat'].shape[0] == n_cells
     assert sel['dist'].shape[1] == n_cells
 
@@ -371,102 +360,3 @@ def test_selectivity_multisession():
         msk = ses_id == sel.coords['sub'].values
         assert msk.any()
         assert msk.sum() == cells_per_session
-
-
-def test_apply_dict():
-    sessions = ['sub01-ses01', 'sub02-ses01']
-    frates = dict()
-
-    for idx, session in enumerate(sessions):
-        spk = create_random_spikes(
-            n_cells=3 + idx, n_trials=12, n_spikes=(15, 35)
-        )
-        emo = np.array(['sad', 'happy', 'neutral'] * 4)
-        block = np.tile([0, 1], 6)
-        spk.metadata = pd.DataFrame({'emo': emo, 'block': block})
-
-        fr = spk.spike_rate(tmin=0.1, tmax=1.1, step=False)
-        if idx == 0:
-            fr.name = None
-        frates[session] = fr
-
-    selected = pln.apply_dict(
-        frates, query={'trial': 'block == 1'}, select='emo != "neutral"'
-    )
-    assert selected is not frates
-
-    for session, original in frates.items():
-        expected = (
-            original if original.name is not None
-            else original.rename('data')
-        )
-        expected = expected.query({'trial': 'block == 1'})
-        expected = expected.query({'trial': 'emo != "neutral"'})
-        expected = expected.reset_index('trial', drop=True)
-
-        xr.testing.assert_identical(selected[session], expected)
-        assert np.array_equal(
-            selected[session].coords['trial'].values,
-            np.arange(selected[session].sizes['trial'])
-        )
-
-    assert frates[sessions[0]].name is None
-
-    selected_no_reset = pln.apply_dict(
-        frates, select='emo != "neutral"', reset_index=False
-    )
-    expected_trials = np.array([0, 1, 3, 4, 6, 7, 9, 10])
-    for session in sessions:
-        assert np.array_equal(
-            selected_no_reset[session].coords['trial'].values, expected_trials
-        )
-
-    frates_inplace = {
-        key: val.copy(deep=True) for key, val in frates.items()
-    }
-    inplace_out = pln.apply_dict(
-        frates_inplace, select='emo == "sad"', inplace=True
-    )
-    assert inplace_out is frates_inplace
-    for session, arr in inplace_out.items():
-        expected = (
-            frates[session] if frates[session].name is not None
-            else frates[session].rename('data')
-        )
-        expected = expected.query({'trial': 'emo == "sad"'})
-        expected = expected.reset_index('trial', drop=True)
-        xr.testing.assert_identical(arr, expected)
-
-    dos_dict = pln.apply_dict(
-        frates,
-        fun=partial(pln.selectivity.depth_of_selectivity, groupby='emo')
-    )
-    for session, arr in frates.items():
-        expected = pln.selectivity.depth_of_selectivity(arr, groupby='emo')
-        assert isinstance(dos_dict[session], tuple)
-        xr.testing.assert_identical(dos_dict[session][0], expected[0])
-        xr.testing.assert_identical(dos_dict[session][1], expected[1])
-
-    dos_xarray = pln.apply_dict(
-        frates,
-        fun=lambda arr: pln.selectivity.depth_of_selectivity(
-            arr, groupby='emo'
-        )[0],
-        return_type='xarray',
-        ses_coord='session'
-    )
-    expected_xarray = pln.dict_to_xarray(
-        {
-            key: pln.selectivity.depth_of_selectivity(val, groupby='emo')[0]
-            for key, val in frates.items()
-        },
-        ses_coord='session'
-    )
-    xr.testing.assert_identical(dos_xarray, expected_xarray)
-    assert 'session' in dos_xarray.coords
-
-    with pytest.raises(ValueError, match='`return_type` must be either'):
-        pln.apply_dict(frates, return_type='array')
-
-    with pytest.raises(TypeError, match='`query` must be a dictionary'):
-        pln.apply_dict(frates, query='emo == "sad"')
