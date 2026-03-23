@@ -605,7 +605,6 @@ def test_apply_dict():
 
     match = "must be a dictionary. Got <class 'list'>."
     with pytest.raises(TypeError, match=match):
-
         pln.apply_dict([frates], fun=func)
 
     frates[sessions[1]] = [0, 1, 2]
