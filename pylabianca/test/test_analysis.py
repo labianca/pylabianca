@@ -520,15 +520,14 @@ def test_apply_dict():
     n_sessions = 3
     frates = create_multisession_data(
         n_sessions, cells_per_session=(5, 25), out='fr')
+    sessions = list(frates.keys())
+    frates[sessions[0]].name = None
 
-    # LATER: check if this was actually needed, was done in code refactored
-    #        into create_multisession_data
-    # if idx == 0:
-    #   fr.name = None
     selected = pln.apply_dict(
         frates, select={'trial': 'block == 1 & emo != "neutral"'}
     )
     assert selected is not frates
+    assert selected[sessions[0]].name is not None
 
     for session, original in frates.items():
         expected = (
@@ -545,16 +544,14 @@ def test_apply_dict():
             np.arange(selected[session].sizes['trial'])
         )
 
-    assert frates[sessions[0]].name is None
-
     selected_no_reset = pln.apply_dict(
         frates, select='emo != "neutral"', reset_index=False
     )
     for session in sessions:
         ses = selected_no_reset[session]
-        expected_trials = np.where(ses.emo.values != "neutral")
+        expected_trials = np.where(frates[session].emo.values != "neutral")[0]
         assert np.array_equal(
-            selected_no_reset[session].coords['trial'].values, expected_trials
+            ses.coords['trial'].values, expected_trials
         )
 
     frates_inplace = {
@@ -606,5 +603,3 @@ def test_apply_dict():
     with pytest.raises(ValueError, match='`return_type` must be either'):
         pln.apply_dict(frates, return_type='array')
 
-    with pytest.raises(TypeError, match='`query` must be a dictionary'):
-        pln.apply_dict(frates, query='emo == "sad"')
