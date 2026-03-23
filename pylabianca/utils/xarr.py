@@ -3,6 +3,15 @@ import numpy as np
 from .base import _deal_with_picks
 
 
+def _ensure_queryable_xarray(arr):
+    """Ensure DataArrays can be passed to :meth:`xarray.DataArray.query`."""
+    import xarray as xr
+
+    if isinstance(arr, xr.DataArray) and arr.name is None:
+        arr.name = 'data'
+    return arr
+
+
 # CONSIDER: spike_epochs and times could be optional arguments
 # CHANGE name to something more general - it is now used for xarray and decoding
 #        results (and more in the future)

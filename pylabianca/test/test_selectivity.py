@@ -336,20 +336,12 @@ def test_compute_percent_selective():
 
 
 def test_selectivity_multisession():
+    from pylabianca.testing import create_multisession_data
+
     n_sessions = 6
-    cells_per_session = 20
-
-    frs = dict()
-    for ses_idx in range(n_sessions):
-        session_id = f'sub{ses_idx + 1:02d}'
-
-        spk_epochs = create_random_spikes(
-            n_cells=cells_per_session, n_trials=60, n_spikes=(10, 50))
-        emo = np.random.choice(['sad', 'happy', 'neutral'], size=60)
-        spk_epochs.metadata = pd.DataFrame({'emo': emo})
-
-        frs[session_id] = spk_epochs.spike_rate(tmin=0.1, tmax=1.1, step=False)
-
+    frs = create_multisession_data(
+        n_sessions, cells_per_session=(5, 25), out='fr')
+    n_cells = {ses: fr.cell.shape[0] for ses, fr in frs.items()}
     sel = compute_selectivity_multisession(
         frs, compare='emo', n_perm=100, n_jobs=n_sessions
     )
@@ -359,13 +351,13 @@ def test_selectivity_multisession():
     assert sel['dist'].dims == ('perm', 'cell',)
 
     # make sure we have the right number of cells
-    n_cells = cells_per_session * n_sessions
-    assert sel['stat'].shape[0] == n_cells
-    assert sel['dist'].shape[1] == n_cells
+    n_sum_cells = np.sum([fr.cell.shape[0] for fr in frs.values()])
+    assert sel['stat'].shape[0] == n_sum_cells
+    assert sel['dist'].shape[1] == n_sum_cells
 
     # make sure we have all sessions and cells per session
     session_ids = frs.keys()
     for ses_id in session_ids:
         msk = ses_id == sel.coords['sub'].values
         assert msk.any()
-        assert msk.sum() == cells_per_session
+        assert msk.sum() == n_cells[ses_id]
