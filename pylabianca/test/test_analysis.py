@@ -572,10 +572,9 @@ def test_apply_dict():
         xr.testing.assert_identical(arr, expected)
 
     # apply DoS to each session
-    dos_dict = pln.apply_dict(
-        frates,
-        fun=partial(pln.selectivity.depth_of_selectivity, groupby='emo')
-    )
+    func = partial(pln.selectivity.depth_of_selectivity, groupby='emo')
+    dos_dict = pln.apply_dict(frates, fun=func)
+
     for session, arr in frates.items():
         expected = pln.selectivity.depth_of_selectivity(arr, groupby='emo')
         assert isinstance(dos_dict[session], tuple)
@@ -600,6 +599,16 @@ def test_apply_dict():
     xr.testing.assert_identical(dos_xarray, expected_xarray)
     assert 'session' in dos_xarray.coords
 
+    # test errors
     with pytest.raises(ValueError, match='`return_type` must be either'):
         pln.apply_dict(frates, return_type='array')
 
+    match = "must be a dictionary. Got <class 'list'>."
+    with pytest.raises(TypeError, match=match):
+
+        pln.apply_dict([frates], fun=func)
+
+    frates[sessions[1]] = [0, 1, 2]
+    match = "must be xarray.DataArray or xarray.Dataset. Found <class 'list'>."
+    with pytest.raises(TypeError, match=match):
+        pln.apply_dict(frates, fun=func)
