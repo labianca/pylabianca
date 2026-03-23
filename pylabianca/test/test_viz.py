@@ -93,6 +93,47 @@ def test_plot_shaded_colors():
         assert (ax.collections[idx].get_facecolor()[0, :3] == color_rgb).all()
 
 
+def test_plot_shaded_groupby_default_colors_match_separate_calls():
+    rng = np.random.RandomState(42)
+    n_trials, n_times = 25, 100
+    times = np.linspace(-0.5, 1.0, n_times)
+    conditions = ['A', 'B']
+
+    data = rng.randn(n_trials, n_times, len(conditions))
+    data[:, 30:55, 0] += 2.0
+    data[:, 45:70, 1] -= 1.5
+    data = gaussian_filter1d(data, sigma=4, axis=1)
+
+    arr = xr.DataArray(
+        data,
+        dims=['trial', 'time', 'condition'],
+        coords={'time': times, 'condition': conditions},
+    )
+
+    ax_grouped = pln.viz.plot_shaded(arr, groupby='condition')
+    grouped_line_colors = [line.get_color() for line in ax_grouped.lines]
+    grouped_shade_colors = [
+        tuple(shade.get_facecolor()[0, :3]) for shade in ax_grouped.collections
+    ]
+
+    ax_separate = None
+    for cond in conditions:
+        ax_separate = pln.viz.plot_shaded(
+            arr.sel(condition=cond), ax=ax_separate
+        )
+
+    separate_line_colors = [line.get_color() for line in ax_separate.lines]
+    separate_shade_colors = [
+        tuple(shade.get_facecolor()[0, :3]) for shade in ax_separate.collections
+    ]
+
+    assert grouped_line_colors == separate_line_colors
+    assert grouped_shade_colors == separate_shade_colors
+
+    for line_color, shade_color in zip(grouped_line_colors, grouped_shade_colors):
+        assert np.allclose(plt.cm.colors.to_rgb(line_color), shade_color)
+
+
 # tests
 
 
@@ -514,4 +555,3 @@ def test_plot_shaded_col_row_facets():
     msg_to_match = 'Coordinate "krecik" does not have exactly 1 dimension'
     with pytest.raises(ValueError, match=msg_to_match):
         pln.plot_shaded(use_data, col='krecik', groupby='condition')
-
