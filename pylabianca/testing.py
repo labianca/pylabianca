@@ -28,7 +28,8 @@ def spk_epochs(ft_data):
     return spk_epo_test
 
 
-def gen_random_xarr(n_cells, n_trials, n_times, per_cell_coord=False):
+def gen_random_xarr(n_cells, n_trials, n_times, per_cell_coord=False,
+                    trial_condition_levels=None):
     import xarray as xr
 
     letters = np.array(list(ascii_lowercase))
@@ -38,12 +39,12 @@ def gen_random_xarr(n_cells, n_trials, n_times, per_cell_coord=False):
     cell_names = [''.join(np.random.choice(letters, 5))
                   for _ in range(n_cells)]
 
-    xarr = xr.DataArray(
-        data, dims=dim_names,
-        coords={'cell': cell_names,
-                'trial': np.arange(n_trials),
-                'time': time}
-    )
+    coords={'cell': cell_names, 'trial': np.arange(n_trials), 'time': time}
+    if trial_condition_levels is not None:
+        levels = np.random.choice(trial_condition_levels, size=n_trials)
+        coords['cond'] = ('trial', levels)
+
+    xarr = xr.DataArray(data, dims=dim_names, coords=coords)
 
     if per_cell_coord:
         prefs = np.zeros((n_cells, n_trials), dtype=int)

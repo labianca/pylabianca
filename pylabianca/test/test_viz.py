@@ -93,38 +93,27 @@ def test_plot_shaded_colors():
         assert (ax.collections[idx].get_facecolor()[0, :3] == color_rgb).all()
 
 
-def test_plot_shaded_groupby_default_colors_match_separate_calls():
-    rng = np.random.RandomState(42)
-    n_trials, n_times = 25, 100
-    times = np.linspace(-0.5, 1.0, n_times)
+def test_plot_shaded_separate_calls_cycle_colors():
+    from pylabianca.testing import gen_random_xarr
+
+    n_cells, n_trials, n_times = 15, 35, 100
     conditions = ['A', 'B']
+    arr = gen_random_xarr(
+        n_cells, n_trials, n_times, trial_condition_levels=conditions)
+    arr = pln.aggregate(arr, groupby='cond', zscore=True)
 
-    data = rng.randn(n_trials, n_times, len(conditions))
-    data[:, 30:55, 0] += 2.0
-    data[:, 45:70, 1] -= 1.5
-    data = gaussian_filter1d(data, sigma=4, axis=1)
-
-    arr = xr.DataArray(
-        data,
-        dims=['trial', 'time', 'condition'],
-        coords={'time': times, 'condition': conditions},
-    )
-
-    ax_grouped = pln.viz.plot_shaded(arr, groupby='condition')
+    ax_grouped = pln.viz.plot_shaded(arr, groupby='cond')
     grouped_line_colors = [line.get_color() for line in ax_grouped.lines]
     grouped_shade_colors = [
         tuple(shade.get_facecolor()[0, :3]) for shade in ax_grouped.collections
     ]
 
-    ax_separate = None
-    for cond in conditions:
-        ax_separate = pln.viz.plot_shaded(
-            arr.sel(condition=cond), ax=ax_separate
-        )
+    ax = pln.viz.plot_shaded(arr.sel(cond='A'))
+    pln.viz.plot_shaded(arr.sel(cond='B'), ax=ax)
 
-    separate_line_colors = [line.get_color() for line in ax_separate.lines]
+    separate_line_colors = [line.get_color() for line in ax.lines]
     separate_shade_colors = [
-        tuple(shade.get_facecolor()[0, :3]) for shade in ax_separate.collections
+        tuple(shade.get_facecolor()[0, :3]) for shade in ax.collections
     ]
 
     assert grouped_line_colors == separate_line_colors
@@ -132,9 +121,6 @@ def test_plot_shaded_groupby_default_colors_match_separate_calls():
 
     for line_color, shade_color in zip(grouped_line_colors, grouped_shade_colors):
         assert np.allclose(plt.cm.colors.to_rgb(line_color), shade_color)
-
-
-# tests
 
 
 @pytest.fixture
