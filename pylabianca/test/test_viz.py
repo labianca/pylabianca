@@ -93,7 +93,34 @@ def test_plot_shaded_colors():
         assert (ax.collections[idx].get_facecolor()[0, :3] == color_rgb).all()
 
 
-# tests
+def test_plot_shaded_separate_calls_cycle_colors():
+    from pylabianca.testing import gen_random_xarr
+
+    n_cells, n_trials, n_times = 15, 35, 100
+    conditions = ['A', 'B']
+    arr = gen_random_xarr(
+        n_cells, n_trials, n_times, trial_condition_levels=conditions)
+    arr = pln.aggregate(arr, groupby='cond', zscore=True)
+
+    ax_grouped = pln.viz.plot_shaded(arr, groupby='cond')
+    grouped_line_colors = [line.get_color() for line in ax_grouped.lines]
+    grouped_shade_colors = [
+        tuple(shade.get_facecolor()[0, :3]) for shade in ax_grouped.collections
+    ]
+
+    ax = pln.viz.plot_shaded(arr.sel(cond='A'))
+    pln.viz.plot_shaded(arr.sel(cond='B'), ax=ax)
+
+    separate_line_colors = [line.get_color() for line in ax.lines]
+    separate_shade_colors = [
+        tuple(shade.get_facecolor()[0, :3]) for shade in ax.collections
+    ]
+
+    assert grouped_line_colors == separate_line_colors
+    assert grouped_shade_colors == separate_shade_colors
+
+    for line_color, shade_color in zip(grouped_line_colors, grouped_shade_colors):
+        assert np.allclose(plt.cm.colors.to_rgb(line_color), shade_color)
 
 
 @pytest.fixture
@@ -514,4 +541,3 @@ def test_plot_shaded_col_row_facets():
     msg_to_match = 'Coordinate "krecik" does not have exactly 1 dimension'
     with pytest.raises(ValueError, match=msg_to_match):
         pln.plot_shaded(use_data, col='krecik', groupby='condition')
-
