@@ -123,7 +123,7 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     return firing
 
 
-def df_from_xarray_coords(xarr, dim):
+def df_from_xarray_coords(xarr, dim, add_dim_coord=False):
     '''
     Extract xarray coordinate information as a dataframe.
 
@@ -133,6 +133,8 @@ def df_from_xarray_coords(xarr, dim):
         DataArray to use.
     dim : str
         Dimension coordinates to extract.
+    add_dim_coord : bool
+        Whether to add the `dim` coordinate to the dataframe.
 
     Returns
     -------
@@ -144,7 +146,7 @@ def df_from_xarray_coords(xarr, dim):
     '''
     import pandas as pd
     use_dims = find_nested_dims(xarr, dim)
-    if dim not in use_dims:
+    if dim not in use_dims and add_dim_coord:
         use_dims = [dim] + use_dims
 
     if len(use_dims) > 1:
@@ -156,7 +158,7 @@ def df_from_xarray_coords(xarr, dim):
     return df
 
 
-def cellinfo_from_xarray(xarr):
+def cellinfo_from_xarray(xarr, add_cell_coord=False):
     '''
     Extract cell information (cellinfo) dataframe from xarray.
 
@@ -164,6 +166,9 @@ def cellinfo_from_xarray(xarr):
     ----------
     xarr : xarray.DataArray
         DataArray to use. Must contain cell dimension.
+    add_cell_coord : bool
+        Whehter to add the cell coordinate (cell names) to the cellinfo
+        dataframe.
 
     Returns
     -------
@@ -172,7 +177,8 @@ def cellinfo_from_xarray(xarr):
         in the xarray, the DataFrame will have multiple columns. If there are
         no cell coordinates, None is returned.
     '''
-    cellinfo = df_from_xarray_coords(xarr, 'cell')
+    cellinfo = df_from_xarray_coords(
+        xarr, 'cell', add_dim_coord=add_cell_coord)
     return cellinfo
 
 
