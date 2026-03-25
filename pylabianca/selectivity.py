@@ -1040,7 +1040,6 @@ def compute_percent_selective(selectivity, threshold=None, dist=None,
         return perc_sel
 
 
-# TODO: create apply_dict function (with out_type='dict' or 'xarray' etc.)
 # TODO: expose ses_coord as a parameter
 def compute_selectivity_multisession(frate, compare=None, select=None,
                                      n_perm=1_000, n_jobs=1):

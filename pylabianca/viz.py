@@ -282,7 +282,8 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
                             f", or dict, got {type(colors)}.")
     else:
         # default matplotlib colors
-        color_map = {name: f'C{idx}' for idx, name in enumerate(group_names)}
+        color_map = {name: ax._get_lines.get_next_color()
+                     for name in group_names}
 
     # plot each line with error interval
     if groupby is not None:
