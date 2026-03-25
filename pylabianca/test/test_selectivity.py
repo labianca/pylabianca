@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy import stats
 import xarray as xr
 
 import pylabianca as pln
@@ -10,6 +11,36 @@ from pylabianca.selectivity import (
     compute_selectivity_continuous, compute_selectivity_multisession)
 
 import pytest
+
+
+def _get_frate():
+    trial_groups = np.array(['A'] * 3 + ['B'] * 2 + ['C'] * 4)
+
+    data = np.array([
+        [1.0, 1.5], [2.0, 2.5], [3.0, 3.5], [4.5, 4.0], [5.5, 5.0],
+        [7.0, 5.5], [8.0, 6.0], [9.0, 6.5], [10.0, 7.0]])
+    frate = xr.DataArray(
+        data, name='data', dims=['trial', 'time'],
+        coords={'time': [0.0, 0.25], 'cond': ('trial', trial_groups)}
+    )
+    return frate
+
+
+def _effect_size_from_f_statistic(*groups, kind='omega'):
+    f_stat, _ = stats.f_oneway(*groups)
+    n_groups = len(groups)
+    n_obs = sum(len(group) for group in groups)
+    df_between = n_groups - 1
+    df_within = n_obs - n_groups
+
+    if kind == 'eta':
+        numerator = f_stat * df_between
+        denominator = numerator + df_within
+    else:
+        numerator = df_between * (f_stat - 1)
+        denominator = f_stat * df_between + df_within + 1
+
+    return numerator / denominator
 
 
 def test_selectivity_continuous():
@@ -53,7 +84,7 @@ def test_selectivity_continuous():
 
     # at least 3 out of 4 should be in the selective list
     selective_are = np.where((results['stat'] > results['thresh']).values)[0]
-    assert np.in1d(selective_should_be, selective_are).mean() > 0.7
+    assert np.isin(selective_should_be, selective_are).mean() > 0.7
 
     # add cellinfo and make sure it is retained in results
     n_cells = spk_epochs.n_units()
@@ -336,20 +367,12 @@ def test_compute_percent_selective():
 
 
 def test_selectivity_multisession():
+    from pylabianca.testing import create_multisession_data
+
     n_sessions = 6
-    cells_per_session = 20
-
-    frs = dict()
-    for ses_idx in range(n_sessions):
-        session_id = f'sub{ses_idx + 1:02d}'
-
-        spk_epochs = create_random_spikes(
-            n_cells=cells_per_session, n_trials=60, n_spikes=(10, 50))
-        emo = np.random.choice(['sad', 'happy', 'neutral'], size=60)
-        spk_epochs.metadata = pd.DataFrame({'emo': emo})
-
-        frs[session_id] = spk_epochs.spike_rate(tmin=0.1, tmax=1.1, step=False)
-
+    frs = create_multisession_data(
+        n_sessions, cells_per_session=(5, 25), out='fr')
+    n_cells = {ses: fr.cell.shape[0] for ses, fr in frs.items()}
     sel = compute_selectivity_multisession(
         frs, compare='emo', n_perm=100, n_jobs=n_sessions
     )
@@ -359,13 +382,91 @@ def test_selectivity_multisession():
     assert sel['dist'].dims == ('perm', 'cell',)
 
     # make sure we have the right number of cells
-    n_cells = cells_per_session * n_sessions
-    assert sel['stat'].shape[0] == n_cells
-    assert sel['dist'].shape[1] == n_cells
+    n_sum_cells = np.sum([fr.cell.shape[0] for fr in frs.values()])
+    assert sel['stat'].shape[0] == n_sum_cells
+    assert sel['dist'].shape[1] == n_sum_cells
 
     # make sure we have all sessions and cells per session
     session_ids = frs.keys()
     for ses_id in session_ids:
         msk = ses_id == sel.coords['sub'].values
         assert msk.any()
-        assert msk.sum() == cells_per_session
+        assert msk.sum() == n_cells[ses_id]
+
+
+def test_explained_variance_matches_anova_reference():
+    frate = _get_frate()
+    eta = pln.selectivity.explained_variance(frate, 'cond', kind='eta')
+    omega = pln.selectivity.explained_variance(frate, 'cond', kind='omega')
+
+    n_times = frate.time.shape[0]
+    trial_groups = list('ABC')
+    eta_expected, omega_expected = list(), list()
+    for time_idx in range(n_times):
+        time_groups = [
+            frate.isel(time=time_idx).query(trial=f'cond == "{label}"')
+            for label in trial_groups
+        ]
+        eta_expected.append(
+            _effect_size_from_f_statistic(*time_groups, kind='eta'))
+        omega_expected.append(
+            _effect_size_from_f_statistic(*time_groups, kind='omega'))
+
+    np.testing.assert_allclose(eta.values, eta_expected)
+    np.testing.assert_allclose(omega.values, omega_expected)
+    assert eta.name == 'eta squared'
+    assert omega.name == 'omega squared'
+
+
+def test_explained_variance_matches_pingouin_eta_squared():
+    pg = pytest.importorskip(
+        'pingouin', reason='pingouin acts as a referece for ANOVA eta-squared')
+
+    frate = _get_frate()
+    eta = pln.selectivity.explained_variance(frate, 'cond', kind='eta')
+
+    eta_expected = []
+    for time_idx in range(frate.sizes['time']):
+        long_df = frate.isel(time=time_idx).to_dataframe().reset_index()
+        pg_eta = pg.anova(
+            data=long_df, dv='data', between='cond', effsize='n2'
+        ).loc[0, 'n2']
+        eta_expected.append(pg_eta)
+
+    np.testing.assert_allclose(eta.values, eta_expected)
+
+
+def test_depth_of_selectivity():
+    trial_groups = np.array(['A', 'A', 'B', 'B', 'C', 'C'])
+    baseline = np.array([2.0, 2.5, 2.0, 2.5, 2.0, 2.5])
+
+    with_effect = baseline.copy()
+    with_effect[:2] += 6.0
+
+    frate = xr.DataArray(
+        np.stack([baseline, with_effect], axis=1), dims=['trial', 'time'],
+        coords={'time': [0.0, 0.25], 'cond': ('trial', trial_groups)}
+    )
+
+    dos, avg_by_probe = pln.selectivity.depth_of_selectivity(frate, 'cond')
+
+    assert dos.sel(time=0.0).item() == pytest.approx(0.0)
+    assert dos.sel(time=0.25).item() > dos.sel(time=0.0).item()
+    assert avg_by_probe.dims == ('cond', 'time')
+
+    selective = xr.DataArray(
+        [5.0, 5.0, 0.0, 0.0, 0.0, 0.0],
+        dims=['trial'], coords={'cond': ('trial', trial_groups)}
+    )
+    dos_selective, avg_selective = pln.selectivity.depth_of_selectivity(
+        selective, 'cond')
+    assert dos_selective.item() == pytest.approx(1.0)
+    np.testing.assert_allclose(avg_selective.values, [5.0, 0.0, 0.0])
+
+    zeros = xr.DataArray(
+        np.zeros(trial_groups.size), dims=['trial'],
+        coords={'cond': ('trial', trial_groups)}
+    )
+    zero_dos, zero_avg = pln.selectivity.depth_of_selectivity(zeros, 'cond')
+    assert zero_dos == 0
+    np.testing.assert_allclose(zero_avg.values, 0.0)

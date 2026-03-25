@@ -1,4 +1,7 @@
+from functools import partial
+
 import os.path as op
+import re
 import time
 import numpy as np
 import pandas as pd
@@ -53,7 +56,7 @@ def test_spike_centered_windows():
 
     # make sure that using pln.utils version raises warning,
     # but gives the same result
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         spk_cent3 = pln.utils.spike_centered_windows(
             spk, xarr, winlen=0.01)
 
@@ -187,8 +190,8 @@ def test_xarr_dct_conversion():
     compare_dicts(x_dct1, x_dct2)
 
     # make sure we can do the same via pln.utils,
-    # but with a deprecation warning
-    with pytest.warns(DeprecationWarning):
+    # but with a FutureWarning
+    with pytest.warns(FutureWarning):
         xarr3 = pln.utils.dict_to_xarray(x_dct1)
         x_dct3 = pln.utils.xarray_to_dict(xarr3)
 
@@ -248,6 +251,10 @@ def test_xarr_dct_conversion():
     assert np.isnan(xarr.coords['cell_dist'].data).sum() == n_cells2
 
 
+# TODO: extract the dict-of-xarray creating and put separately
+# TODO: separate the extract_data tests and aggregation
+# TODO: there are test for dict_to_xarray here too
+# TODO: could use gen_random_xarr
 def test_extract_data_and_aggregate():
     '''Test extract_data and some basic dict -> xarray operations.'''
 
@@ -329,6 +336,7 @@ def test_extract_data_and_aggregate():
     assert (frates_agg_one.data == frates_agg[:n_cells_one].data).all()
 
 
+# TODO - add some docstring informing what this is for
 def group_by_hand(xarr):
     arr_list = list()
     labels1 = list()
@@ -346,7 +354,6 @@ def group_by_hand(xarr):
     arr_list = xr.concat(arr_list, dim='cnd1')
     arr_out = arr_list.assign_coords(cnd1=labels1)
     return arr_out
-
 
 
 def test_aggregate_options():
@@ -383,6 +390,13 @@ def test_aggregate_options():
     xarr_agg_hand = xarr_agg_hand.transpose(*xarr_agg.dims)
     assert (xarr_agg.data == xarr_agg_hand).all()
 
+    # zscore passing xarray to aggregate
+    xarr_agg2 = pln.aggregate(
+        xarr, ['cnd1', 'cnd2'], zscore=baseline_arr, select=None,
+        baseline=None
+    )
+    assert (xarr_agg.data == xarr_agg2.data).all()
+
     # select and baseline
     xarr.name = 'data'
     xarr_agg = _aggregate_xarray(
@@ -399,6 +413,40 @@ def test_aggregate_options():
     xarr_agg_hand -= bsln
     xarr_agg_hand = xarr_agg_hand.transpose(*xarr_agg.dims)
     assert (xarr_agg.data == xarr_agg_hand).all()
+
+
+def test_aggregate_baseline():
+    from pylabianca.testing import gen_random_xarr
+
+    keys = list('ABC')
+    n_cells = [10, 5, 8]
+    arr_dct = {key: gen_random_xarr(n_c, 25, 100)
+               for key, n_c in zip(keys, n_cells)}
+
+    bsln = arr_dct['A']
+    match_str = 'the `zscore` can\'t be a DataArray'
+    with pytest.raises(TypeError, match=match_str):
+        pln.aggregate(arr_dct, zscore=bsln)
+
+    # when some keys are not present in zscore - error
+    bsln = {k: arr_dct[k] for k in ['A', 'B']}
+    match_str = ("Following keys are present in `frates` dictionary, but "
+                 "absent in `zscore`: ['C']")
+    with pytest.raises(TypeError, match=re.escape(match_str)):
+        pln.aggregate(arr_dct, zscore=bsln)
+
+    # everything is matching - check the same as doing element by element
+    bsln = {k: arr_dct[k] for k in list('ABC')}
+    agg = pln.aggregate(arr_dct, zscore=bsln)
+
+    zscored_arr = {key: pln.analysis.zscore_xarray(
+            arr_dct[key], baseline=bsln[key])
+        for key in arr_dct.keys()
+    }
+    agg_comp = pln.aggregate(zscored_arr)
+
+    for arr1, arr2 in zip(agg, agg_comp):
+        assert (arr1.values == arr2.values).all()
 
 
 def test_aggregate_per_cell():
@@ -464,3 +512,102 @@ def test_zscore_xarray():
          / xarr_np[:, :, time_idx].std(axis=(1, 2), keepdims=True)
     )
     assert np.allclose(xarr_z2.data, xarr_np_z2, atol=1e-6)
+
+
+def test_apply_dict():
+    from pylabianca.testing import create_multisession_data
+
+    n_sessions = 3
+    frates = create_multisession_data(
+        n_sessions, cells_per_session=(5, 25), out='fr')
+    sessions = list(frates.keys())
+    frates[sessions[0]].name = None
+
+    selected = pln.apply_dict(
+        frates, select={'trial': 'block == 1 & emo != "neutral"'}
+    )
+    assert selected is not frates
+    assert selected[sessions[0]].name is not None
+
+    for session, original in frates.items():
+        expected = (
+            original if original.name is not None
+            else original.rename('data')
+        )
+        expected = expected.query({'trial': 'block == 1'})
+        expected = expected.query({'trial': 'emo != "neutral"'})
+        expected = expected.reset_index('trial', drop=True)
+
+        xr.testing.assert_identical(selected[session], expected)
+        assert np.array_equal(
+            selected[session].coords['trial'].values,
+            np.arange(selected[session].sizes['trial'])
+        )
+
+    selected_no_reset = pln.apply_dict(
+        frates, select='emo != "neutral"', reset_index=False
+    )
+    for session in sessions:
+        ses = selected_no_reset[session]
+        expected_trials = np.where(frates[session].emo.values != "neutral")[0]
+        assert np.array_equal(
+            ses.coords['trial'].values, expected_trials
+        )
+
+    frates_inplace = {
+        key: val.copy(deep=True) for key, val in frates.items()
+    }
+    inplace_out = pln.apply_dict(
+        frates_inplace, select='emo == "sad"', inplace=True
+    )
+    assert inplace_out is frates_inplace
+
+    for session, arr in inplace_out.items():
+        expected = (
+            frates[session] if frates[session].name is not None
+            else frates[session].rename('data')
+        )
+        expected = expected.query({'trial': 'emo == "sad"'})
+        expected = expected.reset_index('trial', drop=True)
+        xr.testing.assert_identical(arr, expected)
+
+    # apply DoS to each session
+    func = partial(pln.selectivity.depth_of_selectivity, groupby='emo')
+    dos_dict = pln.apply_dict(frates, fun=func)
+
+    for session, arr in frates.items():
+        expected = pln.selectivity.depth_of_selectivity(arr, groupby='emo')
+        assert isinstance(dos_dict[session], tuple)
+        xr.testing.assert_identical(dos_dict[session][0], expected[0])
+        xr.testing.assert_identical(dos_dict[session][1], expected[1])
+
+    dos_xarray = pln.apply_dict(
+        frates,
+        fun=lambda arr: pln.selectivity.depth_of_selectivity(
+            arr, groupby='emo'
+        )[0],
+        return_type='xarray',
+        ses_coord='session'
+    )
+    expected_xarray = pln.dict_to_xarray(
+        {
+            key: pln.selectivity.depth_of_selectivity(val, groupby='emo')[0]
+            for key, val in frates.items()
+        },
+        ses_coord='session'
+    )
+    xr.testing.assert_identical(dos_xarray, expected_xarray)
+    assert 'session' in dos_xarray.coords
+
+    # test errors
+    with pytest.raises(ValueError, match='`return_type` must be either'):
+        pln.apply_dict(frates, return_type='array')
+
+    match = "must be a dictionary. Got <class 'list'>."
+    with pytest.raises(TypeError, match=match):
+        pln.apply_dict([frates], fun=func)
+
+    frates[sessions[1]] = [0, 1, 2]
+    match = "must be xarray.DataArray or xarray.Dataset. Found <class 'list'>."
+    with pytest.raises(TypeError, match=match):
+        pln.apply_dict(frates, fun=func)

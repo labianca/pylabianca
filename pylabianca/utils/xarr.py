@@ -1,5 +1,15 @@
+import warnings
 import numpy as np
 from .base import _deal_with_picks
+
+
+def _ensure_queryable_xarray(arr):
+    """Ensure DataArrays can be passed to :meth:`xarray.DataArray.query`."""
+    import xarray as xr
+
+    if isinstance(arr, xr.DataArray) and arr.name is None:
+        arr.name = 'data'
+    return arr
 
 
 # CONSIDER: spike_epochs and times could be optional arguments
@@ -102,9 +112,11 @@ def _turn_spike_rate_to_xarray(times, frate, spike_epochs, cell_names=None,
     if copy_cellinfo:
         if cell_names is not None and spike_epochs.cellinfo is not None:
             ch_idx = _deal_with_picks(spike_epochs, cell_names)
-            for col in spike_epochs.cellinfo.columns:
+            cellinfo = _turn_StringArray_columns_into_object(
+                spike_epochs.cellinfo)
+            for col in cellinfo.columns:
                 coords[col] = (
-                    'cell', spike_epochs.cellinfo[col].iloc[ch_idx])
+                    'cell', cellinfo[col].iloc[ch_idx])
 
     firing = xr.DataArray(frate, dims=dims, coords=coords,
                           attrs=attrs)
@@ -162,14 +174,55 @@ def cellinfo_from_xarray(xarr):
     return cellinfo
 
 
+# TODO: rename to _inherit_metadata_from_dataframe
+# TODO: add inherit_metadata public function (useful in many places)
 def _inherit_metadata(coords, metadata, dimname, tri=None):
     if metadata is not None:
+        metadata = _turn_StringArray_columns_into_object(metadata)
         for col in metadata.columns:
+            this_data = metadata[col]
             if tri is None:
-                coords[col] = (dimname, metadata[col])
+                coords[col] = (dimname, this_data.values)
             else:
-                coords[col] = (dimname, metadata[col].iloc[tri])
+                coords[col] = (dimname, this_data.iloc[tri].values)
     return coords
+
+
+def _turn_StringArray_columns_into_object(df):
+    if df is None:
+        return df
+
+    dtp = df.dtypes
+    conv = dtp[dtp == 'string']
+
+    if conv.shape[0] > 0:
+        convert_types = {col: 'object' for col in conv.index}
+        df = df.astype(convert_types)
+
+    return df
+
+
+def remove_StringArrays(spk):
+    """Remove StringArrays from spikes object.
+
+    pandas StringArrays cause various issues - for example in xarray
+    - and don't offer much benefit for our usecase.
+
+    Parameters
+    ----------
+    spk : Spikes | SpikeEpochs
+        Spikes object to purge of pandas StringArrays.
+
+    Returns
+    -------
+    spk : Spikes | SpikeEpochs
+        Spikes object with pandas StringArrays turned to numpy object arrays
+        in `.metadata` and `.cellinfo` fields.
+    """
+    if hasattr(spk, 'metadata'):
+        spk.metadata = _turn_StringArray_columns_into_object(spk.metadata)
+    spk.cellinfo = _turn_StringArray_columns_into_object(spk.cellinfo)
+    return spk
 
 
 def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
@@ -204,9 +257,43 @@ def find_nested_dims(arr, dim_name):
     return names
 
 
-# CONSIDER: ses_name -> ses_coord ?
-def assign_session_coord(arr, ses, dim_name='cell', ses_name='session'):
-    n_cells = len(arr.coords[dim_name])
+def assign_session_coord(arr, ses, dim_name='cell', ses_coord='session',
+                         ses_name=None):
+    '''Assign a coordinate with session info to all cells.
+
+    Parameters
+    ----------
+    arr : xarray.DataArray
+        Input xarray.
+    ses : str
+        Session name to assign.
+    dim_name : str
+        Name of the dimension corresponding to cells.
+    ses_name : str
+        Name of the session coordinate to create.
+
+    Returns
+    -------
+    arr : xarray.DataArray
+        Xarray with session coordinate assigned.
+    '''
+    # deprecate ses_name in favor of ses_coord
+    if ses_name is not None:
+        ses_coord = ses_name
+        warnings.warn('`ses_name` is deprecated and will be removed in a '
+                      'future release. Use `ses_coord` instead.',
+                      FutureWarning, stacklevel=2)
+
+    # check dim_name
+    if dim_name in arr.dims:
+        n_cells = len(arr.coords[dim_name])
+    elif dim_name in arr.coords:
+        n_cells = 1
+        arr = arr.expand_dims(dim_name, axis=0)
+    else:
+        raise ValueError(f'Could not find dim_name "{dim_name}" in arr.dims'
+                         'or arr.coords.')
+
     sub_dim = [ses] * n_cells
-    arr = arr.assign_coords({ses_name: (dim_name, sub_dim)})
+    arr = arr.assign_coords({ses_coord: (dim_name, sub_dim)})
     return arr

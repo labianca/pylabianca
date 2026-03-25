@@ -246,6 +246,10 @@ def test_read_write_fieldtrip(tmp_path):
     spk_one_spike.waveform_time = None
     io_roundtrip(spk_one_spike, filepath, kind='trials')
 
+    # only one unit in the file
+    spk_one_unit = pln.utils.create_random_spikes(n_cells=1)
+    io_roundtrip(spk_one_unit, filepath, kind='trials')
+
     # io roundtrip for Spikes
     filepath = op.join(tmp_path, 'spikeRaw.mat')
     spk_raw = pln.utils.create_random_spikes(
@@ -331,7 +335,7 @@ def test_add_region_from_channel_ranges():
     # create a table with anatomy info
     region_info = pd.DataFrame(
         data={'channel start': [1, 5, 10], 'channel end': [4, 9, 10],
-            'region': ['AMY', 'HIP', 'ACC']})
+              'region': ['AMY', 'HIP', 'ACC']})
 
     # add anatomy info to spk
     pln.io.add_region_from_channel_ranges(

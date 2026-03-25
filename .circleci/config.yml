@@ -17,16 +17,30 @@ jobs:
       - run:
           name: Create conda env
           command: |
-            mamba env create -f environment.yml
+            apt-get update
+            apt-get install -y gettext-base
+
+            if [ << parameters.mne_version >> == "current" ]; then
+              export XARRAY_VER=">=2026"
+              export SCIPY_VER=">=1.11.3"
+            else
+              export XARRAY_VER="2023.10.1"
+              export SCIPY_VER="<=1.16.2"
+            fi
+
+            envsubst < environment.template.yml > environment_ci.yml
+            mamba env create -f environment_ci.yml
             source activate pylabianca
+
             if [ << parameters.use_numba >> == "yes" ]; then
-              mamba install numba=0.61.2 -y;
+              mamba install numba -y
             fi
             if [ << parameters.mne_version >> == "current" ]; then
               pip install mne
             else
               pip install mne==<< parameters.mne_version >>;
             fi
+
             pip install borsar elephant neo quantities statsmodels --no-deps
             mamba install pytest -y;
             hash -r pytest
@@ -49,4 +63,4 @@ workflows:
           matrix:
             parameters:
               use_numba: ["yes", "no"]
-              mne_version: ["current", "1.5.1", "1.0.3"]
+              mne_version: ["current", "1.9.0", "1.6.1"]

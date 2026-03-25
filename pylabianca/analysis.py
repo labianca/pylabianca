@@ -3,7 +3,8 @@ import numpy as np
 from .utils import (
     _get_trial_boundaries, _deal_with_picks, find_index, parse_sub_ses)
 from .utils.xarr import (
-    find_nested_dims, _inherit_metadata, assign_session_coord)
+    _ensure_queryable_xarray, find_nested_dims, _inherit_metadata,
+    assign_session_coord)
 from .utils.validate import _validate_xarray_for_aggregation
 
 
@@ -240,10 +241,9 @@ def shuffle_trials(spk, drop_timestamps=True, drop_waveforms=True):
 
 
 # TODO: change name to something more descriptive like "select_data"?
-# CONSIDER: ses_name -> ses_coord ?
 # CONSIDER: change the loop to use .groupby() xarr method instead of _get_arr
 #           (might be faster)
-def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
+def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_coord='sub',
                  df2xarr=None):
     '''Extract data from xarray dictionary using a dataframe.
 
@@ -258,6 +258,9 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
         information.
     ses_col : str | None
         Name of the column in the DataFrame that contains session information.
+    ses_coord : str
+        Name of the subject / session coordinate in the xarray. Defaults to
+        ``'sub'``.
     df2xarr : dict | None
         Dictionary that maps DataFrame columns to xarray coordinates. If None,
         the default is ``{'label': 'region'}``.
@@ -281,7 +284,7 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
         xarr_out = dict()
     else:
         import pandas as pd
-        keys = pd.unique(xarr_dict.coords[ses_name].values)
+        keys = pd.unique(xarr_dict.coords[ses_coord].values)
         xarr_out = list()
 
     # TODO - check for sub / ses consistency and raise / warn
@@ -309,7 +312,7 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
         if ses is not None and ses_col is not None:
             df_sel = df_sel.query(f'{ses_col} == "{ses}"')
 
-        xarr = _get_arr(xarr_dict, key, ses_name=ses_name)
+        xarr = _get_arr(xarr_dict, key, ses_coord=ses_coord)
 
         n_cells = len(xarr.coords['cell'])
         mask_all = np.zeros(n_cells, dtype=bool)
@@ -341,22 +344,22 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_name='sub',
     return xarr_out, row_indices
 
 
-def _get_arr(arr, sub_ses, ses_name='sub'):
+def _get_arr(arr, sub_ses, ses_coord='sub'):
     import xarray as xr
     if isinstance(arr, dict):
         arr = arr[sub_ses]
     elif isinstance(arr, xr.DataArray):
-        arr = arr.query({'cell': f'{ses_name} == "{sub_ses}"'})
+        arr = arr.query({'cell': f'{ses_coord} == "{sub_ses}"'})
     return arr
 
 
-# TODO: stimulus selectivity should be added to the xarray -
-#       it can be done as cell x trial coordinate, this could be a function
-#       in .selectivity module
+# TODO:
 # - [ ] better argument names:
 #     -> is per_cell_query (per_cell_select etc.) even needed is we
 #        have per_cell=True and pass to specific subfunction?
-# ? option to pass the baseline calculated from a different period
+#        (I don't know what I meant by "pass to psecific subfunction"..)
+# - [ ] select vs per_cell_query behavior -> first one is done after zscoring
+#       the second one before
 def aggregate(frate, groupby=None, select=None, per_cell_query=None,
               zscore=False, baseline=False, per_cell=False):
     """
@@ -479,9 +482,9 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
     frate : xarray.DataArray
         Aggregated firing rate data.
     """
-
-    if zscore:
-        bsln = None if isinstance(zscore, bool) else zscore
+    is_zscore_bool = isinstance(zscore, bool)
+    if not is_zscore_bool or zscore:
+        bsln = None if is_zscore_bool else zscore
         frate = zscore_xarray(frate, baseline=bsln)
 
     if select is not None:
@@ -548,19 +551,40 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
 
 # TODO: this could be changed and used with apply_dict / dict_apply
 #       the dict apply function could have output='xarray' option
+# - [ ] we need a separate function that checks whehter input is dict of
+#       xr.DataArray objects
 def _aggregate_dict(frates, groupby=None, select=None,
                     per_cell_query=None, zscore=False, baseline=False,
                     per_cell=False):
     import xarray as xr
 
-    aggregated = list()
     keys = list(frates.keys())
+
+    # zscore can't be an array, must be a dict of arrays, with matching keys
+    msg = ('When aggregating a dictionary of DataArrays, the '
+           '`zscore` can\'t be a DataArray, but a matching '
+           'dictionary of DataArrays.')
+    zscore_dict = isinstance(zscore, dict)
+
+    if zscore_dict:
+        zscore_keys = zscore.keys()
+        missing_keys = [key for key in keys if key not in zscore_keys]
+        if len(missing_keys):
+            use_msg = msg + (' Following keys are present in `frates` '
+                             'dictionary, but absent in `zscore`: '
+                             + str(missing_keys))
+            raise TypeError(use_msg)
+    elif isinstance(zscore, xr.DataArray):
+        raise TypeError(msg)
+
+    aggregated = list()
 
     for key in keys:
         frate = frates[key]
+        zscr = zscore[key] if zscore_dict else zscore
         frate_agg = aggregate(
             frate, groupby=groupby, select=select,
-            per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
+            per_cell_query=per_cell_query, zscore=zscr, baseline=baseline,
             per_cell=per_cell
         )
         if frate_agg is not None:
@@ -622,8 +646,8 @@ def zscore_xarray(arr, groupby='cell', baseline=None):
     return arr
 
 
-# CONSIDER: ses_name -> ses_coord ?
-def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
+def dict_to_xarray(data, dim_name='cell', select=None, ses_coord='sub',
+                   ses_name=None):
     '''Convert dictionary to xarray.DataArray.
 
     Parameters
@@ -642,7 +666,7 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
         concatenation some coordinates may become multi-dimensional and
         querying would raise an error "Unlabeled multi-dimensional array cannot
         be used for indexing").
-    ses_name : str
+    ses_coord : str
         Name of the subject / session coordinate that will be automatically
         added to the concatenated dimension from the dictionary keys. Defaults
         to ``'sub'``.
@@ -655,6 +679,8 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
     import xarray as xr
 
     assert isinstance(data, dict)
+    _check_ses_coord(None, ses_coord, ses_name)
+
     keys = list(data.keys())
     all_xarr = [isinstance(data[sb], (xr.DataArray, xr.Dataset))
                 for sb in keys]
@@ -675,12 +701,12 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
             arr = arr.query(select)
 
             # if trial was in select dict, then we should reset trial indices
-            if 'trial' in select:
+            if 'trial' in select and 'trial' in list(arr.coords):
                 arr = arr.reset_index('trial', drop=True)
 
         # add subject / session information to the concatenated dimension
         arr = assign_session_coord(
-            arr, key, dim_name=dim_name, ses_name=ses_name)
+            arr, key, dim_name=dim_name, ses_coord=ses_coord)
 
         for coord_name, coord in arr.coords.items():
             if coord_name not in all_coord_dims:
@@ -703,6 +729,97 @@ def dict_to_xarray(data, dim_name='cell', select=None, ses_name='sub'):
     return arr
 
 
+def apply_dict(data, fun=None, select=None, inplace=False, reset_index=True,
+               return_type='dict', ses_coord='sub'):
+    """Apply a function to each item in a key -> xarray dictionary.
+
+    This helper is intended for the common ``session -> xarray`` dictionary
+    structure used across ``pylabianca``. It can be used to filter the xarrays
+    before applying a function, and optionally concatenate the results into a
+    single xarray.
+
+    Parameters
+    ----------
+    data : dict of xarray.DataArray | dict of xarray.Dataset
+        Dictionary where keys are subject / session names and values are
+        xarray objects.
+    fun : callable | None
+        Function applied to each selected xarray. The function must accept a
+        single xarray argument. If ``None``, only selection is applied.
+        Additional arguments can be supplied with :func:`functools.partial`.
+    select : str | dict | None
+        Optional selection. If ``select`` is not None and not a
+        dictionary, it is interpreted as a query for the ``'trial'``
+        dimension.
+    inplace : bool
+        If ``True``, modify the input dictionary in place. If ``False``, a new
+        dictionary is returned. Defaults to ``False``.
+    reset_index : bool
+        Whether to reset the ``'trial'`` index after trial selection. This is
+        only used when the effective selection contains the ``'trial'`` key.
+        Defaults to ``True``.
+    return_type : {'dict', 'xarray'}
+        Output type to return. If ``'dict'``, return a dictionary with
+        per-session results. If ``'xarray'``, concatenate the results with
+        :func:`pylabianca.analysis.dict_to_xarray`. Defaults to ``'dict'``.
+    ses_coord : str
+        Name of the session coordinate to add when ``return_type='xarray'``.
+        Defaults to ``'sub'``.
+
+    Returns
+    -------
+    out : dict | xarray.DataArray | xarray.Dataset
+        Processed dictionary or concatenated xarray, depending on
+        ``return_type``.
+    """
+    import xarray as xr
+
+    if not isinstance(data, dict):
+        raise TypeError(f'`data` must be a dictionary. Got {type(data)}.')
+
+    if return_type not in ('dict', 'xarray'):
+        raise ValueError(
+            '`return_type` must be either "dict" or "xarray". '
+            f'Got {return_type}.'
+        )
+
+    all_xarr = [isinstance(val, (xr.DataArray, xr.Dataset))
+                for val in data.values()]
+    if not all(all_xarr):
+        bad_type = type(next(val for val in data.values()
+                             if not isinstance(val, (xr.DataArray,
+                                                     xr.Dataset))))
+        raise TypeError(
+            'All values in `data` must be xarray.DataArray or xarray.Dataset. '
+            f'Found {bad_type}.'
+        )
+
+    if select is not None and not isinstance(select, dict):
+        select = {'trial': select}
+
+    out = data if inplace else dict()
+
+    for key, arr in data.items():
+        this_arr = arr
+
+        if select is not None:
+            this_arr = _ensure_queryable_xarray(this_arr)
+            this_arr = this_arr.query(select)
+
+            if reset_index and 'trial' in select:
+                this_arr = this_arr.reset_index('trial', drop=True)
+
+        if fun is not None:
+            this_arr = fun(this_arr)
+
+        out[key] = this_arr
+
+    if return_type == 'xarray':
+        out = dict_to_xarray(out, ses_coord=ses_coord)
+
+    return out
+
+
 def _get_missing_value(dtype):
     """Return a reasonable missing value for the given dtype."""
     if np.issubdtype(dtype, np.floating):
@@ -715,9 +832,19 @@ def _get_missing_value(dtype):
         return None
 
 
-# CONSIDER: ses_name -> ses_coord ?
-def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
-                   ensure_correct_reduction=True):
+def _check_ses_coord(arr, ses_coord, ses_name):
+    if ses_name is not None:
+        warning.warn("`ses_name` has been renamed to `ses_coord`",
+                     FutureWarning)
+
+    if arr is not None:
+        if ses_coord not in arr.coords:
+            raise ValueError('provided `ses_coord` is not present in DataArray'
+                            ' coordinates.')
+
+
+def xarray_to_dict(xarr, ses_coord='sub', reduce_coords=True,
+                   ensure_correct_reduction=True, ses_name=None):
     '''Convert multi-session xarray to dictionary of session -> xarray pairs.
 
     Note, that it is assumed that each session is a contiguous block in the
@@ -727,7 +854,7 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
     ----------
     xarr : xarray.DataArray
         Multi-session DataArray.
-    ses_name : str
+    ses_coord : str
         Name of the session coordinate. Defaults to ``'sub'``.
     reduce_coords : bool
         If True, reduce coordinates were turned to cell x trial coordinates
@@ -750,9 +877,15 @@ def xarray_to_dict(xarr, ses_name='sub', reduce_coords=True,
     xarr_dct : dict
         Dictionary with session names as keys and xarrays as values.
     '''
+    import xarray as xr
     xarr_dct = dict()
 
-    sessions, ses_idx = np.unique(xarr.coords[ses_name].values, return_index=True)
+    if not isinstance(xarr, (xr.DataArray, xr.Dataset)):
+        raise TypeError('`xarr` has to be either xarray.DataArray or '
+                        'xarray.Dataset.')
+
+    _check_ses_coord(xarr, ses_coord, ses_name)
+    sessions, ses_idx = np.unique(xarr.coords[ses_coord].values, return_index=True)
 
     sort_idx = np.argsort(ses_idx)
     sessions = sessions[sort_idx]
