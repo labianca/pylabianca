@@ -122,6 +122,16 @@ def test_find_cells():
     assert idx[0] == cell_idx
     assert (spk.cellinfo.loc[idx, 'cluster'] == cluster).all()
 
+    # test finding by cell name
+    correct_idx = np.array([2, 3, 6])
+    cell_names = [spk.cell_names[ix] for ix in correct_idx]
+    idx = find_cells(spk, cell=cell_names)
+    assert (idx == correct_idx).all()
+
+    fr = spk.spike_rate(winlen=0.1, step=0.05)
+    idx2 = find_cells(fr, cell=cell_names)
+    assert (idx2 == correct_idx).all()
+
     # multiple clusters matching
     spk.cellinfo.loc[cell_idx + 1, 'cluster'] = cluster
     with pytest.raises(ValueError, match='Found more than one match'):
