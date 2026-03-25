@@ -69,13 +69,15 @@ def _get_trial_boundaries_array(trials):
     return trial_boundaries, tri_num
 
 
-def _get_cellinfo(inst):
+def _get_cellinfo(inst, add_cell_coord=False):
     '''Obtain the cellinfo dataframe from multiple input types.'''
     from ..spikes import Spikes, SpikeEpochs
     spike_objects = (Spikes, SpikeEpochs)
 
     if isinstance(inst, spike_objects):
         cellinfo = inst.cellinfo
+        if add_cell_coord:
+            cellinfo.loc[:, 'cell'] = inst.cell_names
     elif isinstance(inst, pd.DataFrame):
         cellinfo = inst
     else:
@@ -86,7 +88,8 @@ def _get_cellinfo(inst):
             from .xarr import cellinfo_from_xarray
 
             if isinstance(inst, xr.DataArray):
-                cellinfo = cellinfo_from_xarray(inst)
+                cellinfo = cellinfo_from_xarray(
+                    inst, add_cell_coord=add_cell_coord)
             else:
                 raise ValueError(msg)
         except ImportError:
@@ -125,7 +128,7 @@ def find_cells(inst, not_found='error', more_found='error', **features):
     _check_str_options(not_found, 'not_found')
     _check_str_options(more_found, 'more_found')
 
-    cellinfo = _get_cellinfo(inst)
+    cellinfo = _get_cellinfo(inst, add_cell_coord=True)
     feature_names = list(features.keys())
     n_features = len(feature_names)
 
@@ -143,7 +146,6 @@ def find_cells(inst, not_found='error', more_found='error', **features):
         elif isinstance(features[name], pd.arrays.StringArray):
             features[name] = np.asarray(features[name], dtype=str)
 
-    cell_idx = list()
     n_comparisons = np.array([len(val) for val in features.values()])
     max_comp = n_comparisons.max()
     if n_features > 1:
