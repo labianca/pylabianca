@@ -133,7 +133,7 @@ def test_find_percentile_threshold():
 def test_cluster_based_test_return_clusters_object():
     from borsar.cluster.obj import Clusters
 
-    n_trials, n_cells, n_times = 40, 5, 60
+    n_trials, n_cells, n_times = 40, 35, 60
     times = np.linspace(-0.5, 1.5, num=n_times)
     cells = np.array(['cell_a', 'cell_b', 'cell_c', 'cell_d', 'cell_e'])
 
@@ -167,6 +167,12 @@ def test_cluster_based_test_return_clusters_object():
     np.testing.assert_allclose(clst.stat, stat)
     np.testing.assert_array_equal(clst.clusters, clusters)
     np.testing.assert_array_equal(clst.pvals, pval)
+
+    # make sure this also works after aggregation:
+    agg = pln.aggregate(arr, groupby='cond')
+    clst = pln.stats.cluster_based_test(
+        agg, compare='cond', paired=True, n_permutations=100, progress=False,
+        return_clusters=True)
 
 
 def test_infer_cluster_dimnames_coords_respects_compare_dim():
