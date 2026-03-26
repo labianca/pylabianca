@@ -176,7 +176,8 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     if return_clusters:
         from borsar.cluster.obj import Clusters
 
-        dimnames, dimcoords = _infer_cluster_coords(frate, compare)
+        dimnames, dimcoords, stat, clusters = _infer_cluster_coords(
+            frate, compare, stat, clusters)
         return Clusters(stat, clusters=clusters, pvals=pval,
                         dimnames=dimnames, dimcoords=dimcoords)
 
@@ -186,24 +187,34 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 # TODO: this might later need checking against other xarray helpers
 #       to de-duplicate (and some code present in selectivity module
 #       for xarray construction!)
-def _infer_cluster_coords(xarr, compare):
+def _infer_cluster_coords(xarr, compare, stat, clusters):
     dimnames = None
+    drop_dims = list()
 
-    # infer reduced dimension from compare coordinate / dimension
+    # infer reduced dimensions from compare coordinate / dimension
     if compare in xarr.coords:
         compare_dims = xarr.coords[compare].dims
         assert len(compare_dims) == 1
-        compare = compare_dims[0]
+        drop_dims.append(compare)
+
+    # first dimension (observations) should be reduces
+    drop_dims.append(xarr.dims[0])
 
     n_orig_dims = len(xarr.dims)
-    dimnames = [dim for dim in xarr.dims if dim != compare]
+    dimnames = [dim for dim in xarr.dims if dim not in drop_dims]
 
     if len(dimnames) == n_orig_dims:
         raise RuntimeError('Could not find the reduced dimension.')
 
+    # drop singleton dimentions from stat, if not present in xarr
+    ndim_diff = stat.ndim - len(dimnames)
+    if ndim_diff > 0:
+        stat = np.squeeze(stat)
+        clusters = [np.squeeze(c) for c in clusters]
+
     coords = [xarr.coords[dim_name].values for dim_name in dimnames]
 
-    return dimnames, coords
+    return dimnames, coords, stat, clusters
 
 
 # ENH: move to sarna/borsar sometime
