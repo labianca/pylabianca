@@ -143,6 +143,18 @@ def test_crop():
         spk_orig.copy().crop(tmin=None, tmax=None)
 
 
+def test_crop_does_not_extend():
+    spk = create_random_spikes(n_cells=1, n_trials=10)
+    limits = spk.time_limits
+
+    spk2 = spk.copy()
+    spk2.crop(tmin=limits[0] - 1, tmax=limits[1] + 1)
+    limits2 = spk2.time_limits
+
+    assert limits[0] == limits2[0]
+    assert limits[1] == limits2[1]
+
+
 # add .n_trials (if present in SpikeEpochs)
 def test_num():
     for n_cells in [3, 5, 10]:
