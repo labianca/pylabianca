@@ -135,7 +135,6 @@ def test_cluster_based_test_return_clusters_object():
 
     n_trials, n_cells, n_times = 40, 35, 60
     times = np.linspace(-0.5, 1.5, num=n_times)
-    cells = np.array(['cell_a', 'cell_b', 'cell_c', 'cell_d', 'cell_e'])
 
     data = np.random.randn(n_trials, n_cells, n_times)
     conditions = np.array([1] * (n_trials // 2) + [2] * (n_trials // 2))
@@ -146,7 +145,7 @@ def test_cluster_based_test_return_clusters_object():
 
     arr = xr.DataArray(
         data, dims=['trial', 'cell', 'time'],
-        coords={'time': times, 'cell': cells, 'cond': ('trial', conditions)}
+        coords={'time': times, 'cond': ('trial', conditions)}
     )
 
     np.random.seed(12)
