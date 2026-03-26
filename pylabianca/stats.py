@@ -143,12 +143,14 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
     Returns
     -------
-    stats : numpy.ndarray
-        Anova F statistics for every time point.
+    stats : numpy.ndarray | borsar.Clusters
+        Value of the test statistic for every time point. If
+        ``return_clusters=True``, then a ``borsar.Clusters`` object is
+        returned instead.
     clusters : list of numpy.ndarray
-        List of cluster memberships.
+        List of cluster memberships. Only returned if ``return_clusters=False``.
     pval : numpy.ndarray
-        List of p values from anova.
+        List of p values from anova. Only returned if ``return_clusters=False``.
     '''
     from borsar.cluster import permutation_cluster_test_array
 
