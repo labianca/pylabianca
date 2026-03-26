@@ -112,9 +112,10 @@ def depth_of_selectivity(frate, groupby):
 
 # CONSIDER: could add an attribute informing about condition order
 #           (important for t test interpretation for example)
+# CONSIDER: make n_perm vs n_permutations consistent
 # TODO: change tail order to neg, pos?
-def compute_selectivity_continuous(frate, compare='image', n_perm=500,
-                                   n_jobs=1):
+def compute_selectivity_continuous(frate, compare, n_perm=500,
+                                   n_jobs=1, permutation_vectors=False):
     '''
     Compute population selectivity for specific experimental category.
 
@@ -125,19 +126,29 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     frate : xarray.DataArray
         Firing rate of the neurons.
     compare : str
-        Metadata category to compare. Defaults to ``'image'``.
+        Metadata category \ coordinate to statistically compare. Unique
+        levels of this coordinate are compared for presence of differences.
+        Most commonly this is the variable defining stimulus category or
+        experimental condition.
     n_perm : int
         Number of permutations to use for permutation test. Defaults to
         ``500``.
     n_jobs : int
         Number of parallel jobs. No parallel computation is done when
         ``n_jobs=1`` (default).
+    permutation_vectors : bool
+        Whether to return permutation vectors that allow to reconstruct
+        condition labels for each permutation. This is useful when
+        defining selectivity using multiple criteria apart from result of
+        one statistical test (for example: multiple tests or additional
+        criteria, like increase in post-stimulus firing rate for the preferred
+        condition.
 
     Returns
     -------
     selectivity : dict of xarray.DataArray
-        Dictionary of DataArrays with selectivity for each cell. The following
-        keys are used:
+        Dataset of DataArrays with selectivity for each cell. The following
+        dataset variables ("keys") are used:
         * ``'stat'`` - selectivity statistic (t values), DataArray with
           dimensions ``('cell', 'time')`` (unless time was not present in the
           ``frate``)
@@ -148,6 +159,9 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         * ``'perm'`` - selectivity statistic for each permutation. DataArray
           with dimensions ``('perm', 'cell', 'time')`` (unless time was not
           present in the ``frate``)
+        * ``'perm_vec'`` - the permutation vectors (if
+          ``permutation_vectors=True``). DataArray with dimensions
+          ``('perm', 'cell')``
     '''
     import xarray as xr
     from .stats import permutation_test
@@ -166,7 +180,9 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     stat_unit = stat_name[0]
     results = permutation_test(
         *arrs, paired=False, n_perm=n_perm,
-        return_pvalue=False, return_distribution=True, n_jobs=n_jobs)
+        return_pvalue=False, return_distribution=True,
+        permutation_vectors=permutation_vectors, n_jobs=n_jobs
+    )
 
     # turn to xarray
     # --------------
@@ -201,6 +217,12 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
         results['thresh'] = xr.DataArray(
             data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
+
+        if permutation_vectors:
+            # get and format permutation vectors
+            results['perm_vec'] = xr.DataArray(
+                data=results['perm_vec'], dims=('perm', 'trial')
+            )
 
     # copy unit information
     # TODO: use a separate utility function
