@@ -163,7 +163,11 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                       FutureWarning)
 
     # TODO: check if theres is a condition dimension (if so -> paired)
-    arrays = [arr.values for _, arr in frate.groupby(compare)]
+    # TODO: better check for reduced dimention name
+    reduced_dim = frate.coords[compare].dims[0]
+    dim_idx = frate.dims.index(reduced_dim)
+    arrays = [np.squeeze(arr.values, axis=dim_idx)
+              for _, arr in frate.groupby(compare)]
 
     if tail is None:
         n_groups = len(arrays)
