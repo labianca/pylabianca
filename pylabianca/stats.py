@@ -108,7 +108,9 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
         else:
             return stat
 
-
+# TODO: looking for reduced dimentions, transposing, etc. should be checked
+#       against other xarray helpers to de-duplicate (some code present in
+#       selectivity module for xarray construction!)
 # TODO: auto-infer paired from xarray
 def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                        paired=False, stat_fun=None, n_permutations=1_000,
@@ -143,12 +145,14 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
     Returns
     -------
-    stats : numpy.ndarray
-        Anova F statistics for every time point.
+    stats : numpy.ndarray | borsar.Clusters
+        Value of the test statistic for every time point. If
+        ``return_clusters=True``, then a ``borsar.Clusters`` object is
+        returned instead.
     clusters : list of numpy.ndarray
-        List of cluster memberships.
+        List of cluster memberships. Only returned if ``return_clusters=False``.
     pval : numpy.ndarray
-        List of p values from anova.
+        List of p values from anova. Only returned if ``return_clusters=False``.
     '''
     from borsar.cluster import permutation_cluster_test_array
 
@@ -163,6 +167,33 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     # TODO: check if theres is a condition dimension (if so -> paired)
     arrays = [arr.values for _, arr in frate.groupby(compare)]
 
+    # prepare arrays for analysis
+    drop_dims = list()
+    if compare in frate.dims:
+        drop_dims.append(compare)
+        dim_idx = frate.dims.index(compare)
+        arrays = [np.squeeze(arr, axis=dim_idx) for arr in arrays]
+
+        # first dimension (observations) should be reduced
+        # TODO: auto-detect observation dimension and make sure it is first
+        first_dim = 0 + int(dim_idx == 0)
+        drop_dims.append(frate.dims[first_dim])
+    elif compare in frate.coords:
+        reduced_dim = frate.coords[compare].dims
+        assert len(reduced_dim) == 1
+        reduced_dim = reduced_dim[0]
+        reduced_dim_idx = frate.dims.index(reduced_dim)
+        drop_dims.append(reduced_dim)
+
+        if not reduced_dim_idx == 0:
+            dim_ord = np.arange(arrays[0].ndim)
+            dim_ord = np.delete(dim_ord, reduced_dim_idx)
+            dim_ord = np.concatenate([[reduced_dim_idx], dim_ord])
+            arrays = [arr.transpose(*dim_ord) for arr in arrays]
+    else:
+        raise ValueError('Dimension to test (``compare``) was not found in'
+                         ' the provided DataArray.')
+
     if tail is None:
         n_groups = len(arrays)
         tail = 'both' if n_groups == 2 else 'pos'
@@ -176,34 +207,13 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     if return_clusters:
         from borsar.cluster.obj import Clusters
 
-        dimnames, dimcoords = _infer_cluster_coords(frate, compare)
+        dimnames = [dimname for dimname in frate.dims
+                    if dimname not in drop_dims]
+        dimcoords = [frate.coords[dimname].values for dimname in dimnames]
         return Clusters(stat, clusters=clusters, pvals=pval,
                         dimnames=dimnames, dimcoords=dimcoords)
 
     return stat, clusters, pval
-
-
-# TODO: this might later need checking against other xarray helpers
-#       to de-duplicate (and some code present in selectivity module
-#       for xarray construction!)
-def _infer_cluster_coords(xarr, compare):
-    dimnames = None
-
-    # infer reduced dimension from compare coordinate / dimension
-    if compare in xarr.coords:
-        compare_dims = xarr.coords[compare].dims
-        assert len(compare_dims) == 1
-        compare = compare_dims[0]
-
-    n_orig_dims = len(xarr.dims)
-    dimnames = [dim for dim in xarr.dims if dim != compare]
-
-    if len(dimnames) == n_orig_dims:
-        raise RuntimeError('Could not find the reduced dimension.')
-
-    coords = [xarr.coords[dim_name].values for dim_name in dimnames]
-
-    return dimnames, coords
 
 
 # ENH: move to sarna/borsar sometime
