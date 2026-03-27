@@ -108,7 +108,9 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
         else:
             return stat
 
-
+# TODO: looking for reduced dimentions, transposing, etc. should be checked
+#       against other xarray helpers to de-duplicate (some code present in
+#       selectivity module for xarray construction!)
 # TODO: auto-infer paired from xarray
 def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                        paired=False, stat_fun=None, n_permutations=1_000,
@@ -163,11 +165,34 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                       FutureWarning)
 
     # TODO: check if theres is a condition dimension (if so -> paired)
-    # TODO: better check for reduced dimention name
-    reduced_dim = frate.coords[compare].dims[0]
-    dim_idx = frate.dims.index(reduced_dim)
-    arrays = [np.squeeze(arr.values, axis=dim_idx)
-              for _, arr in frate.groupby(compare)]
+    arrays = [arr.values for _, arr in frate.groupby(compare)]
+
+    # prepare arrays for analysis
+    drop_dims = list()
+    if compare in frate.dims:
+        drop_dims.append(compare)
+        dim_idx = frate.dims.index(compare)
+        arrays = [np.squeeze(arr, axis=dim_idx) for arr in arrays]
+
+        # first dimension (observations) should be reduced
+        # TODO: auto-detect observation dimension and make sure it is first
+        first_dim = 0 + int(dim_idx == 0)
+        drop_dims.append(frate.dims[first_dim])
+    elif compare in frate.coords:
+        reduced_dim = frate.coords[compare].dims
+        assert len(reduced_dim) == 1
+        reduced_dim = reduced_dim[0]
+        reduced_dim_idx = frate.dims.index(reduced_dim)
+        drop_dims.append(reduced_dim)
+
+        if not reduced_dim_idx == 0:
+            dim_ord = np.arange(arrays[0].ndim)
+            dim_ord = np.delete(dim_ord, reduced_dim_idx)
+            dim_ord = np.concatenate([[reduced_dim_idx], dim_ord])
+            arrays = [arr.transpose(*dim_ord) for arr in arrays]
+    else:
+        raise ValueError('Dimension to test (``compare``) was not found in'
+                         ' the provided DataArray.')
 
     if tail is None:
         n_groups = len(arrays)
