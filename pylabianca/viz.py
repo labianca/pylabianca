@@ -922,9 +922,6 @@ def add_highlights(arr, clusters, pvals, p_threshold=0.05, ax=None,
         sig_idx = np.where(pvals_significant)[0]
         sig_clusters = [clusters[ix] for ix in sig_idx]
 
-        if sig_clusters[0].ndim > 1:
-            sig_clusters = [np.ravel(c) for c in sig_clusters]
-
         highlight(
             x_coords, sig_clusters, ax=ax,
             bottom_bar=True, bottom_extend=bottom_extend
