@@ -108,12 +108,9 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
         else:
             return stat
 
-# TODO: looking for reduced dimentions, transposing, etc. should be checked
-#       against other xarray helpers to de-duplicate (some code present in
-#       selectivity module for xarray construction!)
-# TODO: auto-infer paired from xarray
+
 def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
-                       paired=False, stat_fun=None, n_permutations=1_000,
+                       paired=None, stat_fun=None, n_permutations=1_000,
                        n_stat_permutations=0, tail=None, progress=True,
                        return_clusters=None):
     '''Perform cluster-based tests on firing rate data.
@@ -137,8 +134,10 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
         categories to test selectivity for.
     cluster_entry_pval : float
         p value used as a cluster-entry threshold. The default is ``0.05``.
-    paired : bool
+    paired : bool | None
         Whether a paired (repeated measures) or unpaired test should be used.
+        Defaults to ``None`` which infers the type of test from the structure
+        of the DataArray.
     return_clusters : bool
         Whether to return a ``borsar.Clusters`` object instead of a
         ``(stat, clusters, pval)`` tuple.
@@ -164,35 +163,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
                       ' old behavior use `return_clusters=False`.',
                       FutureWarning)
 
-    # TODO: check if theres is a condition dimension (if so -> paired)
-    arrays = [arr.values for _, arr in frate.groupby(compare)]
-
-    # prepare arrays for analysis
-    drop_dims = list()
-    if compare in frate.dims:
-        drop_dims.append(compare)
-        dim_idx = frate.dims.index(compare)
-        arrays = [np.squeeze(arr, axis=dim_idx) for arr in arrays]
-
-        # first dimension (observations) should be reduced
-        # TODO: auto-detect observation dimension and make sure it is first
-        first_dim = 0 + int(dim_idx == 0)
-        drop_dims.append(frate.dims[first_dim])
-    elif compare in frate.coords:
-        reduced_dim = frate.coords[compare].dims
-        assert len(reduced_dim) == 1
-        reduced_dim = reduced_dim[0]
-        reduced_dim_idx = frate.dims.index(reduced_dim)
-        drop_dims.append(reduced_dim)
-
-        if not reduced_dim_idx == 0:
-            dim_ord = np.arange(arrays[0].ndim)
-            dim_ord = np.delete(dim_ord, reduced_dim_idx)
-            dim_ord = np.concatenate([[reduced_dim_idx], dim_ord])
-            arrays = [arr.transpose(*dim_ord) for arr in arrays]
-    else:
-        raise ValueError('Dimension to test (``compare``) was not found in'
-                         ' the provided DataArray.')
+    arrays, levels, dimnames, paired = _prepare_arrays(frate, compare, paired)
 
     if tail is None:
         n_groups = len(arrays)
@@ -206,14 +177,70 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
     if return_clusters:
         from borsar.cluster.obj import Clusters
-
-        dimnames = [dimname for dimname in frate.dims
-                    if dimname not in drop_dims]
         dimcoords = [frate.coords[dimname].values for dimname in dimnames]
-        return Clusters(stat, clusters=clusters, pvals=pval,
-                        dimnames=dimnames, dimcoords=dimcoords)
+        desc = {'n_permutations': n_permutations, 'compare': compare,
+                'levels': levels}
+        return Clusters(
+            stat, clusters=clusters, pvals=pval,
+            dimnames=dimnames, dimcoords=dimcoords, description=desc
+        )
 
     return stat, clusters, pval
+
+
+# TODO: looking for reduced dimensions, transposing, etc. should be checked
+#       against other xarray helpers to de-duplicate (some code present in
+#       selectivity module for xarray construction!)
+def _prepare_arrays(frate, compare, paired):
+    '''Extract and convert arrays format expected by the cluster based test.
+
+    Additionally: a) returns inferred dimnames for the stats array after
+    conducting the test and b) auto-detects if paired test should be conducted
+    based on the DataArray structure.'''
+
+    if compare not in frate.coords:
+        raise ValueError(f'``compare`` ("{compare}") was not found in'
+                         ' the provided DataArray coordinates.')
+
+    # extract the arrays grouped by the comapre condition
+    arrays, levels = list(), list()
+    for lvl, arr in frate.groupby(compare):
+        arrays.append(arr.values)
+        levels.append(lvl)
+
+    # prepare arrays for analysis
+    drop_dims = list()
+    if compare in frate.dims:
+        drop_dims.append(compare)
+        dim_idx = frate.dims.index(compare)
+        arrays = [np.squeeze(arr, axis=dim_idx) for arr in arrays]
+
+        # first dimension (observations) should be reduced
+        # TODO: auto-detect observation dimension and make sure it is first
+        first_dim = 0 + int(dim_idx == 0)
+        drop_dims.append(frate.dims[first_dim])
+
+        if paired is None:
+            paired = True
+    else:
+        reduced_dim = frate.coords[compare].dims
+        assert len(reduced_dim) == 1
+        reduced_dim = reduced_dim[0]
+        reduced_dim_idx = frate.dims.index(reduced_dim)
+        drop_dims.append(reduced_dim)
+
+        if not reduced_dim_idx == 0:
+            dim_ord = np.arange(arrays[0].ndim)
+            dim_ord = np.delete(dim_ord, reduced_dim_idx)
+            dim_ord = np.concatenate([[reduced_dim_idx], dim_ord])
+            arrays = [arr.transpose(*dim_ord) for arr in arrays]
+
+        if paired is None:
+            paired = False
+
+    dimnames = [dimname for dimname in frate.dims
+                if dimname not in drop_dims]
+    return arrays, levels, dimnames, paired
 
 
 # ENH: move to sarna/borsar sometime

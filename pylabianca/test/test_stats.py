@@ -157,7 +157,9 @@ def test_cluster_based_test_return_clusters_object():
     np.testing.assert_array_equal(clst.dimcoords[1], arr.time.values)
     np.testing.assert_allclose(clst.stat, stat)
 
-    # the order of clusters may be different
+    # the order of clusters may be different (at least the test failed here,
+    # the order may be different due to sorting [or re-sorting?], when there
+    # are multiple clusters with identical p value)
     # so we compare the number of cluster members (across time) per cell
     n_memb_clst = clst.clusters.any(axis=0).sum(axis=-1)
     n_memb_arr = np.array(clusters).any(axis=0).sum(axis=-1)
@@ -176,3 +178,9 @@ def test_cluster_based_test_return_clusters_object():
     clst = pln.stats.cluster_based_test(agg, **args)
     assert len(clst.dimnames) == 1
     assert clst.dimnames[0] == 'time'
+
+    # test raising error when compare coord is not found
+    args['compare'] = 'nothing'
+    match = f'``compare`` \("nothing"\) was not found'
+    with pytest.raises(ValueError, match=match):
+        clst = pln.stats.cluster_based_test(arr, **args)
