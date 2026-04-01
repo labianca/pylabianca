@@ -157,6 +157,13 @@ def test_cluster_based_test_return_clusters_object():
     np.testing.assert_array_equal(clst.dimcoords[1], arr.time.values)
     np.testing.assert_allclose(clst.stat, stat)
 
+    # make sure the configuration is stored in .description
+    assert clst.description['n_permutations'] == 100
+    assert clst.description['compare'] == 'cond'
+    assert clst.description['levels'] == [1, 2]
+    assert clst.description['tail'] == 'both'
+    assert not clst.description['paired']
+
     # the order of clusters may be different (at least the test failed here,
     # the order may be different due to sorting [or re-sorting?], when there
     # are multiple clusters with identical p value)
@@ -169,7 +176,7 @@ def test_cluster_based_test_return_clusters_object():
 
     # make sure this also works after aggregation:
     agg = pln.aggregate(arr, groupby='cond')
-    args['return_clusters'], args['paired'] = True, True
+    args['return_clusters'] = True
     clst = pln.stats.cluster_based_test(agg, **args)
     assert len(clst.dimnames) == 1
     assert clst.dimnames[0] == 'time'
@@ -178,6 +185,7 @@ def test_cluster_based_test_return_clusters_object():
     clst = pln.stats.cluster_based_test(agg, **args)
     assert len(clst.dimnames) == 1
     assert clst.dimnames[0] == 'time'
+    assert clst.description['paired']
 
     # test raising error when compare coord is not found
     args['compare'] = 'nothing'
