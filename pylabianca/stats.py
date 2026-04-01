@@ -178,8 +178,10 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     if return_clusters:
         from borsar.cluster.obj import Clusters
         dimcoords = [frate.coords[dimname].values for dimname in dimnames]
-        desc = {'n_permutations': n_permutations, 'compare': compare,
-                'levels': levels}
+        desc = { 'compare': compare, 'levels': levels, 'paired': paired,
+                'tail': tail, 'n_permutations': n_permutations,
+                'n_stat_permutations': n_stat_permutations,
+                'cluster_entry_p_threshold': cluster_entry_pval}
         return Clusters(
             stat, clusters=clusters, pvals=pval,
             dimnames=dimnames, dimcoords=dimcoords, description=desc
