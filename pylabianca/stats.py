@@ -511,9 +511,8 @@ def _catch_common_percentile_errors(percentile, dist, tail):
     # the user wanted percentile of 5, and not 0.05)
     if percentile < 1:
         import warnings
-        per_text = f'{percentile:.2f} %'
-        warnings.warn('Percentile is very low ({per_text}). Remember that it '
-                      'is a percentile, not a fraction.')
+        warnings.warn(f'Percentile is very low ({percentile:.2f} %). Remember'
+                      ' that it is a percentile, not a fraction.')
 
     # additionally - if tail is 'both' (the default), check if the distribution
     # indeed contain positive and negative values - if not, warn the user

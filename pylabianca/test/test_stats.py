@@ -189,6 +189,6 @@ def test_cluster_based_test_return_clusters_object():
 
     # test raising error when compare coord is not found
     args['compare'] = 'nothing'
-    match = f'``compare`` \("nothing"\) was not found'
+    match = '``compare`` \("nothing"\) was not found'
     with pytest.raises(ValueError, match=match):
         clst = pln.stats.cluster_based_test(arr, **args)
