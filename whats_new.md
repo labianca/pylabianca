@@ -33,7 +33,10 @@
 * ENH: added `pylabianca.selectivity.compute_selectivity_multisession()` to compute selectivity on a multisession dictionary (session name -> xarray). The output is an xarray.Dataset with concatenated session selectivity results (the order of the sessions in the output xarray.Dataset is the same as in the input dictionary).
 * ENH: added `pylabianca.stats.find_percentile_threshold()` used to calculate significance threshold for given statistic based on percentile of the permutation distribution.
 * ENH: `pylabianca.selectivity.compute_selectivity_continuous()` now can be also run with `n_perm=0`, returning only the selectivity statistics, without the permutation distribution or permutation-based threshold. Also `pylabianca.stats.permutation_test()` can now be run with `n_perm=0`, returning only the statistic values without the permutation distribution or permutation-based threshold.
-* ENH: `pylabianca.cluster_based_test()` can now return `borsar.Clusters` object instead of ``(stat, clusters, pval)`` tuple. This behavior is optional and can be controlled by setting `return_clusters=True` (defaults to False but will change to True in the next version).
+* ENH: `pylabianca.stats.cluster_based_test()` can now return `borsar.Clusters` object instead of ``(stat, clusters, pval)`` tuple. This behavior is optional and can be controlled by setting `return_clusters=True` (defaults to False but will change to True in the next version).
+The returned Clusters object retains the number of perumtations, compared condition and its levels in the `description` dictionary
+ENH: `pylabianca.stats.cluster_based_test()` now infers the statistical test to perform (paired vs unpaired) from the DataArray structure. This behavior is the new default (but can be overriden by seeting the `paired` argument)
+ENH: `pylabianca.stats.cluster_based_test()` no longer expects the observations dimention (`compare`) to be the first one in the passed DataArray when performing an unpaired (independent) test.
 * ENH: `pylabianca.viz.plot_shaded()` now allows to facet by condition into rows and columns using `row` and `col` arguments
 * ENH: allow passing colors by name to `colors` in `pylabianca.viz.plot_shaded()`.
 
@@ -57,7 +60,7 @@
 * FIX: `pylabianca.utils._handle_cell_names()` (used internally in a few places) now works with NumPy >= 2.0.
 * FIX: `pylabianca.viz.plot_waveform()` (as well as `.plot_waveform()` methods of `Spikes` and `SpikeEpochs`) now produces a clearer error when no waveforms are present in the data.
 * FIX: fixed `pval_text=False` still giving p value text (but without text boxes) in `pylabianca.viz.add_highlights()`
-* FIX: using `pylabianca.stats.cluster_based_test()` would often give (1, n) shaped clusters and passing these to `pylabianca.viz.add_highlighs()` lead to errors. This has now been fixed - such clusters would be ravel()'ed into 1d representation.
+FIX: `pylabianca.stats.cluster_based_test()` no longer returns stats and clusters arrays being n_timepoints x 1 when performing a paired (repeated) test.
 * FIX: `pylabianca.io.read_spikes_neo()` started raising errors on new pandas version when reading fieldtrip example spike data. Newer pandas for some reason started to generate StringArray columns when converting the header to pandas dataframe (although the docs seem to suggest that StringArray is experimental), which lead to TypeError when creating the `pylabinaca.Spikes()` object. This is now fixed.
 * FIX: `pylabianca.viz.add_highlights()` now correctly uses 'time' dimension as x coordinate, even if it is not the last dimension in the DataArray
 * FIX: `pylabianca.analysis.aggregate()` now works with `xarray.DataArray` input to `zscore` (previously it would raise an error). When aggregating a dictionary of DataArrays `zscore` (if in the form of arrays) has to be a matching dictionary of DataArrays as well.

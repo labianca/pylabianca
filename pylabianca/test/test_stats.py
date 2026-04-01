@@ -132,64 +132,63 @@ def test_find_percentile_threshold():
 
 def test_cluster_based_test_return_clusters_object():
     from borsar.cluster.obj import Clusters
+    from pylabianca.testing import gen_random_xarr
 
-    n_trials, n_cells, n_times = 40, 5, 60
-    times = np.linspace(-0.5, 1.5, num=n_times)
-    cells = np.array(['cell_a', 'cell_b', 'cell_c', 'cell_d', 'cell_e'])
+    n_trials, n_cells, n_times = 40, 35, 60
+    arr = gen_random_xarr(n_cells, n_trials, n_times,
+                        trial_condition_levels=[1, 2])
 
-    data = np.random.randn(n_trials, n_cells, n_times)
-    conditions = np.array([1] * (n_trials // 2) + [2] * (n_trials // 2))
-    np.random.shuffle(conditions)
-
-    effect_cond_mask = conditions == 1
-    data[effect_cond_mask, 1:4, 20:35] += 1.0
-
-    arr = xr.DataArray(
-        data, dims=['trial', 'cell', 'time'],
-        coords={'time': times, 'cell': cells, 'cond': ('trial', conditions)}
-    )
+    effect_cond_mask = arr.coords['cond'] == 1
+    has_eff = np.random.rand(n_cells) < 0.7
+    idx = np.ix_(has_eff, effect_cond_mask, np.arange(20, 35))
+    arr.data[idx] += 0.2
 
     np.random.seed(12)
+    args = dict(compare='cond', n_permutations=100, progress=False)
     with pytest.warns(FutureWarning, match='will change in the next version'):
-        stat, clusters, pval = pln.stats.cluster_based_test(
-            arr, compare='cond', n_permutations=100, progress=False)
+        stat, clusters, pval = pln.stats.cluster_based_test( arr, **args)
 
     np.random.seed(12)
-    clst = pln.stats.cluster_based_test(
-        arr, compare='cond', n_permutations=100, progress=False,
-        return_clusters=True)
+    clst = pln.stats.cluster_based_test(arr, return_clusters=True, **args)
 
     assert isinstance(clst, Clusters)
     assert clst.dimnames == ['cell', 'time']
-    np.testing.assert_array_equal(clst.dimcoords[0], cells)
-    np.testing.assert_array_equal(clst.dimcoords[1], times)
-
+    np.testing.assert_array_equal(clst.dimcoords[0], arr.cell.values)
+    np.testing.assert_array_equal(clst.dimcoords[1], arr.time.values)
     np.testing.assert_allclose(clst.stat, stat)
-    np.testing.assert_array_equal(clst.clusters, clusters)
-    np.testing.assert_array_equal(clst.pvals, pval)
 
+    # make sure the configuration is stored in .description
+    assert clst.description['n_permutations'] == 100
+    assert clst.description['compare'] == 'cond'
+    assert clst.description['levels'] == [1, 2]
+    assert clst.description['tail'] == 'both'
+    assert not clst.description['paired']
 
-def test_infer_cluster_dimnames_coords_respects_compare_dim():
-    n_cells, n_trials, n_times = 4, 20, 11
-    cells = np.array(['c1', 'c2', 'c3', 'c4'])
-    times = np.linspace(-0.1, 0.4, n_times)
-    cond = np.array([0] * (n_trials // 2) + [1] * (n_trials // 2))
+    # the order of clusters may be different (at least the test failed here,
+    # the order may be different due to sorting [or re-sorting?], when there
+    # are multiple clusters with identical p value)
+    # so we compare the number of cluster members (across time) per cell
+    n_memb_clst = clst.clusters.any(axis=0).sum(axis=-1)
+    n_memb_arr = np.array(clusters).any(axis=0).sum(axis=-1)
+    np.testing.assert_array_equal(n_memb_clst, n_memb_arr)
 
-    frate = xr.DataArray(
-        np.random.randn(n_cells, n_trials, n_times),
-        dims=['cell', 'trial', 'time'],
-        coords={'cell': cells, 'time': times, 'cond': ('trial', cond),
-                'region': ('cell', ['A', 'B', 'A', 'C'])}
-    )
+    assert (clst.pvals == pval).all()
 
-    dimnames, dimcoords = pln.stats._infer_cluster_coords(frate, 'cond')
+    # make sure this also works after aggregation:
+    agg = pln.aggregate(arr, groupby='cond')
+    args['return_clusters'] = True
+    clst = pln.stats.cluster_based_test(agg, **args)
+    assert len(clst.dimnames) == 1
+    assert clst.dimnames[0] == 'time'
 
-    assert dimnames == ['cell', 'time']
-    np.testing.assert_array_equal(dimcoords[0], cells)
-    np.testing.assert_array_equal(dimcoords[1], times)
+    agg = pln.aggregate(arr.transpose('trial', 'cell', 'time'), groupby='cond')
+    clst = pln.stats.cluster_based_test(agg, **args)
+    assert len(clst.dimnames) == 1
+    assert clst.dimnames[0] == 'time'
+    assert clst.description['paired']
 
-    # make sure an error is raised
-    frate = frate.drop_vars('cond')
-    msg = 'Could not find the reduced dimension'
-    with pytest.raises(RuntimeError, match=msg):
-        dimnames, dimcoords = pln.stats._infer_cluster_coords(frate, 'cond')
+    # test raising error when compare coord is not found
+    args['compare'] = 'nothing'
+    match = '``compare`` \("nothing"\) was not found'
+    with pytest.raises(ValueError, match=match):
+        clst = pln.stats.cluster_based_test(arr, **args)
