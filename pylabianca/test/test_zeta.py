@@ -1,12 +1,18 @@
 # test ZETA test
 import time
+import importlib.util
 import numpy as np
 import pandas as pd
+import pytest
 from scipy.io import loadmat
 
 import pylabianca as pln
 
 
+@pytest.mark.skipif(
+    importlib.util.find_spec("zetapy") is None,
+    reason="requires optional dependency: zetapy",
+)
 def test_against_zetapy():
     from zetapy import zetatest2
 
