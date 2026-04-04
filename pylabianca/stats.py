@@ -157,11 +157,7 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
 
     if return_clusters is None:
         return_clusters = False
-        warnings.warn('The default behavior of returning (stats, clusters, '
-                      'pvals) tuple will change in the next version to '
-                      'returning one `borsar.Clusters` object. To retain the'
-                      ' old behavior use `return_clusters=False`.',
-                      FutureWarning)
+        _warn_return_clusters_change('(stats, clusters, pvals)')
 
     arrays, levels, dimnames, paired = _prepare_arrays(frate, compare, paired)
 
@@ -178,14 +174,13 @@ def cluster_based_test(frate, compare='image', cluster_entry_pval=0.05,
     if return_clusters:
         from borsar.cluster.obj import Clusters
         dimcoords = [frate.coords[dimname].values for dimname in dimnames]
-        desc = { 'compare': compare, 'levels': levels, 'paired': paired,
+        desc = {'compare': compare, 'levels': levels, 'paired': paired,
                 'tail': tail, 'n_permutations': n_permutations,
                 'n_stat_permutations': n_stat_permutations,
                 'cluster_entry_p_threshold': cluster_entry_pval}
-        return Clusters(
-            stat, clusters=clusters, pvals=pval,
-            dimnames=dimnames, dimcoords=dimcoords, description=desc
-        )
+        return Clusters(stat, clusters=clusters, pvals=pval,
+                        dimnames=dimnames, dimcoords=dimcoords,
+                        description=desc)
 
     return stat, clusters, pval
 
@@ -251,7 +246,8 @@ def _prepare_arrays(frate, compare, paired):
 # ENH: return borsar.Clusters object as output
 def cluster_based_test_from_permutations(data, perm_data, tail='both',
                                          adjacency=None, percentile=5,
-                                         threshold=None):
+                                         threshold=None,
+                                         return_clusters=None):
     '''Performs a cluster-based test from precalculated permutations.
 
     This function should get data ready for cluster-based permutation test
@@ -288,23 +284,31 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
     threshold : float
         Threshold to use for clustering. If ``None`` then the threshold is
         calculated using the ``percentile`` parameter.
+    return_clusters : bool
+        Whether to return a ``borsar.Clusters`` object instead of a
+        ``(clusters, cluster_stats, cluster_pval)`` tuple.
 
     Returns
     -------
-    clusters : list of numpy.ndarray
-        List of cluster memberships.
+    clusters : list of numpy.ndarray | borsar.Clusters
+        List of cluster memberships. If ``return_clusters=True``, then a
+        ``borsar.Clusters`` object is returned instead.
     cluster_stats : numpy.ndarray
-        Cluster statistics.
+        Cluster statistics. Only returned if ``return_clusters=False``.
     cluster_pval : numpy.ndarray
-        Cluster p values.
+        Cluster p values. Only returned if ``return_clusters=False``.
     '''
     import xarray as xr
     import borsar
 
+    if return_clusters is None:
+        return_clusters = False
+        _warn_return_clusters_change('(clusters, cluster_stats, cluster_pval)')
+
     assert isinstance(data, xr.DataArray)
     assert isinstance(perm_data, xr.DataArray)
 
-    perm_dim_name, _ = _find_dim(perm_data)
+    perm_dim_name, perm_dim_idx = _find_dim(perm_data)
 
     if threshold is None:
         thresholds = find_percentile_threshold(
@@ -357,7 +361,28 @@ def cluster_based_test_from_permutations(data, perm_data, tail='both',
         # and one for neg clusters) so we have to correct...
         cluster_pval = np.minimum(cluster_pval * 2, 1)
 
+    if return_clusters:
+        from borsar.cluster.obj import Clusters
+        dimnames = list(data.dims)
+        dimcoords = [data.coords[dimname].values for dimname in dimnames]
+        desc = {
+            'tail': tail, 'percentile': percentile, 'threshold': threshold,
+            'adjacency': adjacency,
+            'n_permutations': perm_data.shape[perm_dim_idx]
+        }
+        return Clusters(data.values, clusters=clusters, pvals=cluster_pval,
+                        dimnames=dimnames, dimcoords=dimcoords,
+                        description=desc)
+
     return clusters, cluster_stats, cluster_pval
+
+
+def _warn_return_clusters_change(returned_tuple):
+    warnings.warn(
+        f'The default behavior of returning {returned_tuple} tuple will '
+        'change in the next version to returning one `borsar.Clusters` '
+        'object. To retain the old behavior use `return_clusters=False`.',
+        FutureWarning)
 
 
 # CONSIDER: move the xarray "clothing" function somewhere to utils
