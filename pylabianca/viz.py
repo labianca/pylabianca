@@ -390,7 +390,6 @@ def check_modify_progressbar(pbar, total=None):
             from tqdm import tqdm
             pbar = tqdm(total=total)
         else:
-            from sarna.utils import EmptyProgressbar
             pbar = EmptyProgressbar(total=total)
     elif isinstance(pbar, str):
         if pbar == 'notebook':
@@ -417,6 +416,9 @@ class EmptyProgressbar(object):
         self.total = total
 
     def update(self, val):
+        pass
+
+    def close(self):
         pass
 
 
