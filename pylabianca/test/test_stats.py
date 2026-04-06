@@ -46,7 +46,7 @@ def test_permutation_test_n_perm_0():
 
 
 def test_cluster_based_test_from_permutations():
-    from borsar.cluster.obj import Clusters
+    from borsar import Clusters
 
     n_trials, n_times = 50, 100
     times = np.linspace(-0.5, 1.5, num=n_times)
@@ -105,19 +105,19 @@ def test_cluster_based_test_from_permutations():
     assert (clst2[0] == clst[0]).mean() >= 0.9
 
     # test Clusters output with metadata
-    clst_obj = pln.stats.cluster_based_test_from_permutations(
+    clst = pln.stats.cluster_based_test_from_permutations(
         stat, stat_perm, return_clusters=True, tail='both')
-    assert isinstance(clst_obj, Clusters)
-    assert clst_obj.dimnames == ['time']
-    np.testing.assert_array_equal(clst_obj.dimcoords[0], times)
-    np.testing.assert_array_equal(clst_obj.stat, stat.values)
-    np.testing.assert_array_equal(clst_obj.pvals, pval2_unsorted)
+    assert isinstance(clst, Clusters)
+    assert clst.dimnames == ['time']
+    np.testing.assert_array_equal(clst.dimcoords[0], times)
+    np.testing.assert_array_equal(clst.stat, stat.values)
+    np.testing.assert_array_equal(clst.pvals, pval2_unsorted)
 
-    assert clst_obj.description['tail'] == 'both'
-    assert clst_obj.description['percentile'] == 5
-    assert clst_obj.description['threshold'] is None
-    assert clst_obj.description['n_permutations'] == n_permutations
-    assert 'perm_dim' not in clst_obj.description
+    assert clst.description['tail'] == 'both'
+    assert clst.description['percentile'] == 5
+    assert clst.description['threshold'] is None
+    assert clst.description['n_permutations'] == n_permutations
+    assert 'perm_dim' not in clst.description
 
 
 def test_find_percentile_threshold():
@@ -150,7 +150,7 @@ def test_find_percentile_threshold():
 
 
 def test_cluster_based_test_return_clusters_object():
-    from borsar.cluster.obj import Clusters
+    from borsar import Clusters
     from pylabianca.testing import gen_random_xarr
 
     n_trials, n_cells, n_times = 40, 35, 60
