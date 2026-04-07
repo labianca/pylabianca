@@ -172,7 +172,7 @@ def cumulative_diff_two_conditions_numba(
         spikes2_all, reference_time, n_trials2)
 
     fraction_diff = fraction1 - fraction2
-    fraction_diff -= fraction_diff.mean()
+    # fraction_diff -= fraction_diff.mean()
 
     return fraction_diff
 
@@ -193,7 +193,7 @@ def cumulative_sel_multi_conditions_numba(spikes_list, n_trials,
         )
 
     fraction_sel = var_2d_axis_0(cumulative_fraction)
-    fraction_sel -= fraction_sel.mean()
+    # fraction_sel -= fraction_sel.mean()
 
     return fraction_sel
 

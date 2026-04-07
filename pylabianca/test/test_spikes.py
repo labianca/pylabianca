@@ -638,10 +638,13 @@ def test_pandas_StringArray_compatibility():
         spk1.cellinfo.loc[:, 'anat'].values, pd.arrays.StringArray)
 
     fr = spk1.to_epochs(0.25).spike_rate()
-    # and that spike rate does not change it either
-    assert isinstance(spk1.cellinfo.loc[:, 'anat'].values, pd.arrays.StringArray)
 
-    # although the xarray's type is object (otherwise we would get errors in multiple places
+    # and that spike rate does not change it either
+    assert isinstance(spk1.cellinfo.loc[:, 'anat'].values,
+                      pd.arrays.StringArray)
+
+    # although the xarray's type is object (otherwise we would get errors in
+    # multiple places)
     assert fr.coords['anat'].dtype == object
 
     # using remove_StringArrays we can purge Spike objects from StringArrays
