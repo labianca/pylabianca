@@ -151,10 +151,10 @@ def test_find_percentile_threshold():
 
 def test_cluster_based_test_return_clusters_object():
     from borsar import Clusters
-    from pylabianca.testing import gen_random_xarr
+    from pylabianca.testing import random_xarray
 
     n_trials, n_cells, n_times = 40, 35, 60
-    arr = gen_random_xarr(n_cells, n_trials, n_times,
+    arr = random_xarray(n_cells, n_trials, n_times,
                         trial_condition_levels=[1, 2])
 
     effect_cond_mask = arr.coords['cond'] == 1

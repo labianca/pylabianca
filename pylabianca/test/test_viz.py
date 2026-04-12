@@ -5,6 +5,7 @@ import xarray as xr
 
 from scipy.ndimage import gaussian_filter1d
 import pylabianca as pln
+from pylabianca.testing import random_spikes
 
 import pytest
 
@@ -72,7 +73,7 @@ def test_plot_shaded():
 
 def test_plot_shaded_colors():
     df = pd.DataFrame({'condition': ['A'] * 13 + ['B'] * 12})
-    spk = pln.utils.create_random_spikes(
+    spk = random_spikes(
         n_cells=2, n_trials=25, n_spikes=(15, 35), metadata=df)
     fr = spk.spike_density(fwhm=0.2)
 
@@ -94,11 +95,11 @@ def test_plot_shaded_colors():
 
 
 def test_plot_shaded_separate_calls_cycle_colors():
-    from pylabianca.testing import gen_random_xarr
+    from pylabianca.testing import random_xarray
 
     n_cells, n_trials, n_times = 15, 35, 100
     conditions = ['A', 'B']
-    arr = gen_random_xarr(
+    arr = random_xarray(
         n_cells, n_trials, n_times, trial_condition_levels=conditions)
     arr = pln.aggregate(arr, groupby='cond', zscore=True)
 
@@ -215,7 +216,7 @@ def test_plot_shaded_color_inputs(grouped_data, colors):
 
 
 def test_plot_raster():
-    spk = pln.utils.create_random_spikes(n_cells=1)
+    spk = random_spikes(n_cells=1)
     ax = pln.viz.plot_raster(spk)
 
     for idx, tri in enumerate(np.unique(spk.trial[0])):
@@ -227,7 +228,7 @@ def test_plot_raster():
 
 def test_plot_isi():
     # currently mostly a smoke test
-    spk = pln.utils.create_random_spikes(
+    spk = random_spikes(
         n_cells=7, n_trials=0, n_spikes=(35, 153))
     ax = spk.plot_isi(min_spikes=20, max_isi=1000)
 
@@ -325,7 +326,7 @@ def compare_box_ranges(ax, ranges):
 
 def test_add_highlights():
     # prepare data
-    spk = pln.utils.create_random_spikes(
+    spk = random_spikes(
         n_cells=2, n_trials=50, n_spikes=(20, 50))
     fr = spk.spike_density(fwhm=0.2)
 

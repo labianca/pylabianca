@@ -6,7 +6,7 @@ import xarray as xr
 import pylabianca as pln
 from pylabianca.analysis import (
     _symmetric_window_samples, _gauss_kernel_samples)
-from pylabianca.utils import create_random_spikes
+from pylabianca.testing import random_spikes
 from pylabianca.selectivity import (
     compute_selectivity_continuous, compute_selectivity_multisession)
 
@@ -44,7 +44,7 @@ def _effect_size_from_f_statistic(*groups, kind='omega'):
 
 
 def test_selectivity_continuous():
-    spk_epochs = create_random_spikes(
+    spk_epochs = random_spikes(
         n_cells=20, n_trials=60, n_spikes=(10, 50))
 
     # add metadata
@@ -104,7 +104,7 @@ def test_selectivity_continuous():
         assert all([coo in results[key].coords for coo in cellinfo.columns])
 
     # test also in time with two conditions
-    spk = create_random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
+    spk = random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
 
     # add metadata
     spk.metadata = pd.DataFrame(
@@ -137,7 +137,7 @@ def test_cluster_based_selectivity():
     has_clusters = True
     while has_clusters:
         # create random spikes
-        spk = create_random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
+        spk = random_spikes(n_cells=1, n_trials=50, n_spikes=(5, 15))
 
         # add metadata and cellinfo
         spk.metadata = metadata
@@ -367,10 +367,10 @@ def test_compute_percent_selective():
 
 
 def test_selectivity_multisession():
-    from pylabianca.testing import create_multisession_data
+    from pylabianca.testing import random_multisession_xarray
 
     n_sessions = 6
-    frs = create_multisession_data(
+    frs = random_multisession_xarray(
         n_sessions, cells_per_session=(5, 25), out='fr')
     n_cells = {ses: fr.cell.shape[0] for ses, fr in frs.items()}
     sel = compute_selectivity_multisession(

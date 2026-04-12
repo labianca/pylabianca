@@ -5,7 +5,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import has_elephant, find_index
-from pylabianca.testing import ft_data, spk_epochs
+from pylabianca.testing import ft_data, spk_epochs, random_spikes
 
 
 @pytest.mark.skipif(not has_elephant(), reason="requires elephant")
@@ -68,7 +68,7 @@ def test_firing_rate_against_elephant(spk_epochs):
 
 
 def test_time_centering():
-    spk = pln.utils.create_random_spikes(n_cells=3, n_trials=10)
+    spk = random_spikes(n_cells=3, n_trials=10)
 
     fr = spk.spike_rate()
     zero_dist = np.abs(fr.time - 0).min().item()
