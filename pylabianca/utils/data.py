@@ -88,37 +88,3 @@ def download_test_data():
 
     # remove the zipfile
     os.remove(destination)
-
-
-def create_random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21), **args):
-    '''Create random spike data. Mostly useful for testing.
-
-    Parameters
-    ----------
-    n_cells : int
-        Number of cells.
-    n_trials : int
-        Number of trials. If ``None`` or 0 then Spikes object is returned.
-    n_spikes : int | tuple
-        Number of spikes. If tuple then the first element is the minimum
-        number of spikes and the second element is the maximum number of
-        spikes.
-    args : dict
-        Additional arguments are passed to the Spikes / SpikeEpochs object.
-
-    Returns
-    -------
-    spikes : Spikes | SpikeEpochs
-        Spike data object.
-    '''
-    from ..testing import random_spikes
-    return random_spikes(
-        n_cells=n_cells, n_trials=n_trials, n_spikes=n_spikes, **args
-    )
-
-
-def random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21), **args):
-    """Compatibility alias for :func:`create_random_spikes`."""
-    return create_random_spikes(
-        n_cells=n_cells, n_trials=n_trials, n_spikes=n_spikes, **args
-    )
