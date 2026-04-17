@@ -246,10 +246,3 @@ def random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21), **args):
         args['sfreq'] = 10_000
 
     return Spikes(times, **args)
-
-
-# backward-compatible aliases
-gen_random_xarr = random_xarray
-create_multisession_data = random_multisession_xarray
-create_spike_epochs_dict = random_multisession_spikes
-create_random_spikes = random_spikes
