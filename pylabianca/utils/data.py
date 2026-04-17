@@ -88,3 +88,4 @@ def download_test_data():
 
     # remove the zipfile
     os.remove(destination)
+
