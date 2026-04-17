@@ -4,9 +4,11 @@ import importlib.util
 import numpy as np
 import pandas as pd
 import pytest
+import xarray as xr
 from scipy.io import loadmat
 
 import pylabianca as pln
+from pylabianca.testing import random_spikes
 
 
 @pytest.mark.skipif(
@@ -121,3 +123,74 @@ def test_against_zetapy():
     assert isinstance(p_val_n2, dict)
     assert 'empirical' in p_val_n2 and 'gumbel' in p_val_n2
     assert (np.abs(p_val_n1 - p_val_n2['empirical']) < (20 / 100)).all()
+
+
+def test_zeta_return_type_xarray():
+    np.random.seed(0)
+    n_trials = 12
+    spk = random_spikes(
+        n_cells=2, n_trials=n_trials, n_spikes=(8, 13),
+        metadata=pd.DataFrame({
+            'image': np.array(['A'] * (n_trials // 2) + ['B'] * (n_trials // 2))
+        }),
+        cellinfo=pd.DataFrame({
+            'region': ['hipp', 'amyg'],
+            'quality': ['good', 'mua']
+        })
+    )
+    np.random.seed(0)
+    z_np, p_np, dist_np = pln.selectivity.zeta_test(
+        spk, compare='image', n_permutations=50, return_dist=True,
+        return_type='numpy', backend='numpy'
+    )
+    np.random.seed(0)
+    zeta_xr = pln.selectivity.zeta_test(
+        spk, compare='image', n_permutations=50, return_dist=True,
+        return_type='xarray', backend='numpy'
+    )
+
+    assert isinstance(zeta_xr, xr.Dataset)
+    assert set(zeta_xr.data_vars) >= {'stat', 'dist', 'pval'}
+
+    np.testing.assert_allclose(z_np, zeta_xr['z'].values)
+    np.testing.assert_allclose(p_np, zeta_xr['pval'].values)
+    np.testing.assert_allclose(dist_np['max'], zeta_xr['stat'].values)
+    np.testing.assert_allclose(dist_np['perm_max'], zeta_xr['dist'].values)
+    assert np.array_equal(dist_np['perm_vec'], zeta_xr['perm_vec'].values)
+
+    assert 'region' in zeta_xr.coords
+    assert 'quality' in zeta_xr.coords
+
+
+def test_zeta_return_type_xarray_significance_both():
+    np.random.seed(0)
+    spk = random_spikes(
+        n_cells=2, n_trials=12, n_spikes=(8, 13),
+        metadata=pd.DataFrame({
+            'image': np.array(['A'] * 6 + ['B'] * 6)
+        })
+    )
+    with pytest.raises(ValueError, match='not supported'):
+        pln.selectivity.zeta_test(
+            spk, compare='image', n_permutations=20, return_dist=True,
+            return_type='xarray', backend='numpy', significance='both',
+            permute_independently=True
+        )
+
+
+def test_zeta_return_type_xarray_no_dist():
+    np.random.seed(0)
+    spk = random_spikes(
+        n_cells=2, n_trials=12, n_spikes=(8, 13),
+        metadata=pd.DataFrame({
+            'image': np.array(['A'] * 6 + ['B'] * 6)
+        })
+    )
+    out = pln.selectivity.zeta_test(
+        spk, compare='image', n_permutations=20, return_dist=False,
+        return_type='xarray', backend='numpy'
+    )
+
+    assert isinstance(out, xr.Dataset)
+    assert set(out.data_vars) >= {'stat', 'pval'}
+    assert 'dist' not in out

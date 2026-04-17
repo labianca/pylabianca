@@ -650,10 +650,68 @@ def compute_time_in_window(df_cluster, window_of_interest):
     return df_cluster
 
 
+def _zeta_cell_coords(spk, picks):
+    from .utils.xarr import _inherit_metadata
+
+    coords = {'cell': np.array(spk.cell_names)[picks]}
+    return _inherit_metadata(coords, spk.cellinfo, 'cell')
+
+
+def _zeta_perm_vec_to_xarray(perm_vec, permute_independently, cell_coords):
+    import xarray as xr
+
+    if permute_independently:
+        dims = ['perm', 'cell', 'trial']
+        coords = dict(cell_coords)
+    else:
+        dims = ['perm', 'trial']
+        coords = dict()
+    coords['trial'] = np.arange(perm_vec.shape[-1])
+
+    return xr.DataArray(perm_vec, dims=dims, coords=coords, name='perm_vec')
+
+
+def _zeta_to_xarray_dataset(spk, picks, real_abs_max, p_values, z_scores=None,
+                            perm_abs_max=None, perm_vec=None, trace=None,
+                            perm_trace=None, ref_time=None):
+    import xarray as xr
+
+    cell_coords = _zeta_cell_coords(spk, picks)
+    data_vars = {
+        'stat': xr.DataArray(
+            real_abs_max, dims=['cell'], coords=cell_coords, name='stat'
+        ),
+        'pval': xr.DataArray(
+            p_values, dims=['cell'], coords=cell_coords, name='pval'
+        )
+    }
+    if z_scores is not None:
+        data_vars['z'] = xr.DataArray(
+            z_scores, dims=['cell'], coords=cell_coords, name='z'
+        )
+    if perm_abs_max is not None:
+        data_vars['dist'] = xr.DataArray(
+            perm_abs_max, dims=['cell', 'perm'], coords=cell_coords,
+            name='dist'
+        )
+
+    out = xr.Dataset(data_vars)
+    if perm_vec is not None:
+        out['perm_vec'] = perm_vec
+    if trace is not None:
+        out.attrs['trace'] = trace
+    if perm_trace is not None:
+        out.attrs['perm_trace'] = perm_trace
+    if ref_time is not None:
+        out.attrs['ref_time'] = ref_time
+    return out
+
+
 # CONSIDER renaming return_dist to return_traces / return_dict, etc.
 def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
               n_permutations=100, significance='gumbel', return_dist=False,
-              subsample=1, reduction=None, permute_independently=False):
+              return_type='numpy', subsample=1, reduction=None,
+              permute_independently=False):
     """ZETA test for comparing cumulative spike distributions between
     conditions.
 
@@ -682,6 +740,11 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     return_dist : bool, optional
         Whether to return the cumulative traces and permutation traces.
         Default is ``False``.
+    return_type : {'numpy', 'xarray'}, optional
+        Output type to return. If ``'numpy'``, outputs are returned as numpy
+        arrays (and dictionaries of arrays). If ``'xarray'``, outputs are
+        returned as xarray objects with cell metadata inherited from ``spk``.
+        Default is ``'numpy'``.
     subsample : int, optional
         Subsample factor for the reference time. Default is ``10``.
     reduction : callable, optional
@@ -694,36 +757,41 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
 
     Returns
     -------
-    z_scores : np.ndarray
-        Z-scores - one per cell. Used only if ``significance`` is
-        ``'gumbel'``, otherwise ``None``.
-    p_values : np.ndarray
-        P-values - one per cell.
-    other : dict
-        Dictionary containing additional output if ``return_dist`` is ``True``.
-        Contains the following keys:
+    out : tuple | xarray.Dataset
+        If ``return_type='numpy'``:
 
-        - trace : list of np.ndarray
-            Cumulative traces for each cell.
-        - perm_trace : list of np.ndarray
-            Permutation traces for each cell.
-        - max : np.ndarray
-            Maximum values for each cell.
-        - perm_max : np.ndarray
-            Maximum values for each permutation.
-        - perm_vec : np.ndarray
-            Permutation vectors (shuffled condition assignment per trial) for
-            each permutations - so that the same shuffled conditions can used
-            when calculating additional selectivity criteria.
-            * n_permutations x n_trials if ``permute_independently=False``
-            * n_permutations x n_cells x n_trials if
-              ``permute_independently=True``
-        - ref_time : list of np.ndarray
-            Reference times for each cell.
+        - returns ``(z_scores, p_values)`` when ``return_dist=False``.
+        - returns ``(z_scores, p_values, other)`` when ``return_dist=True``,
+          where ``other`` is a dictionary with the following keys:
+
+          - ``trace`` : list of np.ndarray
+              Cumulative traces for each cell.
+          - ``perm_trace`` : list of np.ndarray
+              Permutation traces for each cell.
+          - ``max`` : np.ndarray
+              Maximum values for each cell.
+          - ``perm_max`` : np.ndarray
+              Maximum values for each permutation.
+          - ``perm_vec`` : np.ndarray
+              Permutation vectors (shuffled condition assignment per trial):
+              ``n_permutations x n_trials`` if
+              ``permute_independently=False`` and
+              ``n_permutations x n_cells x n_trials`` otherwise.
+          - ``ref_time`` : list of np.ndarray
+              Reference times for each cell.
+
+        If ``return_type='xarray'``, returns a single ``xarray.Dataset`` with
+        at least ``'stat'`` and ``'pval'`` variables, and ``'dist'`` when
+        ``return_dist=True``.
     """
     from .utils import _deal_with_picks
+    from .utils.validate import _check_str_options
     from ._zeta import (_prepare_ZETA_numpy_and_numba, _get_times_and_trials,
                         compute_pvalues)
+    _check_str_options(return_type, 'return_type', ['numpy', 'xarray'])
+    if return_type == 'xarray' and significance == 'both':
+        raise ValueError('`significance="both"` is not supported when '
+                         '`return_type="xarray"`.')
 
     if backend == 'numba':
         from .utils import has_numba
@@ -814,8 +882,12 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     z_scores, p_values = compute_pvalues(
         real_abs_max, perm_abs_max, significance=significance)
 
-    if not return_dist:
+    if not return_dist and return_type == 'numpy':
         return z_scores, p_values
+    elif not return_dist and return_type == 'xarray':
+        return _zeta_to_xarray_dataset(
+            spk, picks, real_abs_max, p_values, z_scores=z_scores
+        )
     else:
         from ._zeta import recreate_permutation_condition_assignment
 
@@ -829,6 +901,18 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
         else:
             perm_vec = recreate_permutation_condition_assignment(
                 perm_vec, condition_idx, condition_values_unique)
+
+        if return_type == 'xarray':
+            perm_vec = _zeta_perm_vec_to_xarray(
+                perm_vec, permute_independently,
+                _zeta_cell_coords(spk, picks)
+            )
+            return _zeta_to_xarray_dataset(
+                spk, picks, real_abs_max, p_values, z_scores=z_scores,
+                perm_abs_max=perm_abs_max, perm_vec=perm_vec,
+                trace=cumulative_diffs, perm_trace=permutation_diffs,
+                ref_time=reference_times
+            )
 
         other = dict(trace=cumulative_diffs, perm_trace=permutation_diffs,
                      max=real_abs_max, perm_max=perm_abs_max,
