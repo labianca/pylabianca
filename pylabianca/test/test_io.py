@@ -5,6 +5,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import download_test_data, get_data_path
+from pylabianca.testing import random_spikes
 
 
 download_test_data()
@@ -170,7 +171,7 @@ def test_read_write_fieldtrip(tmp_path):
         return spk2
 
     # random spikes
-    spk = pln.utils.create_random_spikes()
+    spk = random_spikes()
     n_spk = spk.n_spikes()
     n_tri = spk.n_trials
     n_uni = len(n_spk)
@@ -247,12 +248,12 @@ def test_read_write_fieldtrip(tmp_path):
     io_roundtrip(spk_one_spike, filepath, kind='trials')
 
     # only one unit in the file
-    spk_one_unit = pln.utils.create_random_spikes(n_cells=1)
+    spk_one_unit = random_spikes(n_cells=1)
     io_roundtrip(spk_one_unit, filepath, kind='trials')
 
     # io roundtrip for Spikes
     filepath = op.join(tmp_path, 'spikeRaw.mat')
-    spk_raw = pln.utils.create_random_spikes(
+    spk_raw = random_spikes(
         n_cells=3, n_trials=0, n_spikes=(23, 55))
     spk_raw.cellinfo = cellinfo.iloc[:-1, :]
     io_roundtrip(spk_raw, filepath, kind='raw')
@@ -324,7 +325,7 @@ def test_neuralynx_no_scaling_info(tmp_path):
 
 def test_add_region_from_channel_ranges():
     # create random spikes
-    spk = pln.utils.create_random_spikes(
+    spk = random_spikes(
         n_cells=10, cell_names=list('ABCDEFGHIJ'))
 
     # create cellinfo with channel numbers

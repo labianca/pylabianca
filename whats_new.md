@@ -13,6 +13,7 @@
 * API: removed `min_Hz` argument of `pylabianca.selectivity.compute_selectivity_continuous()`. It was used to ignore average firing rate values below a certain threshold, but such selection should be done by the user before calling the function.
 * API: removed `pylabianca.utils.find_cells_by_cluster_id()` in favor of a more universal `pylabianca.utils.find_cells()`. Instead of doing `pln.utils.find_cells_by_cluster_id([254], channel='A15')` and then `pln.utils.find_cells_by_cluster_id([1854], channel='A23')` one can use `pln.utils.find_cells(cluster=[254, 1854], channel=['A15', 'A23'])`.
 * API: `pylabianca.utils.assign_session_coord()` and therefore `pylabianca.analysis.extract_data()`, `pylabianca.analysis.dict_to_xarray()` and `pylabianca.analysis.xarray_to_dict()` now use `ses_coord` argument instead of previously named `ses_name`. `ses_name` still works, but will be deprecated in the next version.
+* API: `pylabianca.utils.data.create_random_spikes()` has been renamed and moved and is now `pylabianca.testing.random_spikes()`. `pylabianca.testing.gen_random_xarr()` has been renamed to `pylabianca.testing.random_xarray()`. `pylabianca.testing.create_multisession_data()` was renamed to `pylabinaca.testing.random_multisession_xarray()`. New function `pylabianca.testing.random_multisession_spikes()` was added - for creating a dictionary of multiple sessions of random spikes.
 
 <br/>
 
