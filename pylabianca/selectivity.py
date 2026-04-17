@@ -355,7 +355,8 @@ def _cluster_sel_process_cell(fr_cell, compare, cluster_entry_pval,
     _, clusters, pvals = cluster_based_test(
         fr_cell, compare=compare, cluster_entry_pval=cluster_entry_pval,
         paired=False, stat_fun=stat_fun, n_permutations=n_permutations,
-        n_stat_permutations=n_stat_permutations, progress=False)
+        n_stat_permutations=n_stat_permutations, progress=False,
+        return_clusters=False)
 
     # process clusters
     df_part = _characterize_clusters(
