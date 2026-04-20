@@ -18,6 +18,15 @@ def has_numba():
         return False
 
 
+def has_numbagg():
+    """Check if numbagg is available."""
+    try:
+        import numbagg
+        return True
+    except ImportError:
+        return False
+
+
 def has_elephant():
     '''Test if elephant is available.'''
     try:

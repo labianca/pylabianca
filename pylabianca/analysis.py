@@ -5,7 +5,7 @@ from .utils import (
 from .utils.xarr import (
     _ensure_queryable_xarray, find_nested_dims, _inherit_metadata,
     assign_session_coord)
-from .utils.validate import _validate_xarray_for_aggregation
+from .utils.validate import _validate_xarray_for_aggregation, has_numbagg
 
 
 def _symmetric_window_samples(winlen, sfreq):
@@ -361,7 +361,8 @@ def _get_arr(arr, sub_ses, ses_coord='sub'):
 # - [ ] select vs per_cell_query behavior -> first one is done after zscoring
 #       the second one before
 def aggregate(frate, groupby=None, select=None, per_cell_query=None,
-              zscore=False, baseline=False, per_cell=False):
+              zscore=False, baseline=False, per_cell=False,
+              backend='xarray'):
     """
     Prepare spikes object for firing rate analysis.
 
@@ -397,6 +398,10 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
         separately. This is much slower, but necessary when the selection is
         cell-specific, e.g. when selecting only cells that are
         stimulus-selective (then the preferred stimulus is cell-specific).
+    backend : {'xarray', 'numba'}
+        Backend used for ``per_cell=True`` aggregation. ``'xarray'`` uses the
+        existing cell-by-cell xarray implementation. ``'numba'`` uses a
+        faster grouped reduction via ``numbagg``. Defaults to ``'xarray'``.
 
     Returns
     -------
@@ -405,47 +410,176 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
     """
     import xarray as xr
 
+    if backend not in ('xarray', 'numba'):
+        raise ValueError('Backend can be only "xarray" or "numba".')
+
     if isinstance(frate, dict):
         return _aggregate_dict(
             frate, groupby=groupby, select=select,
             per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
-            per_cell=per_cell
+            per_cell=per_cell, backend=backend
         )
     else:
         msg = ('frate has to be an xarray.DataArray or dictionary of '
                'xarray.DataArrays.')
         assert isinstance(frate, xr.DataArray), msg
 
-        _validate_xarray_for_aggregation(frate, groupby, per_cell)
-
     if per_cell_query is not None:
         per_cell = True
 
+    _validate_xarray_for_aggregation(frate, groupby, per_cell)
+
     if not per_cell:
-        # integrate with per_cell approach
-        frates = _aggregate_xarray(
-                frate, groupby, zscore, select, baseline
-            )
+        return _aggregate_xarray(frate, groupby, zscore, select, baseline)
+
+    if backend == 'xarray':
+        return _aggregate_per_cell_xarray(
+            frate, groupby, zscore, select, baseline,
+            per_cell_query=per_cell_query
+        )
+
+    if per_cell_query is not None:
+        raise NotImplementedError(
+            '`per_cell_query` is not implemented for backend="numba".'
+        )
+
+    if not has_numbagg():
+        raise ImportError(
+            'numbagg package is required for the "numba" backend.'
+        )
+
+    return _aggregate_per_cell_numba(
+        frate, groupby, zscore, select, baseline
+    )
+
+
+def _aggregate_per_cell_xarray(frate, groupby, zscore, select, baseline,
+                               per_cell_query=None):
+    import xarray as xr
+
+    frates = list()
+    n_cells = len(frate.cell)
+    for cell_idx in range(n_cells):
+        frate_cell = frate[cell_idx]
+
+        if per_cell_query is not None:
+            frate_cell = frate_cell.query(per_cell_query)
+
+        frate_cell = _aggregate_xarray(
+            frate_cell, groupby, zscore, select, baseline
+        )
+        frates.append(frate_cell)
+
+    if len(frates) > 0:
+        frates = xr.concat(frates, dim='cell')
         return frates
     else:
-        frates = list()
-        n_cells = len(frate.cell)
-        for cell_idx in range(n_cells):
-            frate_cell = frate[cell_idx]
+        return None
 
-            if per_cell_query is not None:
-                frate_cell = frate_cell.query(per_cell_query)
 
-            frate_cell = _aggregate_xarray(
-                frate_cell, groupby, zscore, select, baseline
-            )
-            frates.append(frate_cell)
+def _aggregate_prepare_xarray(frate, zscore, select):
+    is_zscore_bool = isinstance(zscore, bool)
+    if not is_zscore_bool or zscore:
+        bsln = None if is_zscore_bool else zscore
+        frate = zscore_xarray(frate, baseline=bsln)
 
-        if len(frates) > 0:
-            frates = xr.concat(frates, dim='cell')
-            return frates
+    if select is not None:
+        frate = frate.query(trial=select)
+
+    return frate
+
+
+def _aggregate_apply_groupby(frate, groupby):
+    if groupby:
+        if isinstance(groupby, list):
+            frate = nested_groupby_apply(frate, groupby)
         else:
-            return None
+            frate = frate.groupby(groupby).mean()
+    else:
+        frate = frate.mean(dim='trial')
+
+    return frate
+
+
+def _aggregate_apply_baseline(frate, baseline):
+    if baseline:
+        time_range = slice(baseline[0], baseline[1])
+        bsln = frate.sel(time=time_range).mean(dim='time')
+        frate -= bsln
+
+    return frate
+
+
+def _aggregate_per_cell_numba(frate, groupby, zscore, select, baseline):
+    import xarray as xr
+    from numbagg import group_nanmean
+
+    frate = _aggregate_prepare_xarray(frate, zscore, select)
+
+    if not groupby:
+        frate = frate.mean(dim='trial')
+        return _aggregate_apply_baseline(frate, baseline)
+
+    groupby = [groupby] if isinstance(groupby, str) else list(groupby)
+    levels, labels = _construct_per_cell_group_labels(frate, groupby)
+
+    values = frate.values
+    grouped = group_nanmean(values, labels, axis=1)
+
+    new_shape = (frate.sizes['cell'],) + tuple(len(lev) for lev in levels)
+    dims = ['cell'] + groupby
+    coords = {'cell': frate.coords['cell'].values}
+
+    if 'time' in frate.dims:
+        new_shape += (frate.sizes['time'],)
+        dims.append('time')
+        coords['time'] = frate.coords['time'].values
+
+    grouped = grouped.reshape(new_shape)
+    for coord_name in find_nested_dims(frate, 'cell'):
+        coords[coord_name] = ('cell', frate.coords[coord_name].values)
+    for grp, lev in zip(groupby, levels):
+        coords[grp] = lev
+
+    frate = xr.DataArray(
+        grouped, dims=dims, coords=coords, name=frate.name,
+        attrs=frate.attrs
+    )
+    frate = _aggregate_apply_baseline(frate, baseline)
+    return frate
+
+
+def _construct_per_cell_group_labels(frate, groupby):
+    levels = list()
+    label_arrays = list()
+
+    n_cells = frate.sizes['cell']
+    n_trials = frate.sizes['trial']
+
+    for coord_name in groupby:
+        coord = frate.coords[coord_name]
+        coord_vals = coord.values
+        coord_levels = np.unique(coord_vals)
+        levels.append(coord_levels)
+
+        mapping = {value: idx for idx, value in enumerate(coord_levels)}
+        if coord.ndim == 1:
+            labels = np.array([mapping[val] for val in coord_vals], dtype=int)
+            labels = np.broadcast_to(labels[None, :], (n_cells, n_trials))
+        else:
+            labels = np.array(
+                [mapping[val] for val in coord_vals.ravel()], dtype=int
+            ).reshape(coord_vals.shape)
+        label_arrays.append(labels)
+
+    if len(label_arrays) == 1:
+        labels = label_arrays[0]
+    else:
+        labels = np.ravel_multi_index(
+            tuple(label_arrays), dims=tuple(len(lev) for lev in levels)
+        )
+
+    return levels, labels
 
 
 def _aggregate_xarray(frate, groupby, zscore, select, baseline):
@@ -482,28 +616,9 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
     frate : xarray.DataArray
         Aggregated firing rate data.
     """
-    is_zscore_bool = isinstance(zscore, bool)
-    if not is_zscore_bool or zscore:
-        bsln = None if is_zscore_bool else zscore
-        frate = zscore_xarray(frate, baseline=bsln)
-
-    if select is not None:
-        frate = frate.query(trial=select)
-
-    if groupby:
-        if isinstance(groupby, list):
-            frate = nested_groupby_apply(frate, groupby)
-        else:
-            frate = frate.groupby(groupby).mean()
-    else:
-        # average all trials
-        frate = frate.mean(dim='trial')
-
-    if baseline:
-        time_range = slice(baseline[0], baseline[1])
-        bsln = frate.sel(time=time_range).mean(dim='time')
-        frate -= bsln
-
+    frate = _aggregate_prepare_xarray(frate, zscore, select)
+    frate = _aggregate_apply_groupby(frate, groupby)
+    frate = _aggregate_apply_baseline(frate, baseline)
     return frate
 
 
@@ -555,7 +670,7 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
 #       xr.DataArray objects
 def _aggregate_dict(frates, groupby=None, select=None,
                     per_cell_query=None, zscore=False, baseline=False,
-                    per_cell=False):
+                    per_cell=False, backend='xarray'):
     import xarray as xr
 
     keys = list(frates.keys())
@@ -585,7 +700,7 @@ def _aggregate_dict(frates, groupby=None, select=None,
         frate_agg = aggregate(
             frate, groupby=groupby, select=select,
             per_cell_query=per_cell_query, zscore=zscr, baseline=baseline,
-            per_cell=per_cell
+            per_cell=per_cell, backend=backend
         )
         if frate_agg is not None:
             aggregated.append(frate_agg)
