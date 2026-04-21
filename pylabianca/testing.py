@@ -188,13 +188,12 @@ def random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21), **args):
     n_cells : int
         Number of cells.
     n_trials : int | None
-        Number of trials. If ``None`` or non-positive then
+        Number of trials. If ``None`` or ``0`` then
         :class:`pylabianca.Spikes` is returned.
     n_spikes : int | tuple of int
         Number of spikes per trial (or per cell for raw spikes).
-        If an ``int``, the same number is used everywhere.
-        If a tuple, spikes are sampled uniformly in
-        ``[n_spikes[0], n_spikes[1])``.
+        If an ``int``, the same number is used everywhere. If a tuple, spikes
+        are sampled uniformly in ``[n_spikes[0], n_spikes[1])``.
     **args : dict
         Extra keyword arguments passed to :class:`pylabianca.Spikes` or
         :class:`pylabianca.SpikeEpochs`.
@@ -202,7 +201,7 @@ def random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21), **args):
     Returns
     -------
     spikes : pylabianca.Spikes | pylabianca.SpikeEpochs
-        Randomly generated spike object.
+        Generated spike object.
     """
     from pylabianca.spikes import SpikeEpochs, Spikes
 
