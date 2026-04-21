@@ -218,11 +218,11 @@ def random_spikes(n_cells=4, n_trials=25, n_spikes=(10, 21), **args):
         tmin = 0
         tmax = 1e6
 
-    times = []
-    trials = []
+    times = list()
+    trials = list()
     for _ in range(n_cells):
-        this_tri = []
-        this_tim = []
+        this_tri = list()
+        this_tim = list()
         for tri_idx in range(n_trials):
             if not constant_n_spikes:
                 n_spk = np.random.randint(*n_spikes)
