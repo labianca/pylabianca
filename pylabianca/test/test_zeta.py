@@ -125,24 +125,36 @@ def test_against_zetapy():
     assert (np.abs(p_val_n1 - p_val_n2['empirical']) < (20 / 100)).all()
 
 
-def test_zeta_return_type_xarray():
+# TODO: later might be a good idea to add metadata / cellinfo creation to
+#       the testing function
+def _create_random_spikes_with_metadata_and_cellinfo():
     np.random.seed(0)
     n_trials = 12
+    h_tri = n_trials // 2
+
+    metadata = pd.DataFrame(
+        {'image': np.array(['A'] * h_tri + ['B'] * h_tri)}
+    )
+    cellinfo = pd.DataFrame({
+        'region': ['hipp', 'amyg'], 'quality': ['good', 'mua']
+    })
+
     spk = random_spikes(
         n_cells=2, n_trials=n_trials, n_spikes=(8, 13),
-        metadata=pd.DataFrame({
-            'image': np.array(['A'] * (n_trials // 2) + ['B'] * (n_trials // 2))
-        }),
-        cellinfo=pd.DataFrame({
-            'region': ['hipp', 'amyg'],
-            'quality': ['good', 'mua']
-        })
+        metadata=metadata, cellinfo=cellinfo
     )
+    return spk
+
+
+def test_zeta_return_type_xarray():
+    spk = _create_random_spikes_with_metadata_and_cellinfo()
+
     np.random.seed(0)
     z_np, p_np, dist_np = pln.selectivity.zeta_test(
         spk, compare='image', n_permutations=50, return_dist=True,
         return_type='numpy', backend='numpy'
     )
+
     np.random.seed(0)
     zeta_xr = pln.selectivity.zeta_test(
         spk, compare='image', n_permutations=50, return_dist=True,
@@ -163,13 +175,8 @@ def test_zeta_return_type_xarray():
 
 
 def test_zeta_return_type_xarray_significance_both():
-    np.random.seed(0)
-    spk = random_spikes(
-        n_cells=2, n_trials=12, n_spikes=(8, 13),
-        metadata=pd.DataFrame({
-            'image': np.array(['A'] * 6 + ['B'] * 6)
-        })
-    )
+    spk = _create_random_spikes_with_metadata_and_cellinfo()
+
     with pytest.raises(ValueError, match='not supported'):
         pln.selectivity.zeta_test(
             spk, compare='image', n_permutations=20, return_dist=True,
@@ -179,13 +186,8 @@ def test_zeta_return_type_xarray_significance_both():
 
 
 def test_zeta_return_type_xarray_no_dist():
-    np.random.seed(0)
-    spk = random_spikes(
-        n_cells=2, n_trials=12, n_spikes=(8, 13),
-        metadata=pd.DataFrame({
-            'image': np.array(['A'] * 6 + ['B'] * 6)
-        })
-    )
+    spk = _create_random_spikes_with_metadata_and_cellinfo()
+
     out = pln.selectivity.zeta_test(
         spk, compare='image', n_permutations=20, return_dist=False,
         return_type='xarray', backend='numpy'
