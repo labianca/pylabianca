@@ -192,7 +192,7 @@ def test_zeta_return_dist_permute_independently():
         return_type='xarray', backend='numpy', permute_independently=True
     )
 
-    assert sel.perm_vec.dims == ['perm', 'cell', 'trial']
+    assert sel.perm_vec.dims == ('perm', 'cell', 'trial')
     assert 'trace' in sel.attrs
     assert 'perm_trace' in sel.attrs
     assert 'ref_time' in sel.attrs
