@@ -184,6 +184,19 @@ def test_zeta_return_type_xarray_significance_both():
             permute_independently=True
         )
 
+def test_zeta_return_dist_permute_independently():
+    spk = _create_random_spikes_with_metadata_and_cellinfo()
+
+    sel = pln.selectivity.zeta_test(
+        spk, compare='image', n_permutations=20, return_dist=True,
+        return_type='xarray', backend='numpy', permute_independently=True
+    )
+
+    assert sel.perm_vec.dims == ['perm', 'cell', 'trial']
+    assert 'trace' in sel.attrs
+    assert 'perm_trace' in sel.attrs
+    assert 'ref_time' in sel.attrs
+
 
 def test_zeta_return_type_xarray_no_dist():
     spk = _create_random_spikes_with_metadata_and_cellinfo()
