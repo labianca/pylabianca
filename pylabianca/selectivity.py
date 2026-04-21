@@ -698,11 +698,8 @@ def _zeta_to_xarray_dataset(spk, picks, real_abs_max, p_values, z_scores=None,
     out = xr.Dataset(data_vars)
     if perm_vec is not None:
         out['perm_vec'] = perm_vec
-    if trace is not None:
         out.attrs['trace'] = trace
-    if perm_trace is not None:
         out.attrs['perm_trace'] = perm_trace
-    if ref_time is not None:
         out.attrs['ref_time'] = ref_time
     return out
 
@@ -760,8 +757,8 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     out : tuple | xarray.Dataset
         If ``return_type='numpy'``:
 
-        - returns ``(z_scores, p_values)`` when ``return_dist=False``.
-        - returns ``(z_scores, p_values, other)`` when ``return_dist=True``,
+        and ``return_dist=False`` - returns ``(z_scores, p_values)``.
+        and ``return_dist=True`` - returns ``(z_scores, p_values, other)``,
           where ``other`` is a dictionary with the following keys:
 
           - ``trace`` : list of np.ndarray
@@ -781,8 +778,10 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
               Reference times for each cell.
 
         If ``return_type='xarray'``, returns a single ``xarray.Dataset`` with
-        at least ``'stat'`` and ``'pval'`` variables, and ``'dist'`` when
-        ``return_dist=True``.
+        ``'stat'`` and ``'pval'`` variables. When ``return_dist=True`` then
+        also ``'dist'`` variable is returned in the dataset, along with
+        additional information in the attrs attribute (see the description of
+        the ``other`` dictionary above).
     """
     from .utils import _deal_with_picks
     from .utils.validate import _check_str_options
@@ -882,12 +881,14 @@ def zeta_test(spk, compare, picks=None, tmin=0., tmax=None, backend='numpy',
     z_scores, p_values = compute_pvalues(
         real_abs_max, perm_abs_max, significance=significance)
 
-    if not return_dist and return_type == 'numpy':
-        return z_scores, p_values
-    elif not return_dist and return_type == 'xarray':
-        return _zeta_to_xarray_dataset(
-            spk, picks, real_abs_max, p_values, z_scores=z_scores
-        )
+    # prepare output
+    if not return_dist:
+        if return_type == 'numpy':
+            return z_scores, p_values
+        elif return_type == 'xarray':
+            return _zeta_to_xarray_dataset(
+                spk, picks, real_abs_max, p_values, z_scores=z_scores
+            )
     else:
         from ._zeta import recreate_permutation_condition_assignment
 
