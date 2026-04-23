@@ -410,19 +410,16 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
     """
     import xarray as xr
 
-    if backend not in ('xarray', 'numba'):
-        raise ValueError('Backend can be only "xarray" or "numba".')
+    input_dct = isinstance(frate, dict)
+    input_xr = isinstance(frate, xr.DataArray)
+    _safety_checks(input_dct, input_xr, backend)
 
-    if isinstance(frate, dict):
+    if input_dct:
         return _aggregate_dict(
             frate, groupby=groupby, select=select,
             per_cell_query=per_cell_query, zscore=zscore, baseline=baseline,
             per_cell=per_cell, backend=backend
         )
-    else:
-        msg = ('frate has to be an xarray.DataArray or dictionary of '
-               'xarray.DataArrays.')
-        assert isinstance(frate, xr.DataArray), msg
 
     if per_cell_query is not None:
         per_cell = True
@@ -438,6 +435,22 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
             per_cell_query=per_cell_query
         )
 
+    _safety_checks_numba(per_cell_query)
+    return _aggregate_per_cell_numba(
+        frate, groupby, zscore, select, baseline
+    )
+
+
+def _safety_checks(input_dct, input_xr, backend):
+    if backend not in ('xarray', 'numba'):
+        raise ValueError('Backend can be only "xarray" or "numba".')
+
+    if not input_dct or input_xr:
+        raise TypeError('frate has to be an xarray.DataArray or dictionary of '
+                        'xarray.DataArrays.')
+
+
+def _safety_checks_numba(per_cell_query):
     if per_cell_query is not None:
         raise NotImplementedError(
             '`per_cell_query` is not implemented for backend="numba".'
