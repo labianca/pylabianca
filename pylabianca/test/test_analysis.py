@@ -465,7 +465,7 @@ def test_aggregate_per_cell_backend_parity():
     n_cells = 8
     n_trials = 40
     n_times = 60
-    arr = gen_random_xarr(n_cells, n_trials, n_times, per_cell_coord=True)
+    arr = random_xarray(n_cells, n_trials, n_times, per_cell_coord=True)
 
     cond = np.array(['A'] * 20 + ['B'] * 20)
     cond = np.random.permutation(cond)
@@ -495,8 +495,8 @@ def test_aggregate_per_cell_backend_parity():
     not pln.utils.has_numbagg(), reason="requires numbagg"
 )
 def test_aggregate_per_cell_backend_parity_dict():
-    arr1 = gen_random_xarr(5, 30, 40, per_cell_coord=True)
-    arr2 = gen_random_xarr(7, 30, 40, per_cell_coord=True)
+    arr1 = random_xarray(5, 30, 40, per_cell_coord=True)
+    arr2 = random_xarray(7, 30, 40, per_cell_coord=True)
     arr_dct = {'A': arr1, 'B': arr2}
 
     agg_xarray = pln.aggregate(
@@ -512,7 +512,7 @@ def test_aggregate_per_cell_backend_parity_dict():
     not pln.utils.has_numbagg(), reason="requires numbagg"
 )
 def test_aggregate_per_cell_query_not_supported_in_numba_backend():
-    arr = gen_random_xarr(4, 20, 30, per_cell_coord=True)
+    arr = random_xarray(4, 20, 30, per_cell_coord=True)
     match = '`per_cell_query` is not implemented for backend="numba".'
     with pytest.raises(NotImplementedError, match=re.escape(match)):
         pln.aggregate(
