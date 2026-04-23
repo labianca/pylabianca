@@ -921,7 +921,8 @@ def apply_dict(data, fun=None, select=None, inplace=False, reset_index=True,
             this_arr = _ensure_queryable_xarray(this_arr)
             this_arr = this_arr.query(select)
 
-            if reset_index and 'trial' in select:
+            trial_has_coord = 'trial' in this_arr.coords
+            if reset_index and 'trial' in select and trial_has_coord:
                 this_arr = this_arr.reset_index('trial', drop=True)
 
         if fun is not None:
