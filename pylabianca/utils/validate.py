@@ -1,3 +1,4 @@
+from importlib.util import find_spec
 from warnings import warn
 import numpy as np
 
@@ -9,40 +10,28 @@ def _check_str_options(arg_val, arg_name,
                          f'Got: {arg_val}.')
 
 
+def _has_package(package_name):
+    return find_spec(package_name) is not None
+
+
 def has_numba():
     """Check if numba is available."""
-    try:
-        from numba import jit
-        return True
-    except ImportError:
-        return False
+    return _has_package('numba')
 
 
 def has_numbagg():
     """Check if numbagg is available."""
-    try:
-        import numbagg
-        return True
-    except ImportError:
-        return False
+    return _has_package('numbagg')
 
 
 def has_elephant():
     '''Test if elephant is available.'''
-    try:
-        import elephant
-        return True
-    except ImportError:
-        return False
+    return _has_package('elephant')
 
 
 def has_datashader():
     '''Test if datashader is available.'''
-    try:
-        import datashader
-        return True
-    except ImportError:
-        return False
+    return _has_package('datashader')
 
 
 def is_list_or_array(obj, dtype=None):
