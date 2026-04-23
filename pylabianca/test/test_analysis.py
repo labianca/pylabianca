@@ -467,14 +467,15 @@ def test_aggregate_per_cell_backend_parity():
     n_times = 60
     arr = gen_random_xarr(n_cells, n_trials, n_times, per_cell_coord=True)
 
-    cnd = np.array(['A'] * (n_trials // 2) + ['B'] * (n_trials // 2))
-    cnd = np.random.permutation(cnd)
+    cond = np.array(['A'] * 20 + ['B'] * 20)
+    cond = np.random.permutation(cond)
     ifcorrect = np.ones(n_trials, dtype=bool)
     incorrect_idx = np.random.choice(
-        n_trials, size=max(1, int(np.round(n_trials * 0.15))), replace=False
+        n_trials, size=int(n_trials * 0.15), replace=False
     )
     ifcorrect[incorrect_idx] = False
-    arr = arr.assign_coords(cond=('trial', cnd), ifcorrect=('trial', ifcorrect))
+    arr = arr.assign_coords(cond=('trial', cond),
+                            ifcorrect=('trial', ifcorrect))
 
     baseline_arr = arr.sel(time=slice(-0.5, 0.))
     common_kwargs = dict(
