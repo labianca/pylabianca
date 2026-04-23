@@ -448,50 +448,28 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
             'numbagg package is required for the "numba" backend.'
         )
 
-    return _aggregate_per_cell_numba(
-        frate, groupby, zscore, select, baseline
-    )
 
-
+# TODO - just assume somewhere upstream that the first dim is "cell-like"
 def _aggregate_per_cell_xarray(frate, groupby, zscore, select, baseline,
                                per_cell_query=None):
     import xarray as xr
-
-    if frate.dims[0] != 'cell':
-        other_dims = [dim for dim in frate.dims if dim != 'cell']
-        frate = frate.transpose('cell', *other_dims)
-
-    if isinstance(zscore, xr.DataArray) and 'cell' in zscore.dims:
-        if zscore.dims[0] != 'cell':
-            other_dims = [dim for dim in zscore.dims if dim != 'cell']
-            zscore = zscore.transpose('cell', *other_dims)
 
     frates = list()
     n_cells = len(frate.cell)
     for cell_idx in range(n_cells):
         frate_cell = frate[cell_idx]
-        zscore_cell = zscore
-        if isinstance(zscore, xr.DataArray) and 'cell' in zscore.dims:
-            zscore_cell = zscore[cell_idx]
 
         if per_cell_query is not None:
             frate_cell = _ensure_queryable_xarray(frate_cell)
             frate_cell = frate_cell.query(per_cell_query)
 
         frate_cell = _aggregate_xarray(
-            frate_cell, groupby, zscore_cell, select, baseline
+            frate_cell, groupby, zscore, select, baseline
         )
         frates.append(frate_cell)
 
     if len(frates) > 0:
-        frates = xr.concat(frates, dim='cell')
-        groupby = [] if not groupby else (
-            [groupby] if isinstance(groupby, str) else list(groupby)
-        )
-        first_dims = ['cell'] + [dim for dim in groupby if dim in frates.dims]
-        last_dims = [dim for dim in frates.dims if dim not in first_dims]
-        frates = frates.transpose(*(first_dims + last_dims))
-        return frates
+        return xr.concat(frates, dim='cell')
     else:
         return None
 
@@ -505,18 +483,6 @@ def _aggregate_prepare_xarray(frate, zscore, select):
     if select is not None:
         frate = _ensure_queryable_xarray(frate)
         frate = frate.query(trial=select)
-
-    return frate
-
-
-def _aggregate_apply_groupby(frate, groupby):
-    if groupby:
-        if isinstance(groupby, list):
-            frate = nested_groupby_apply(frate, groupby)
-        else:
-            frate = frate.groupby(groupby).mean()
-    else:
-        frate = frate.mean(dim='trial')
 
     return frate
 
@@ -661,7 +627,7 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
         Aggregated firing rate data.
     """
     frate = _aggregate_prepare_xarray(frate, zscore, select)
-    frate = _aggregate_apply_groupby(frate, groupby)
+    frate = nested_groupby_apply(frate, groupby)
     frate = _aggregate_apply_baseline(frate, baseline)
     return frate
 
