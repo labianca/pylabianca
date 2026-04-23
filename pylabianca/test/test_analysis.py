@@ -469,12 +469,17 @@ def test_aggregate_per_cell_backend_parity():
 
     cnd = np.array(['A'] * (n_trials // 2) + ['B'] * (n_trials // 2))
     cnd = np.random.permutation(cnd)
-    arr = arr.assign_coords(cond=('trial', cnd))
+    ifcorrect = np.ones(n_trials, dtype=bool)
+    incorrect_idx = np.random.choice(
+        n_trials, size=max(1, int(np.round(n_trials * 0.15))), replace=False
+    )
+    ifcorrect[incorrect_idx] = False
+    arr = arr.assign_coords(cond=('trial', cnd), ifcorrect=('trial', ifcorrect))
 
     baseline_arr = arr.sel(time=slice(-0.5, 0.))
     common_kwargs = dict(
         groupby=['preferred', 'cond'],
-        select='cond == "A" | cond == "B"',
+        select='ifcorrect == True',
         zscore=baseline_arr,
         baseline=(0.0, 0.25),
         per_cell=True
