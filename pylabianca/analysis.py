@@ -457,21 +457,40 @@ def _aggregate_per_cell_xarray(frate, groupby, zscore, select, baseline,
                                per_cell_query=None):
     import xarray as xr
 
+    if frate.dims[0] != 'cell':
+        other_dims = [dim for dim in frate.dims if dim != 'cell']
+        frate = frate.transpose('cell', *other_dims)
+
+    if isinstance(zscore, xr.DataArray) and 'cell' in zscore.dims:
+        if zscore.dims[0] != 'cell':
+            other_dims = [dim for dim in zscore.dims if dim != 'cell']
+            zscore = zscore.transpose('cell', *other_dims)
+
     frates = list()
     n_cells = len(frate.cell)
     for cell_idx in range(n_cells):
         frate_cell = frate[cell_idx]
+        zscore_cell = zscore
+        if isinstance(zscore, xr.DataArray) and 'cell' in zscore.dims:
+            zscore_cell = zscore[cell_idx]
 
         if per_cell_query is not None:
+            frate_cell = _ensure_queryable_xarray(frate_cell)
             frate_cell = frate_cell.query(per_cell_query)
 
         frate_cell = _aggregate_xarray(
-            frate_cell, groupby, zscore, select, baseline
+            frate_cell, groupby, zscore_cell, select, baseline
         )
         frates.append(frate_cell)
 
     if len(frates) > 0:
         frates = xr.concat(frates, dim='cell')
+        groupby = [] if not groupby else (
+            [groupby] if isinstance(groupby, str) else list(groupby)
+        )
+        first_dims = ['cell'] + [dim for dim in groupby if dim in frates.dims]
+        last_dims = [dim for dim in frates.dims if dim not in first_dims]
+        frates = frates.transpose(*(first_dims + last_dims))
         return frates
     else:
         return None
@@ -484,6 +503,7 @@ def _aggregate_prepare_xarray(frate, zscore, select):
         frate = zscore_xarray(frate, baseline=bsln)
 
     if select is not None:
+        frate = _ensure_queryable_xarray(frate)
         frate = frate.query(trial=select)
 
     return frate
@@ -521,19 +541,35 @@ def _aggregate_per_cell_numba(frate, groupby, zscore, select, baseline):
         return _aggregate_apply_baseline(frate, baseline)
 
     groupby = [groupby] if isinstance(groupby, str) else list(groupby)
+    data_dims = [dim for dim in frate.dims if dim not in ('cell', 'trial')]
+    frate = frate.transpose('cell', 'trial', *data_dims)
     levels, labels = _construct_per_cell_group_labels(frate, groupby)
 
     values = frate.values
-    grouped = group_nanmean(values, labels, axis=1)
+    n_groups = np.prod([len(lev) for lev in levels])
+    if labels.ndim == 1:
+        grouped = group_nanmean(
+            values, labels, axis=1, num_labels=n_groups
+        )
+        grouped = np.moveaxis(grouped, -1, 1)
+    else:
+        grouped = np.stack([
+            group_nanmean(
+                values[cell_idx], labels[cell_idx],
+                axis=0, num_labels=n_groups
+            )
+            for cell_idx in range(frate.sizes['cell'])
+        ], axis=0)
+        grouped = np.moveaxis(grouped, -1, 1)
 
     new_shape = (frate.sizes['cell'],) + tuple(len(lev) for lev in levels)
     dims = ['cell'] + groupby
     coords = {'cell': frate.coords['cell'].values}
 
-    if 'time' in frate.dims:
-        new_shape += (frate.sizes['time'],)
-        dims.append('time')
-        coords['time'] = frate.coords['time'].values
+    for dim in data_dims:
+        new_shape += (frate.sizes[dim],)
+        dims.append(dim)
+        coords[dim] = frate.coords[dim].values
 
     grouped = grouped.reshape(new_shape)
     for coord_name in find_nested_dims(frate, 'cell'):
@@ -558,6 +594,8 @@ def _construct_per_cell_group_labels(frate, groupby):
 
     for coord_name in groupby:
         coord = frate.coords[coord_name]
+        if coord.ndim == 2:
+            coord = coord.transpose('cell', 'trial')
         coord_vals = coord.values
         coord_levels = np.unique(coord_vals)
         levels.append(coord_levels)
@@ -565,7 +603,6 @@ def _construct_per_cell_group_labels(frate, groupby):
         mapping = {value: idx for idx, value in enumerate(coord_levels)}
         if coord.ndim == 1:
             labels = np.array([mapping[val] for val in coord_vals], dtype=int)
-            labels = np.broadcast_to(labels[None, :], (n_cells, n_trials))
         else:
             labels = np.array(
                 [mapping[val] for val in coord_vals.ravel()], dtype=int
@@ -575,6 +612,13 @@ def _construct_per_cell_group_labels(frate, groupby):
     if len(label_arrays) == 1:
         labels = label_arrays[0]
     else:
+        has_per_cell_labels = any(labels.ndim == 2 for labels in label_arrays)
+        if has_per_cell_labels:
+            label_arrays = [
+                np.broadcast_to(labels[None, :], (n_cells, n_trials))
+                if labels.ndim == 1 else labels
+                for labels in label_arrays
+            ]
         labels = np.ravel_multi_index(
             tuple(label_arrays), dims=tuple(len(lev) for lev in levels)
         )
