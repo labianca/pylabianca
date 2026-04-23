@@ -445,7 +445,7 @@ def _safety_checks(input_dct, input_xr, backend):
     if backend not in ('xarray', 'numba'):
         raise ValueError('Backend can be only "xarray" or "numba".')
 
-    if not input_dct or input_xr:
+    if not input_dct or not input_xr:
         raise TypeError('frate has to be an xarray.DataArray or dictionary of '
                         'xarray.DataArrays.')
 
