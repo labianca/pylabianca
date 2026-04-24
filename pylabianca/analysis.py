@@ -412,7 +412,7 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
 
     input_dct = isinstance(frate, dict)
     input_xr = isinstance(frate, xr.DataArray)
-    _safety_checks(input_dct, input_xr, backend)
+    _aggregate_safety_checks(input_dct, input_xr, backend)
     groupby = _prepare_groupby(groupby)
 
     if input_dct:
@@ -436,13 +436,13 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
             per_cell_query=per_cell_query
         )
 
-    _safety_checks_numba(per_cell_query)
+    _aggregate_safety_checks_numba(per_cell_query)
     return _aggregate_per_cell_numba(
         frate, groupby, zscore, select, baseline
     )
 
 
-def _safety_checks(input_dct, input_xr, backend):
+def _aggregate_safety_checks(input_dct, input_xr, backend):
     if backend not in ('xarray', 'numba'):
         raise ValueError('Backend can be only "xarray" or "numba".')
 
@@ -451,7 +451,7 @@ def _safety_checks(input_dct, input_xr, backend):
                         'xarray.DataArrays.')
 
 
-def _safety_checks_numba(per_cell_query):
+def _aggregate_safety_checks_numba(per_cell_query):
     if per_cell_query is not None:
         raise NotImplementedError(
             '`per_cell_query` is not implemented for backend="numba".'
