@@ -314,7 +314,7 @@ def extract_data(xarr_dict, df, sub_col='sub', ses_col=None, ses_coord='sub',
 
         xarr = _get_arr(xarr_dict, key, ses_coord=ses_coord)
 
-        n_cells = len(xarr.coords['cell'])
+        n_cells = xarr.sizes['cell']
         mask_all = np.zeros(n_cells, dtype=bool)
         row_per_unit = np.zeros(n_cells, dtype=int)
 
@@ -469,7 +469,7 @@ def _aggregate_per_cell_xarray(frate, groupby, zscore, select, baseline,
     import xarray as xr
 
     frates = list()
-    n_cells = len(frate.cell)
+    n_cells = frate.sizes['cell']
     zscore_is_xarray = isinstance(zscore, xr.DataArray)
     for cell_idx in range(n_cells):
         frate_cell = frate[cell_idx]
