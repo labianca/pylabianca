@@ -692,7 +692,7 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
 
     if apply_fn is None:
         # average over trial by default
-        apply_fn = lambda arr: arr.mean(dim='trial')
+        def apply_fn(arr): return arr.mean(dim='trial')
 
     if groupby is None:
         return apply_fn(array)
