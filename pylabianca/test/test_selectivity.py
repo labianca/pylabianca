@@ -470,3 +470,58 @@ def test_depth_of_selectivity():
     zero_dos, zero_avg = pln.selectivity.depth_of_selectivity(zeros, 'cond')
     assert zero_dos == 0
     np.testing.assert_allclose(zero_avg.values, 0.0)
+
+
+def test_explained_variance_multiple_cells():
+    frate = _get_frate()
+    n_cells = 3
+    cell_scaling = xr.DataArray(
+        [1.0, 1.4, 0.6], dims=['cell'], coords={'cell': np.arange(n_cells)}
+    )
+    frate_multi = frate.expand_dims(cell=cell_scaling.cell) * cell_scaling
+
+    eta = pln.selectivity.explained_variance(frate_multi, 'cond', kind='eta')
+    omega = pln.selectivity.explained_variance(
+        frate_multi, 'cond', kind='omega')
+
+    eta_single = pln.selectivity.explained_variance(frate, 'cond', kind='eta')
+    omega_single = pln.selectivity.explained_variance(
+        frate, 'cond', kind='omega')
+
+    eta_expected = xr.concat([eta_single] * n_cells, dim='cell')
+    eta_expected = eta_expected.assign_coords(cell=frate_multi.cell)
+    omega_expected = xr.concat([omega_single] * n_cells, dim='cell')
+    omega_expected = omega_expected.assign_coords(cell=frate_multi.cell)
+
+    xr.testing.assert_allclose(eta, eta_expected)
+    xr.testing.assert_allclose(omega, omega_expected)
+    assert eta.dims == ('cell', 'time')
+    assert omega.dims == ('cell', 'time')
+
+
+def test_depth_of_selectivity_multiple_cells():
+    trial_groups = np.array(['A', 'A', 'B', 'B', 'C', 'C'])
+    data = np.array([
+        [6.0, 4.0], [6.0, 4.0], [0.0, 4.0],
+        [0.0, 4.0], [0.0, 4.0], [0.0, 4.0]
+    ])
+    frate = xr.DataArray(
+        data, dims=['trial', 'cell'],
+        coords={'cond': ('trial', trial_groups), 'cell': [0, 1]}
+    )
+
+    dos, avg = pln.selectivity.depth_of_selectivity(frate, 'cond')
+    expected = xr.DataArray(
+        [1.0, 0.0], dims=['cell'], coords={'cell': frate.cell}
+    )
+
+    xr.testing.assert_allclose(dos, expected)
+    assert avg.dims == ('cond', 'cell')
+
+    zeros = xr.DataArray(
+        np.zeros((trial_groups.size, 2)), dims=['trial', 'cell'],
+        coords={'cond': ('trial', trial_groups), 'cell': [0, 1]}
+    )
+    zero_dos, zero_avg = pln.selectivity.depth_of_selectivity(zeros, 'cond')
+    xr.testing.assert_allclose(zero_dos, xr.zeros_like(expected))
+    np.testing.assert_allclose(zero_avg.values, 0.0)
