@@ -533,8 +533,11 @@ def _prepare_groupby(groupby):
     return groupby
 
 
-# move to numba?
+# TODO: merge common parts with xarray function? Will hold on with this for
+#       now, as some parts may be moved over to numba
+# CONSIDER: move to numba?
 def _aggregate_per_cell_numba(frate, groupby, zscore, select, baseline):
+    '''Numba-accelerated per-cell aggregation.'''
     import xarray as xr
     from numbagg import group_nanmean
 
@@ -603,7 +606,8 @@ def _construct_per_cell_group_labels(frate, groupby):
 
     for coord_name in groupby:
         coord = frate.coords[coord_name]
-        if coord.ndim == 2:
+        # TODO: here we test which coords are multi-dim, might be useful later
+        if coord.ndim == 2 and not (coord.dims == ('cell', 'trial')):
             coord = coord.transpose('cell', 'trial')
         coord_vals = coord.values
         coord_levels = np.unique(coord_vals)
@@ -621,6 +625,8 @@ def _construct_per_cell_group_labels(frate, groupby):
     if len(label_arrays) == 1:
         labels = label_arrays[0]
     else:
+        # TODO: here we test which coords are multi-dim, might be useful later
+        #       the single-dim coords are broadcast
         has_per_cell_labels = any(labels.ndim == 2 for labels in label_arrays)
         if has_per_cell_labels:
             label_arrays = [
