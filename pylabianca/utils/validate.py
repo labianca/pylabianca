@@ -1,3 +1,4 @@
+from importlib.util import find_spec
 from warnings import warn
 import numpy as np
 
@@ -9,31 +10,28 @@ def _check_str_options(arg_val, arg_name,
                          f'Got: {arg_val}.')
 
 
+def _has_package(package_name):
+    return find_spec(package_name) is not None
+
+
 def has_numba():
     """Check if numba is available."""
-    try:
-        from numba import jit
-        return True
-    except ImportError:
-        return False
+    return _has_package('numba')
+
+
+def has_numbagg():
+    """Check if numbagg is available."""
+    return _has_package('numbagg')
 
 
 def has_elephant():
     '''Test if elephant is available.'''
-    try:
-        import elephant
-        return True
-    except ImportError:
-        return False
+    return _has_package('elephant')
 
 
 def has_datashader():
     '''Test if datashader is available.'''
-    try:
-        import datashader
-        return True
-    except ImportError:
-        return False
+    return _has_package('datashader')
 
 
 def is_list_or_array(obj, dtype=None):
@@ -161,7 +159,8 @@ def _validate_xarray_for_aggregation(arr, groupby, per_cell):
     if groupby is not None:
         from .xarr import find_nested_dims
         nested = find_nested_dims(arr, ('cell', 'trial'))
-        if groupby in nested and per_cell is False:
+        nested_groupby = any([grp in nested for grp in groupby])
+        if nested_groupby and per_cell is False:
             raise ValueError(
                 'When using `per_cell=False`, the groupby coordinate cannot be'
                 ' cell x trial, it has to be a simple trial dimension '

@@ -42,7 +42,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-all = ["mne >= 1.0.0", "neo", "joblib", "numba", "tqdm", "pooch"]
+all = ["mne >= 1.0.0", "neo", "joblib", "numba", "numbagg", "tqdm", "pooch"]
 
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"]
