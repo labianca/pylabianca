@@ -538,24 +538,23 @@ def _aggregate_per_cell_numba(frate, groupby, zscore, select, baseline):
     import xarray as xr
     from numbagg import group_nanmean
 
+    # TODO: some of this could be later moved to numba
     frate = _aggregate_zscore_select_xarray(frate, zscore, select)
 
     if not groupby:
         frate = frate.mean(dim='trial')
         return _aggregate_apply_baseline(frate, baseline)
 
-    groupby = [groupby] if isinstance(groupby, str) else list(groupby)
-    data_dims = [dim for dim in frate.dims if dim not in ('cell', 'trial')]
-    frate = frate.transpose('cell', 'trial', *data_dims)
     levels, labels = _construct_per_cell_group_labels(frate, groupby)
+    n_levels = [len(lev) for lev in levels]
+    n_groups = np.prod(n_levels)
 
     values = frate.values
-    n_groups = np.prod([len(lev) for lev in levels])
+    # TODO: this could be moved to numba to further speed up
     if labels.ndim == 1:
         grouped = group_nanmean(
             values, labels, axis=1, num_labels=n_groups
         )
-        grouped = np.moveaxis(grouped, -1, 1)
     else:
         grouped = np.stack([
             group_nanmean(
@@ -564,22 +563,28 @@ def _aggregate_per_cell_numba(frate, groupby, zscore, select, baseline):
             )
             for cell_idx in range(frate.sizes['cell'])
         ], axis=0)
-        grouped = np.moveaxis(grouped, -1, 1)
 
-    new_shape = (frate.sizes['cell'],) + tuple(len(lev) for lev in levels)
-    dims = ['cell'] + groupby
+    # TODO: similar code is used in other places to "cloth up"
+    #       numpy arrays to xarray (for example selectivity or when
+    #       constructing borsar.Clusters)
+    # move the aggregated dim as second (just after cells) and reshape
+    grouped = np.moveaxis(grouped, -1, 1)
+    new_shape = (frate.sizes['cell'],) + tuple(n_levels)
+
     coords = {'cell': frate.coords['cell'].values}
-
+    data_dims = [dim for dim in frate.dims if dim not in ('cell', 'trial')]
     for dim in data_dims:
         new_shape += (frate.sizes[dim],)
-        dims.append(dim)
         coords[dim] = frate.coords[dim].values
-
     grouped = grouped.reshape(new_shape)
-    for coord_name in find_nested_dims(frate, 'cell'):
-        coords[coord_name] = ('cell', frate.coords[coord_name].values)
+
+    dims = ['cell'] + groupby + data_dims
     for grp, lev in zip(groupby, levels):
         coords[grp] = lev
+
+    # TODO: this could be done in an inherit function
+    for coord_name in find_nested_dims(frate, 'cell'):
+        coords[coord_name] = ('cell', frate.coords[coord_name].values)
 
     frate = xr.DataArray(
         grouped, dims=dims, coords=coords, name=frate.name,
