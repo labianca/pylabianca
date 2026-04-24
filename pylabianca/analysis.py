@@ -489,7 +489,8 @@ def _aggregate_per_cell_xarray(frate, groupby, zscore, select, baseline,
         frates.append(frate_cell)
 
     if len(frates) > 0:
-        return xr.concat(frates, dim='cell')
+        frates = xr.concat(frates, dim='cell')
+        return _reorder_dims(frates, groupby)
     else:
         return None
 
@@ -516,6 +517,17 @@ def _aggregate_apply_baseline(frate, baseline):
     return frate
 
 
+def _reorder_dims(arr, groupby):
+    '''Make sure the order is cells, groupby dims, rest (time).'''
+    groupby = list() if not groupby else (
+        [groupby] if isinstance(groupby, str) else groupby)
+    first_dims = ['cell'] + [dim for dim in groupby if dim in arr.dims]
+    last_dims = [dim for dim in arr.dims if dim not in first_dims]
+    arr = arr.transpose(*(first_dims + last_dims))
+    return arr
+
+
+# move to numba?
 def _aggregate_per_cell_numba(frate, groupby, zscore, select, baseline):
     import xarray as xr
     from numbagg import group_nanmean
