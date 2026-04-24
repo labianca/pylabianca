@@ -469,15 +469,22 @@ def _aggregate_per_cell_xarray(frate, groupby, zscore, select, baseline,
 
     frates = list()
     n_cells = len(frate.cell)
+    zscore_is_xarray = isinstance(zscore, xr.DataArray)
     for cell_idx in range(n_cells):
         frate_cell = frate[cell_idx]
+
+        if zscore_is_xarray:
+            zscore_cell = zscore[cell_idx]
+        else:
+            zscore_cell = zscore
 
         if per_cell_query is not None:
             frate_cell = _ensure_queryable_xarray(frate_cell)
             frate_cell = frate_cell.query(per_cell_query)
+            # should zscore_cell be queried as well?
 
         frate_cell = _aggregate_xarray(
-            frate_cell, groupby, zscore, select, baseline
+            frate_cell, groupby, zscore_cell, select, baseline
         )
         frates.append(frate_cell)
 
