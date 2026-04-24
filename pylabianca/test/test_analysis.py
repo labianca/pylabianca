@@ -313,6 +313,9 @@ def test_extract_data_and_aggregate():
     with pytest.raises(ValueError, match=pattern):
         pln.aggregate(frates_sel_x, groupby='condition')
 
+    with pytest.raises(ValueError, match=pattern):
+        pln.aggregate(frates_sel_x, groupby=['condition', 'anat_region'])
+
     # but should work on a single xarray
     frates_agg_one = pln.aggregate(
         frates_sel['sub-a01'], groupby='condition')
