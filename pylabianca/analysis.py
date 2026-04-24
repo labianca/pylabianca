@@ -495,7 +495,7 @@ def _aggregate_per_cell_xarray(frate, groupby, zscore, select, baseline,
         return None
 
 
-def _aggregate_prepare_xarray(frate, zscore, select):
+def _aggregate_zscore_select_xarray(frate, zscore, select):
     is_zscore_bool = isinstance(zscore, bool)
     if not is_zscore_bool or zscore:
         bsln = None if is_zscore_bool else zscore
@@ -532,7 +532,7 @@ def _aggregate_per_cell_numba(frate, groupby, zscore, select, baseline):
     import xarray as xr
     from numbagg import group_nanmean
 
-    frate = _aggregate_prepare_xarray(frate, zscore, select)
+    frate = _aggregate_zscore_select_xarray(frate, zscore, select)
 
     if not groupby:
         frate = frate.mean(dim='trial')
@@ -658,7 +658,7 @@ def _aggregate_xarray(frate, groupby, zscore, select, baseline):
     frate : xarray.DataArray
         Aggregated firing rate data.
     """
-    frate = _aggregate_prepare_xarray(frate, zscore, select)
+    frate = _aggregate_zscore_select_xarray(frate, zscore, select)
     frate = nested_groupby_apply(frate, groupby)
     frate = _aggregate_apply_baseline(frate, baseline)
     return frate
