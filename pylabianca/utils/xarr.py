@@ -12,6 +12,22 @@ def _ensure_queryable_xarray(arr):
     return arr
 
 
+def _dataarray_from_template(data, template, dims, coords=None, name=None,
+                             attrs=None):
+    """Wrap numpy data in DataArray, inheriting matching coords from template."""
+    import xarray as xr
+
+    xarr_coords = {
+        dim: template.coords[dim].values
+        for dim in dims if dim in template.coords
+    }
+    if coords is not None:
+        xarr_coords.update(coords)
+
+    return xr.DataArray(data=data, dims=dims, coords=xarr_coords, name=name,
+                        attrs=attrs)
+
+
 # CONSIDER: spike_epochs and times could be optional arguments
 # CHANGE name to something more general - it is now used for xarray and decoding
 #        results (and more in the future)
