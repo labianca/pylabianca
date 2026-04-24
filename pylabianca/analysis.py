@@ -413,6 +413,7 @@ def aggregate(frate, groupby=None, select=None, per_cell_query=None,
     input_dct = isinstance(frate, dict)
     input_xr = isinstance(frate, xr.DataArray)
     _safety_checks(input_dct, input_xr, backend)
+    groupby = _prepare_groupby(groupby)
 
     if input_dct:
         return _aggregate_dict(
@@ -519,12 +520,17 @@ def _aggregate_apply_baseline(frate, baseline):
 
 def _reorder_dims(arr, groupby):
     '''Make sure the order is cells, groupby dims, rest (time).'''
-    groupby = list() if not groupby else (
-        [groupby] if isinstance(groupby, str) else groupby)
     first_dims = ['cell'] + [dim for dim in groupby if dim in arr.dims]
     last_dims = [dim for dim in arr.dims if dim not in first_dims]
     arr = arr.transpose(*(first_dims + last_dims))
     return arr
+
+
+# TODO: could be moved to utils
+def _prepare_groupby(groupby):
+    groupby = list() if not groupby else (
+        [groupby] if isinstance(groupby, str) else groupby)
+    return groupby
 
 
 # move to numba?
@@ -694,10 +700,11 @@ def nested_groupby_apply(array, groupby, apply_fn=None):
         # average over trial by default
         def apply_fn(arr): return arr.mean(dim='trial')
 
-    if groupby is None:
-        return apply_fn(array)
-    elif isinstance(groupby, str):
+    if isinstance(groupby, str):
         groupby = [groupby]
+
+    if groupby is None or len(groupby) == 0:
+        return apply_fn(array)
 
     if len(groupby) == 1:
         return array.groupby(groupby[0]).apply(apply_fn)

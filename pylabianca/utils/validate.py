@@ -159,7 +159,8 @@ def _validate_xarray_for_aggregation(arr, groupby, per_cell):
     if groupby is not None:
         from .xarr import find_nested_dims
         nested = find_nested_dims(arr, ('cell', 'trial'))
-        if groupby in nested and per_cell is False:
+        nested_groupby = any([grp in nested for grp in groupby])
+        if nested_groupby and per_cell is False:
             raise ValueError(
                 'When using `per_cell=False`, the groupby coordinate cannot be'
                 ' cell x trial, it has to be a simple trial dimension '
