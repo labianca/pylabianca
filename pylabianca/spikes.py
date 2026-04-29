@@ -169,7 +169,7 @@ class SpikeEpochs():
         return self
 
     def spike_rate(self, picks=None, winlen=0.25, step=0.01, tmin=None,
-                   tmax=None, backend='numpy', center_time=False):
+                   tmax=None, backend='numpy', center_time=False, count=False):
         '''Calculate spike rate with a running window.
 
         Parameters
@@ -192,6 +192,9 @@ class SpikeEpochs():
         center_time : bool
             If ``True`` the time is centered around zero, if possible. Defaults to
             ``False``.
+        count : bool
+            Whether to skip normalizing by window length, effectively performing
+            a simple spike count. Defaults to ``False``.
 
         Returns
         -------
@@ -200,7 +203,7 @@ class SpikeEpochs():
         '''
         return compute_spike_rate(self, picks=picks, winlen=winlen, step=step,
                                   tmin=tmin, tmax=tmax, backend=backend,
-                                  center_time=center_time)
+                                  center_time=center_time, count=count)
 
     def spike_density(self, picks=None, winlen=0.3, gauss_sd=None, fwhm=None,
                       sfreq=500.):

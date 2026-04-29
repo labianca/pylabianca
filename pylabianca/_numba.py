@@ -5,15 +5,18 @@ from numba.extending import overload
 
 @njit(cache=True)
 def _compute_spike_rate_numba(spike_times, spike_trials, times, window_limits,
-                              win_len, n_trials):
+                              win_len, n_trials, count):
     n_steps = len(times)
     frate = np.zeros((n_trials, n_steps))
     for step_idx in range(n_steps):
         win_lims = times[step_idx] + window_limits
         msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
         tri = spike_trials[msk]
-        in_tri, count = _monotonic_unique_counts(tri)
-        frate[in_tri, step_idx] = count / win_len
+        in_tri, spike_count = _monotonic_unique_counts(tri)
+        frate[in_tri, step_idx] = spike_count
+
+        if count:
+            frate /= win_len
 
     return frate
 
