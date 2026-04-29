@@ -4,10 +4,9 @@ from numba.extending import overload
 
 
 @njit(cache=True)
-def _compute_spike_rate_numba(spike_times, spike_trials, times, window_limits,
+def _compute_spike_rate_numba(frate, spike_times, spike_trials, times, window_limits,
                               win_len, n_trials, count):
     n_steps = len(times)
-    frate = np.zeros((n_trials, n_steps))
     for step_idx in range(n_steps):
         win_lims = times[step_idx] + window_limits
         msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])

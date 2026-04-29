@@ -58,8 +58,8 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
         for idx, pick in enumerate(picks):
             spk_times = spk.time[pick]
             if len(spk_times) > 0:
-                frate[idx] = _compute_spike_rate_fixed(
-                    spk_times, spk.trial[pick], [tmin, tmax],
+                _compute_spike_rate_fixed(
+                    frate[idx], spk_times, spk.trial[pick], [tmin, tmax],
                     spk.n_trials, count=count)
 
     else:
@@ -73,8 +73,8 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
         for idx, pick in enumerate(picks):
             spk_times = spk.time[pick]
             if len(spk_times) > 0:
-                frate[idx] = func(
-                    spk_times, spk.trial[pick],
+                func(
+                    frate[idx], spk_times, spk.trial[pick],
                     times, window_limits, winlen,
                     n_trials, count
                 )
@@ -94,10 +94,9 @@ def _add_frate_info(arr, count, dep='rate'):
 
 
 # ENH: speed up by using previous mask in the next step to pre-select spikes
-def _compute_spike_rate_numpy(spike_times, spike_trials, times,
+def _compute_spike_rate_numpy(frate, spike_times, spike_trials, times,
                               window_limits, win_len, n_trials, count):
     n_steps = len(times)
-    frate = np.zeros((n_trials, n_steps))
     for step_idx in range(n_steps):
         win_lims = times[step_idx] + window_limits
         msk = (spike_times >= win_lims[0]) & (spike_times < win_lims[1])
