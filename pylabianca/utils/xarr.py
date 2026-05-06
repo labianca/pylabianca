@@ -277,7 +277,7 @@ def assign_session_coord(arr, ses, dim_name='cell', ses_coord='session',
         Session name to assign.
     dim_name : str
         Name of the dimension corresponding to cells.
-    ses_name : str
+    ses_coord : str
         Name of the session coordinate to create.
 
     Returns
