@@ -54,13 +54,13 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
     if isinstance(step, bool) and not step:
         times = f'{tmin} - {tmax} s'
         frate = np.zeros((n_cells, n_trials), dtype=use_type)
+        winlen = tmax - tmin
 
         for idx, pick in enumerate(picks):
             spk_times = spk.time[pick]
             if len(spk_times) > 0:
                 _compute_spike_rate_fixed(
-                    frate[idx], spk_times, spk.trial[pick], [tmin, tmax],
-                    spk.n_trials, count=count)
+                    frate[idx], spk_times, spk.trial[pick], [tmin, tmax])
 
     else:
         func = _check_backend(backend)
@@ -75,9 +75,11 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
             if len(spk_times) > 0:
                 func(
                     frate[idx], spk_times, spk.trial[pick],
-                    times, window_limits, winlen,
-                    n_trials, count
+                    times, window_limits
                 )
+
+    if not count:
+        frate /= winlen
 
     frate = _turn_spike_rate_to_xarray(
         times, frate, spk, cell_names=cell_names)
@@ -86,7 +88,7 @@ def compute_spike_rate(spk, picks=None, winlen=0.25, step=0.01, tmin=None,
     return frate
 
 
-def _add_frate_info(arr, count, dep='rate'):
+def _add_frate_info(arr, count=False, dep='rate'):
     arr.name = f'firing {dep}' if not count else 'spike count'
     arr.attrs['unit'] = "Hz" if not count else 'n'
     arr.attrs['time_unit'] = 's'
@@ -95,7 +97,7 @@ def _add_frate_info(arr, count, dep='rate'):
 
 # ENH: speed up by using previous mask in the next step to pre-select spikes
 def _compute_spike_rate_numpy(frate, spike_times, spike_trials, times,
-                              window_limits, win_len, n_trials, count):
+                              window_limits):
     n_steps = len(times)
     for step_idx in range(n_steps):
         win_lims = times[step_idx] + window_limits
@@ -103,9 +105,6 @@ def _compute_spike_rate_numpy(frate, spike_times, spike_trials, times,
         tri = spike_trials[msk]
         in_tri, spike_count = np.unique(tri, return_counts=True)
         frate[in_tri, step_idx] = spike_count
-
-    if not count:
-        frate /= win_len
 
     return frate
 
@@ -164,17 +163,13 @@ def _eval_time(winlen, step, time_limits, center_time=False):
 # Encountered the use of a type that is scheduled for deprecation: type
 # 'reflected list' found for argument 'time_limits' of function
 # '_compute_spike_rate_fixed'
-def _compute_spike_rate_fixed(spike_times, spike_trials, time_limits,
-                              n_trials):
-
-    winlen = time_limits[1] - time_limits[0]
-    frate = np.zeros(n_trials)
+def _compute_spike_rate_fixed(frate, spike_times, spike_trials, time_limits):
 
     if len(spike_times) > 0:
         msk = (spike_times >= time_limits[0]) & (spike_times < time_limits[1])
         tri = spike_trials[msk]
-        in_tri, count = np.unique(tri, return_counts=True)
-        frate[in_tri] = count / winlen
+        in_tri, spike_count = np.unique(tri, return_counts=True)
+        frate[in_tri] = spike_count
 
     return frate
 
