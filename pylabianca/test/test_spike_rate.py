@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 import pylabianca as pln
-from pylabianca.utils import has_elephant, find_index
+from pylabianca.utils import has_elephant, has_numba, find_index
 from pylabianca.testing import ft_data, spk_epochs, random_spikes
 
 
@@ -78,6 +78,47 @@ def test_time_centering():
 
     assert zero_dist > zero_dist2
     assert zero_dist2 == 0.
+
+
+def test_spike_rate_count_running_window():
+    spk = random_spikes(n_cells=3, n_trials=10)
+
+    fr = spk.spike_rate(winlen=0.5)
+    counts = spk.spike_rate(winlen=0.5, count=True)
+
+    np.testing.assert_array_equal(fr.values / 2, counts.values)
+    assert fr.dtype == float
+    assert counts.dtype == int
+    assert fr.name == 'firing rate'
+    assert counts.name == 'spike count'
+    assert fr.attrs['unit'] == 'Hz'
+    assert counts.attrs['unit'] == 'n'
+
+
+def test_spike_rate_count_fixed_window():
+    spk = random_spikes(n_cells=3, n_trials=10)
+
+    fr = spk.spike_rate(tmin=0., tmax=0.5, step=False)
+    counts = spk.spike_rate(tmin=0., tmax=0.5, step=False, count=True)
+
+    np.testing.assert_array_equal(fr.values / 2, counts.values)
+    assert fr.dtype == float
+    assert counts.dtype == int
+
+
+@pytest.mark.skipif(not has_numba(), reason="requires numba")
+def test_spike_rate_count_numba_matches_numpy():
+    spk = random_spikes(n_cells=3, n_trials=10)
+
+    fr_numpy = spk.spike_rate(winlen=0.5)
+    fr_numba = spk.spike_rate(winlen=0.5, backend='numba')
+    counts_numpy = spk.spike_rate(winlen=0.5, count=True)
+    counts_numba = spk.spike_rate(winlen=0.5, backend='numba', count=True)
+
+    np.testing.assert_array_equal(fr_numpy.values, fr_numba.values)
+    np.testing.assert_array_equal(counts_numpy.values, counts_numba.values)
+    np.testing.assert_array_equal(fr_numba.values / 2, counts_numba.values)
+    assert counts_numba.dtype == int
 
 
 def test_frate_writes_to_netcdf4(spk_epochs, tmp_path):
