@@ -6,7 +6,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import (_get_trial_boundaries, find_cells,
-                              _inherit_metadata)
+                              _inherit_metadata, dataarray_from_template)
 from pylabianca.testing import random_xarray, random_spikes
 
 
