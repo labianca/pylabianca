@@ -46,6 +46,8 @@ def test_permutation_test_n_perm_0():
 
 
 def test_cluster_based_test_from_permutations():
+    from borsar import Clusters
+
     n_trials, n_times = 50, 100
     times = np.linspace(-0.5, 1.5, num=n_times)
     data = np.random.rand(n_trials, n_times)
@@ -90,8 +92,10 @@ def test_cluster_based_test_from_permutations():
                              coords={'time': times})
 
     # compute test from permuted stats
-    clst2, _, pval2 = pln.stats.cluster_based_test_from_permutations(
-        stat, stat_perm)
+    with pytest.warns(FutureWarning, match='will change in the next version'):
+        clst2, _, pval2 = pln.stats.cluster_based_test_from_permutations(
+            stat, stat_perm)
+    pval2_unsorted = pval2.copy()
 
     # sort for comparison
     srt_idx = pval2.argsort()
@@ -99,6 +103,21 @@ def test_cluster_based_test_from_permutations():
     clst2 = [clst2[idx] for idx in srt_idx]
 
     assert (clst2[0] == clst[0]).mean() >= 0.9
+
+    # test Clusters output with metadata
+    clst = pln.stats.cluster_based_test_from_permutations(
+        stat, stat_perm, return_clusters=True, tail='both')
+    assert isinstance(clst, Clusters)
+    assert clst.dimnames == ['time']
+    np.testing.assert_array_equal(clst.dimcoords[0], times)
+    np.testing.assert_array_equal(clst.stat, stat.values)
+    np.testing.assert_array_equal(clst.pvals, pval2_unsorted)
+
+    assert clst.description['tail'] == 'both'
+    assert clst.description['percentile'] == 5
+    assert clst.description['threshold'] is None
+    assert clst.description['n_permutations'] == n_permutations
+    assert 'perm_dim' not in clst.description
 
 
 def test_find_percentile_threshold():
@@ -131,11 +150,11 @@ def test_find_percentile_threshold():
 
 
 def test_cluster_based_test_return_clusters_object():
-    from borsar.cluster.obj import Clusters
-    from pylabianca.testing import gen_random_xarr
+    from borsar import Clusters
+    from pylabianca.testing import random_xarray
 
     n_trials, n_cells, n_times = 40, 35, 60
-    arr = gen_random_xarr(n_cells, n_trials, n_times,
+    arr = random_xarray(n_cells, n_trials, n_times,
                         trial_condition_levels=[1, 2])
 
     effect_cond_mask = arr.coords['cond'] == 1

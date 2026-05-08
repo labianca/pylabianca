@@ -33,7 +33,7 @@ jobs:
             source activate pylabianca
 
             if [ << parameters.use_numba >> == "yes" ]; then
-              mamba install numba -y
+              mamba install numba numbagg -y
             fi
             if [ << parameters.mne_version >> == "current" ]; then
               pip install mne

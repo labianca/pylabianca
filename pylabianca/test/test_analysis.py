@@ -9,9 +9,11 @@ import xarray as xr
 
 import pytest
 import pylabianca as pln
-from pylabianca.testing import gen_random_xarr, ft_data
+from pylabianca.testing import (
+    random_xarray, ft_data, random_multisession_spikes
+)
 from pylabianca.utils import (
-    create_random_spikes, get_fieldtrip_data, get_data_path)
+    get_fieldtrip_data, get_data_path)
 
 
 get_fieldtrip_data()
@@ -173,8 +175,8 @@ def test_xarr_dct_conversion():
                         == x_dct2[key].coords[coord].values).all()
 
     n_cells1, n_cells2, n_trials, n_times = 10, 15, 20, 100
-    xarr1 = gen_random_xarr(n_cells1, n_trials, n_times)
-    xarr2 = gen_random_xarr(n_cells2, n_trials, n_times)
+    xarr1 = random_xarray(n_cells1, n_trials, n_times)
+    xarr2 = random_xarray(n_cells2, n_trials, n_times)
 
     # add load information
     load = np.concatenate([np.ones(10), np.ones(10) * 2])
@@ -254,7 +256,6 @@ def test_xarr_dct_conversion():
 # TODO: extract the dict-of-xarray creating and put separately
 # TODO: separate the extract_data tests and aggregation
 # TODO: there are test for dict_to_xarray here too
-# TODO: could use gen_random_xarr
 def test_extract_data_and_aggregate():
     '''Test extract_data and some basic dict -> xarray operations.'''
 
@@ -262,24 +263,10 @@ def test_extract_data_and_aggregate():
     keys = ['sub-a01', 'sub-a02', 'sub-a04']
     n_trials = 40
     n_cells = [10, 12, 8]
-    anat_region = ['HIP', 'AMY', 'ACC']
-    conditions = ['A', 'B', 'C']
-
-    spk_dict = dict()
-    for this_key, this_n_cells in zip(keys, n_cells):
-        cnd = np.random.choice(conditions, size=n_trials)
-        metadata = pd.DataFrame({'condition': cnd})
-
-        anat = np.sort(
-            np.random.choice(anat_region, size=this_n_cells)
-        )
-        cellinfo = pd.DataFrame({'anat': anat})
-
-        spk = pln.utils.create_random_spikes(
-            n_cells=this_n_cells, n_trials=n_trials, n_spikes=(25, 65),
-            metadata=metadata, cellinfo=cellinfo
-        )
-        spk_dict[this_key] = spk
+    spk_dict = random_multisession_spikes(
+        keys=keys, n_cells=n_cells, n_trials=n_trials, n_spikes=(25, 65),
+        conditions=('A', 'B', 'C'), anat_region=('HIP', 'AMY', 'ACC')
+    )
 
     # get firing rates
     frates = {sub: spk_dict[sub].spike_rate() for sub in spk_dict.keys()}
@@ -326,6 +313,9 @@ def test_extract_data_and_aggregate():
     with pytest.raises(ValueError, match=pattern):
         pln.aggregate(frates_sel_x, groupby='condition')
 
+    with pytest.raises(ValueError, match=pattern):
+        pln.aggregate(frates_sel_x, groupby=['condition', 'anat_region'])
+
     # but should work on a single xarray
     frates_agg_one = pln.aggregate(
         frates_sel['sub-a01'], groupby='condition')
@@ -360,7 +350,7 @@ def test_aggregate_options():
     from pylabianca.analysis import _aggregate_xarray
 
     n_cells, n_trials, n_times = 4, 50, 100
-    xarr = gen_random_xarr(n_cells, n_trials, n_times)
+    xarr = random_xarray(n_cells, n_trials, n_times)
 
     # create metadata
     cnd1 = np.array(['A'] * 25 + ['B'] * 25)
@@ -416,11 +406,11 @@ def test_aggregate_options():
 
 
 def test_aggregate_baseline():
-    from pylabianca.testing import gen_random_xarr
+    from pylabianca.testing import random_xarray
 
     keys = list('ABC')
     n_cells = [10, 5, 8]
-    arr_dct = {key: gen_random_xarr(n_c, 25, 100)
+    arr_dct = {key: random_xarray(n_c, 25, 100)
                for key, n_c in zip(keys, n_cells)}
 
     bsln = arr_dct['A']
@@ -453,7 +443,7 @@ def test_aggregate_per_cell():
     '''Test aggregation per cell.'''
     n_cells = 10
     n_trials = 50
-    arr = gen_random_xarr(n_cells, n_trials, 120, per_cell_coord=True)
+    arr = random_xarray(n_cells, n_trials, 120, per_cell_coord=True)
     arr_agg = pln.aggregate(arr, groupby='preferred', per_cell=True)
 
     # check that the aggregation per cell is correct:
@@ -471,17 +461,74 @@ def test_aggregate_per_cell():
             assert np.allclose(avg, agg_gave.data)
 
 
+@pytest.mark.skipif(
+    not pln.utils.has_numbagg(), reason="requires numbagg"
+)
+def test_aggregate_per_cell_backend_parity():
+    n_cells = 8
+    n_trials = 40
+    n_times = 60
+    arr = random_xarray(n_cells, n_trials, n_times, per_cell_coord=True)
+
+    cond = np.array(['A'] * 20 + ['B'] * 20)
+    cond = np.random.permutation(cond)
+    ifcorrect = np.ones(n_trials, dtype=bool)
+    incorrect_idx = np.random.choice(
+        n_trials, size=int(n_trials * 0.15), replace=False
+    )
+    ifcorrect[incorrect_idx] = False
+    arr = arr.assign_coords(cond=('trial', cond),
+                            ifcorrect=('trial', ifcorrect))
+
+    baseline_arr = arr.sel(time=slice(-0.5, 0.))
+    common_kwargs = dict(
+        groupby=['preferred', 'cond'],
+        select='ifcorrect == True',
+        zscore=baseline_arr,
+        baseline=(0.0, 0.25),
+        per_cell=True
+    )
+
+    agg_xarray = pln.aggregate(arr, backend='xarray', **common_kwargs)
+    agg_numba = pln.aggregate(arr, backend='numba', **common_kwargs)
+    xr.testing.assert_identical(agg_numba, agg_xarray)
+
+
+@pytest.mark.skipif(
+    not pln.utils.has_numbagg(), reason="requires numbagg"
+)
+def test_aggregate_per_cell_backend_parity_dict():
+    arr1 = random_xarray(5, 30, 40, per_cell_coord=True)
+    arr2 = random_xarray(7, 30, 40, per_cell_coord=True)
+    arr_dct = {'A': arr1, 'B': arr2}
+
+    agg_xarray = pln.aggregate(
+        arr_dct, groupby='preferred', per_cell=True, backend='xarray'
+    )
+    agg_numba = pln.aggregate(
+        arr_dct, groupby='preferred', per_cell=True, backend='numba'
+    )
+    xr.testing.assert_identical(agg_numba, agg_xarray)
+
+
+@pytest.mark.skipif(
+    not pln.utils.has_numbagg(), reason="requires numbagg"
+)
+def test_aggregate_per_cell_query_not_supported_in_numba_backend():
+    arr = random_xarray(4, 20, 30, per_cell_coord=True)
+    match = '`per_cell_query` is not implemented for backend="numba".'
+    with pytest.raises(NotImplementedError, match=re.escape(match)):
+        pln.aggregate(
+            arr, groupby='preferred', per_cell_query={'trial': 'preferred == 1'},
+            backend='numba'
+        )
+
+
 def test_zscore_xarray():
     # create random xarray
     n_trials, n_cells, n_times = 50, 10, 100
     time = np.linspace(-0.5, 1.5, num=n_times)
-    cell_names = ['cell_{}'.format(i) for i in range(n_cells)]
-
-    xarr = xr.DataArray(np.random.rand(n_cells, n_trials, n_times),
-                        dims=['cell', 'trial', 'time'],
-                        coords={'cell': cell_names,
-                                'trial': np.arange(n_trials),
-                                'time': time})
+    xarr = random_xarray(n_cells, n_trials, n_times)
 
     # zscore
     xarr_z = pln.analysis.zscore_xarray(xarr)
@@ -515,10 +562,10 @@ def test_zscore_xarray():
 
 
 def test_apply_dict():
-    from pylabianca.testing import create_multisession_data
+    from pylabianca.testing import random_multisession_xarray
 
     n_sessions = 3
-    frates = create_multisession_data(
+    frates = random_multisession_xarray(
         n_sessions, cells_per_session=(5, 25), out='fr')
     sessions = list(frates.keys())
     frates[sessions[0]].name = None

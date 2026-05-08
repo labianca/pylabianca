@@ -13,14 +13,17 @@
 * API: removed `min_Hz` argument of `pylabianca.selectivity.compute_selectivity_continuous()`. It was used to ignore average firing rate values below a certain threshold, but such selection should be done by the user before calling the function.
 * API: removed `pylabianca.utils.find_cells_by_cluster_id()` in favor of a more universal `pylabianca.utils.find_cells()`. Instead of doing `pln.utils.find_cells_by_cluster_id([254], channel='A15')` and then `pln.utils.find_cells_by_cluster_id([1854], channel='A23')` one can use `pln.utils.find_cells(cluster=[254, 1854], channel=['A15', 'A23'])`.
 * API: `pylabianca.utils.assign_session_coord()` and therefore `pylabianca.analysis.extract_data()`, `pylabianca.analysis.dict_to_xarray()` and `pylabianca.analysis.xarray_to_dict()` now use `ses_coord` argument instead of previously named `ses_name`. `ses_name` still works, but will be deprecated in the next version.
+* API: `pylabianca.utils.data.create_random_spikes()` has been renamed and moved and is now `pylabianca.testing.random_spikes()`. `pylabianca.testing.gen_random_xarr()` has been renamed to `pylabianca.testing.random_xarray()`. `pylabianca.testing.create_multisession_data()` was renamed to `pylabinaca.testing.random_multisession_xarray()`. New function `pylabianca.testing.random_multisession_spikes()` was added - for creating a dictionary of multiple sessions of random spikes.
 
 <br/>
 
 * ENH: `Spikes` and `SpikeEpochs` can now be saved to FieldTrip data format. To maintain the input-output roundtrip (data saved and then read are identical) additional non-standard fields are added to the file when `.metadata` or `.cellinfo` are used. These additional fields should not conflict with using the file in FieldTrip.
 * ENH: `SpikeEpochs.spike_rate()` now has a `center_time` argument to allow firing rate time coordinate to be centered around zero (default is `center_time=False`).
+* ENH: `SpikeEpochs.spike_rate()` now has a `count` argument to return spike counts without normalizing by window length.
 * ENH: `Spikes.epoch()` with `backend='numba'` has been further sped up, it is now 30-40 times faster than numpy
 * ENH: `pylabianca.analysis.spike_centered_windows()` (previously `pylabianca.utils.spike_centered_windows()`) has been sped up twofold.
 * ENH: `pylabianca.analysis.xarray_to_dict()` has been sped up considerably. It relies on sessions being concatenated along the cell dimension (so each session being a contiguous block of cells).
+* ENH: `pylabianca.analysis.aggregate()` receives a `backend` argument that can be set to `'numba'` for per-cell execution (`per_cell=True`) speeding it up considerably.
 * ENH: add `pylabianca.utils._inherit_from_xarray()` to allow inheriting metadata (cell or trial-level additional information) from xarray DataArray to new xarray DataArray.
 * ENH: `pylabianca.analysis.dict_to_xarray()` now allows to pass dictionary of `xarray.Dataset` as input.
 * ENH: `pylabianca.analysis.dict_to_xarray()` has been improved to not drop coordinates that are not present in all sessions. Instead, missing coordinates in some of the sessions are filled with NA values appropriate for given coordinate type (e.g. NaN for float coordinates, empty string for string coordinates, etc.).
@@ -33,6 +36,7 @@
 * ENH: added `pylabianca.selectivity.compute_selectivity_multisession()` to compute selectivity on a multisession dictionary (session name -> xarray). The output is an xarray.Dataset with concatenated session selectivity results (the order of the sessions in the output xarray.Dataset is the same as in the input dictionary).
 * ENH: added `pylabianca.stats.find_percentile_threshold()` used to calculate significance threshold for given statistic based on percentile of the permutation distribution.
 * ENH: `pylabianca.selectivity.compute_selectivity_continuous()` now can be also run with `n_perm=0`, returning only the selectivity statistics, without the permutation distribution or permutation-based threshold. Also `pylabianca.stats.permutation_test()` can now be run with `n_perm=0`, returning only the statistic values without the permutation distribution or permutation-based threshold.
+* ENH: `pylabianca.selectivity.zeta_test()` now accepts `return_type` argument with `return_type='xarray'` returning an `xarray.Dataset` that retains all cell metadata, similarly to what `pylabianca.selectivity.compute_selectivity_continuous()` returns.
 * ENH: `pylabianca.stats.cluster_based_test()` can now return `borsar.Clusters` object instead of ``(stat, clusters, pval)`` tuple. This behavior is optional and can be controlled by setting `return_clusters=True` (defaults to False but will change to True in the next version).
 The returned Clusters object retains the number of perumtations, compared condition and its levels in the `description` dictionary
 ENH: `pylabianca.stats.cluster_based_test()` now infers the statistical test to perform (paired vs unpaired) from the DataArray structure. This behavior is the new default (but can be overriden by seeting the `paired` argument)

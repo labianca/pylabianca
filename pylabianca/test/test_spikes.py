@@ -5,8 +5,8 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import (download_test_data, get_data_path,
-                              create_random_spikes, has_numba)
-from pylabianca.testing import ft_data, spk_epochs
+                              has_numba)
+from pylabianca.testing import ft_data, spk_epochs, random_spikes
 
 
 download_test_data()
@@ -84,7 +84,7 @@ def test_input_validation():
     # cellinfo
     # --------
     # adding cellinfo to Spikes
-    spk = create_random_spikes(n_cells=4)
+    spk = random_spikes(n_cells=4)
 
     cellinfo = pd.DataFrame({'name': list('abcd'),
                             'channel': np.random.randint(20, 120, size=4),
@@ -144,7 +144,7 @@ def test_crop():
 
 
 def test_crop_does_not_extend():
-    spk = create_random_spikes(n_cells=1, n_trials=10)
+    spk = random_spikes(n_cells=1, n_trials=10)
     limits = spk.time_limits
 
     spk2 = spk.copy()
@@ -158,15 +158,15 @@ def test_crop_does_not_extend():
 # add .n_trials (if present in SpikeEpochs)
 def test_num():
     for n_cells in [3, 5, 10]:
-        spk = create_random_spikes(n_cells=n_cells)
+        spk = random_spikes(n_cells=n_cells)
         assert spk.n_units() == n_cells
 
     for n_tri in [5, 8, 12]:
-        spk = create_random_spikes(n_trials=n_tri)
+        spk = random_spikes(n_trials=n_tri)
         assert len(spk) == n_tri
 
     for n_spk_per_tri in [10, 15, 23]:
-        spk = create_random_spikes(
+        spk = random_spikes(
             n_cells=1, n_trials=10, n_spikes=n_spk_per_tri)
         assert spk.n_spikes()[0] == n_spk_per_tri * 10
         assert (spk.n_spikes(per_epoch=True) == n_spk_per_tri).all()
@@ -174,8 +174,8 @@ def test_num():
 
 def test_concatenate():
     args = dict(n_trials=False, sfreq=10_000)
-    spk1 = create_random_spikes(n_cells=2, n_spikes=(5, 11), **args)
-    spk2 = create_random_spikes(n_cells=2, n_spikes=(5, 11), **args)
+    spk1 = random_spikes(n_cells=2, n_spikes=(5, 11), **args)
+    spk2 = random_spikes(n_cells=2, n_spikes=(5, 11), **args)
     spk3 = pln.spikes.concatenate_spikes([spk1, spk2], sort=False)
 
     assert len(spk3) == len(spk1) + len(spk2)
@@ -191,7 +191,7 @@ def test_repr():
 
     # another test for SpikeEpochs
     n_cells, n_trials, n_spikes = 5, 4, 23
-    spk = create_random_spikes(
+    spk = random_spikes(
         n_cells=n_cells, n_trials=n_trials, n_spikes=n_spikes)
     expected_str = (f'<SpikeEpochs, {n_trials} epochs, {n_cells} cells, '
                     f'{n_spikes * n_trials}.0 spikes/cell on average>')
@@ -199,7 +199,7 @@ def test_repr():
 
     # Spikes repr
     n_cells, n_trials, n_spikes = 23, 0, 100
-    spk = create_random_spikes(
+    spk = random_spikes(
         n_cells=n_cells, n_trials=n_trials, n_spikes=n_spikes)
     expected_str = (f'<Spikes, {n_cells} cells, '
                     f'{n_spikes}.0 spikes/cell on average>')
@@ -213,7 +213,7 @@ def test_pick_cells():
     assert len(spk.time) == 1
     assert spk.time[0][0] == -0.22
 
-    spk = create_random_spikes(n_cells=5)
+    spk = random_spikes(n_cells=5)
     spk.cell_names = np.array(list("ABCDE"))
 
     spk2 = spk.copy().pick_cells(['A', 'C', 'E'])
@@ -245,7 +245,7 @@ def test_pick_cells():
 
 
 def test_pick_trials():
-    spk = create_random_spikes(n_cells=3, n_trials=10)
+    spk = random_spikes(n_cells=3, n_trials=10)
 
     tri = [1, 3, 8]
     for repr in ['list', 'array', 'bool']:
@@ -277,7 +277,7 @@ def test_pick_cells_cellinfo_query():
     from copy import deepcopy
     cellinfo = pd.DataFrame({'cell_idx': [10, 15, 20, 25],
                              'letter': list('abcd')})
-    spk = create_random_spikes(cellinfo=cellinfo)
+    spk = random_spikes(cellinfo=cellinfo)
 
     spk2 = deepcopy(spk)
     spk2.pick_cells(query='cell_idx > 18')
@@ -331,7 +331,7 @@ def test_to_raw():
 
 
 def test_apply():
-    spk = create_random_spikes(n_cells=4, n_trials=23)
+    spk = random_spikes(n_cells=4, n_trials=23)
     avg = spk.apply(np.mean)
     test_idx = [(0, 5), (1, 18), (3, 22)]
 
@@ -460,7 +460,7 @@ def test_epoching_some_epochs_without_spikes():
 
 
 def test_metadata():
-    spk = create_random_spikes()
+    spk = random_spikes()
 
     # good metadata and selection by condition
     df = pd.DataFrame({'cond': ['A'] * 15 + ['B'] * 10})
@@ -474,7 +474,7 @@ def test_metadata():
                 == spk.trial[cell_idx][first_idx:]).all()
 
 def test_sort():
-    spk = create_random_spikes(n_cells=6, n_trials=0, n_spikes=(50, 120))
+    spk = random_spikes(n_cells=6, n_trials=0, n_spikes=(50, 120))
 
     # no .cellinfo attribute
     with pytest.raises(ValueError, match=".cellinfo attribute has to contain"):
@@ -506,7 +506,7 @@ def test_sort():
 
 
 def test_merge():
-    spk = create_random_spikes(n_cells=5, n_trials=0, n_spikes=(50, 120))
+    spk = random_spikes(n_cells=5, n_trials=0, n_spikes=(50, 120))
     spk_m1 = spk.copy().merge([0, 2])
 
     assert len(spk) > len(spk_m1)
@@ -541,7 +541,7 @@ def test_degenerate():
     '''Test degenerate cases like no spikes, too short time segment etc.'''
     has_no_spike_units = False
     while not has_no_spike_units:
-        spk = create_random_spikes(n_cells=25, n_trials=2, n_spikes=(0, 2))
+        spk = random_spikes(n_cells=25, n_trials=2, n_spikes=(0, 2))
         n_spk = spk.n_spikes()
         has_no_spike_units = (n_spk == 0).any()
 
@@ -566,7 +566,7 @@ def test_degenerate():
 
 # TODO: MOVE to viz tests
 def test_plot_waveform():
-    spk = create_random_spikes(n_cells=2, n_trials=0, n_spikes=(50, 120))
+    spk = random_spikes(n_cells=2, n_trials=0, n_spikes=(50, 120))
 
     n_smp = 6
     n_spk = spk.n_spikes()
@@ -582,7 +582,7 @@ def test_plot_waveform():
 
 # TODO: MOVE to io tests
 def test_to_neo_and_to_spiketools():
-    spk = create_random_spikes(n_cells=2, n_trials=3, n_spikes=(50, 120))
+    spk = random_spikes(n_cells=2, n_trials=3, n_spikes=(50, 120))
 
     # .to_neo, join='concat'
     spk_neo = spk.to_neo(0, join='concat', sep_time=0.1)

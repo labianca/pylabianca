@@ -8,7 +8,7 @@ import pylabianca as pln
 from pylabianca.utils import (_get_trial_boundaries, find_cells,
                               create_random_spikes, _inherit_metadata,
                               dataarray_from_template)
-from pylabianca.testing import gen_random_xarr
+from pylabianca.testing import random_xarray, random_spikes
 
 
 def test_trial_boundaries():
@@ -149,7 +149,7 @@ def test_dataarray_from_template_coord_override():
 
 
 def test_cellinfo_from_xarray():
-    spk = create_random_spikes(n_trials=10, n_cells=10)
+    spk = random_spikes(n_trials=10, n_cells=10)
     cellinfo = pd.DataFrame({'a': np.arange(10), 'b': list('ABCDEFGHIJ'),
                              'd': np.random.rand(10) > 0.5})
     spk.cellinfo = cellinfo
@@ -166,7 +166,7 @@ def test_cellinfo_from_xarray():
 
 
 def test_find_cells():
-    spk = create_random_spikes(n_trials=10, n_cells=10)
+    spk = random_spikes(n_trials=10, n_cells=10)
     channel = (np.tile(np.arange(5)[:, None], [1, 2]) + 1).ravel()
 
     # generate unique cluster ids
@@ -307,7 +307,7 @@ def test_turn_spike_rate_to_xarray():
     # test 1: 2d array, cell_names None
     # then it is trials x times
     times = np.linspace(0.1, 0.8, num=20)
-    spk = create_random_spikes(n_trials=10, n_cells=2)
+    spk = random_spikes(n_trials=10, n_cells=2)
     spk.metadata = pd.DataFrame({'a': np.arange(10), 'b': list('ABCDEFGHIJ')})
     arr = np.random.rand(10, 20)
     xr = pln.utils._turn_spike_rate_to_xarray(times, arr, spk)
@@ -350,7 +350,7 @@ def test_find_nested_dims():
     n_cells, n_trials, n_times = 5, 24, 100
     tri_coord = np.random.choice(list('abcd'), size=n_trials)
     xarr = (
-        gen_random_xarr(n_cells, n_trials, n_times)
+        random_xarray(n_cells, n_trials, n_times)
         .drop_vars('trial')
         .assign_coords({'cond': ('trial', tri_coord)})
     )
@@ -367,7 +367,7 @@ def test_assign_session_coord():
 
     # Test 1: Basic functionality with cell dimension
     n_cells, n_trials, n_times = 5, 24, 100
-    xarr = gen_random_xarr(n_cells, n_trials, n_times)
+    xarr = random_xarray(n_cells, n_trials, n_times)
     session_name = 'session_A'
 
     result = pln.utils.xarr.assign_session_coord(xarr, session_name)
