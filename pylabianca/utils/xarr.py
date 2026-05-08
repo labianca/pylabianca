@@ -12,9 +12,37 @@ def _ensure_queryable_xarray(arr):
     return arr
 
 
-def _dataarray_from_template(data, template, dims, coords=None, name=None,
-                             attrs=None, inherit=True):
-    """Wrap numpy data in DataArray, inheriting matching coords from template."""
+def dataarray_from_template(data, template, dims, coords=None, name=None,
+                            attrs=None, inherit=True):
+    """Wrap data in a DataArray using coordinates from a template.
+
+    Parameters
+    ----------
+    data : array_like
+        Data to wrap in the returned DataArray.
+    template : xarray.DataArray
+        Template DataArray from which matching dimension coordinates and
+        nested coordinates are copied.
+    dims : list of str
+        Dimension names for ``data``.
+    coords : dict | None
+        Additional coordinates to assign to the DataArray. These coordinates
+        override inherited coordinates with the same names.
+    name : str | None
+        Name of the returned DataArray.
+    attrs : dict | None
+        Attributes assigned to the returned DataArray.
+    inherit : bool | list of str
+        If ``True``, copy nested coordinates for all inherited dimensions. If
+        ``False``, copy only dimension coordinates. If a list of strings, copy
+        nested coordinates only for the listed dimensions.
+
+    Returns
+    -------
+    xarr : xarray.DataArray
+        DataArray with coordinates inherited from ``template`` and updated
+        with ``coords``.
+    """
     import xarray as xr
 
     try_inherit = list()

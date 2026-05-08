@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from .analysis import nested_groupby_apply
-from .utils import (_dataarray_from_template, find_nested_dims,
+from .utils import (dataarray_from_template, find_nested_dims,
                     cellinfo_from_xarray, _inherit_metadata_from_xarray,
                     assign_session_coord)
 
@@ -174,7 +174,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     stat_dims = frate_dims[1:]
 
     if n_perm > 0:
-        results['dist'] = _dataarray_from_template(
+        results['dist'] = dataarray_from_template(
             results['dist'], frate, ['perm'] + stat_dims,
             coords={'perm': np.arange(results['dist'].shape[0])},
             name=stat_name, inherit=False)
@@ -183,7 +183,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         use_data = results
         results = dict()
 
-    results['stat'] = _dataarray_from_template(
+    results['stat'] = dataarray_from_template(
         use_data, frate, stat_dims, name=stat_name, inherit=False)
 
     if n_perm > 0:
@@ -196,7 +196,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
             thresh_dims = stat_dims
             thresh_coords = None
 
-        results['thresh'] = _dataarray_from_template(
+        results['thresh'] = dataarray_from_template(
             thresh_data, frate, thresh_dims, coords=thresh_coords,
             name=stat_name, inherit=False)
 

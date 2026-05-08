@@ -6,7 +6,8 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import (_get_trial_boundaries, find_cells,
-                              create_random_spikes, _inherit_metadata)
+                              create_random_spikes, _inherit_metadata,
+                              dataarray_from_template)
 from pylabianca.testing import gen_random_xarr
 
 
