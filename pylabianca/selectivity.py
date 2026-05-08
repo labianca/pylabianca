@@ -177,14 +177,14 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         results['dist'] = _dataarray_from_template(
             results['dist'], frate, ['perm'] + stat_dims,
             coords={'perm': np.arange(results['dist'].shape[0])},
-            name=stat_name)
+            name=stat_name, inherit=False)
         use_data = results['stat']
     else:
         use_data = results
         results = dict()
 
     results['stat'] = _dataarray_from_template(
-        use_data, frate, stat_dims, name=stat_name)
+        use_data, frate, stat_dims, name=stat_name, inherit=False)
 
     if n_perm > 0:
         if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
@@ -198,7 +198,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
         results['thresh'] = _dataarray_from_template(
             thresh_data, frate, thresh_dims, coords=thresh_coords,
-            name=stat_name)
+            name=stat_name, inherit=False)
 
     # copy unit information
     # TODO: use a separate utility function
@@ -207,16 +207,12 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         if 'coord_units' in frate.attrs:
             results[key].attrs['coord_units'] = frate.attrs['coord_units']
 
-    # add cell coords
-    # TODO: move after Dataset creation
-    copy_coords = find_nested_dims(frate, 'cell')
-    if len(copy_coords) > 0:
-        for key in results.keys():
-            results[key] = _inherit_metadata_from_xarray(
-                frate, results[key], 'cell', copy_coords=copy_coords)
-
     # transform to dataset:
     results = xr.Dataset(results)
+
+    # add cell coords
+    results = _inherit_metadata_from_xarray(
+        frate, results, 'cell')
 
     return results
 
