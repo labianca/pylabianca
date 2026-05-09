@@ -12,6 +12,65 @@ def _ensure_queryable_xarray(arr):
     return arr
 
 
+def dataarray_from_template(data, template, dims, coords=None, name=None,
+                            attrs=None, inherit=True):
+    """Wrap data in a DataArray using coordinates from a template.
+
+    Parameters
+    ----------
+    data : array_like
+        Data to wrap in the returned DataArray.
+    template : xarray.DataArray
+        Template DataArray from which matching dimension coordinates and
+        nested coordinates are copied.
+    dims : list of str
+        Dimension names for ``data``.
+    coords : dict | None
+        Additional coordinates to assign to the DataArray. These coordinates
+        override inherited coordinates with the same names.
+    name : str | None
+        Name of the returned DataArray.
+    attrs : dict | None
+        Attributes assigned to the returned DataArray.
+    inherit : bool | list of str
+        If ``True``, copy nested coordinates for all inherited dimensions. If
+        ``False``, copy only dimension coordinates. If a list of strings, copy
+        nested coordinates only for the listed dimensions.
+
+    Returns
+    -------
+    xarr : xarray.DataArray
+        DataArray with coordinates inherited from ``template`` and updated
+        with ``coords``.
+    """
+    import xarray as xr
+
+    try_inherit = list()
+    if isinstance(inherit, list):
+        try_inherit = inherit
+    elif isinstance(inherit, bool):
+        if inherit:
+            try_inherit = dims
+
+    xarr_coords = dict()
+    for dim in dims:
+        if dim in template.coords:
+            xarr_coords[dim] = template.coords[dim].values
+
+            if dim in try_inherit:
+                # inherit nested coords
+                xarr_coords.update(
+                    _inherit_nested_coords_from_xarray(
+                        template, dim)
+                )
+
+    if coords is not None:
+        xarr_coords.update(coords)
+
+    return xr.DataArray(
+        data=data, dims=dims, coords=xarr_coords, name=name, attrs=attrs)
+
+
 # CONSIDER: spike_epochs and times could be optional arguments
 # CHANGE name to something more general - it is now used for xarray and decoding
 #        results (and more in the future)
@@ -196,6 +255,46 @@ def _inherit_metadata(coords, metadata, dimname, tri=None):
     return coords
 
 
+def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
+                                  copy_coords=None):
+    new_coords = _inherit_nested_coords_from_xarray(
+        xarr_from, dimname, copy_coords=copy_coords)
+    if len(new_coords) > 0:
+        xarr_to = xarr_to.assign_coords(new_coords)
+    return xarr_to
+
+
+def _inherit_nested_coords_from_xarray(xarr_from, dimname, copy_coords=None):
+    coords = dict()
+    if copy_coords is None:
+        copy_coords = find_nested_dims(xarr_from, dimname)
+    if len(copy_coords) > 0:
+        coords = {coord: (dimname, xarr_from.coords[coord].values)
+                  for coord in copy_coords}
+    return coords
+
+
+def find_nested_dims(arr, dim_name):
+    names = list()
+    coords = list(arr.coords)
+
+    if isinstance(dim_name, tuple):
+        for dim in dim_name:
+            if dim in coords:
+                coords.remove(dim)
+        sub_dim = dim_name
+    else:
+        if dim_name in coords:
+            coords.remove(dim_name)
+        sub_dim = (dim_name,)
+
+    for coord in coords:
+        if arr.coords[coord].dims == sub_dim:
+            names.append(coord)
+
+    return names
+
+
 def _turn_StringArray_columns_into_object(df):
     if df is None:
         return df
@@ -231,38 +330,6 @@ def remove_StringArrays(spk):
         spk.metadata = _turn_StringArray_columns_into_object(spk.metadata)
     spk.cellinfo = _turn_StringArray_columns_into_object(spk.cellinfo)
     return spk
-
-
-def _inherit_metadata_from_xarray(xarr_from, xarr_to, dimname,
-                                  copy_coords=None):
-    if copy_coords is None:
-        copy_coords = find_nested_dims(xarr_from, dimname)
-    if len(copy_coords) > 0:
-        coords = {coord: (dimname, xarr_from.coords[coord].values)
-                  for coord in copy_coords}
-        xarr_to = xarr_to.assign_coords(coords)
-    return xarr_to
-
-
-def find_nested_dims(arr, dim_name):
-    names = list()
-    coords = list(arr.coords)
-
-    if isinstance(dim_name, tuple):
-        for dim in dim_name:
-            if dim in coords:
-                coords.remove(dim)
-        sub_dim = dim_name
-    else:
-        if dim_name in coords:
-            coords.remove(dim_name)
-        sub_dim = (dim_name,)
-
-    for coord in coords:
-        if arr.coords[coord].dims == sub_dim:
-            names.append(coord)
-
-    return names
 
 
 def assign_session_coord(arr, ses, dim_name='cell', ses_coord='session',

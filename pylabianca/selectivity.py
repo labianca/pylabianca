@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 
 from .analysis import nested_groupby_apply
-from .utils import (find_nested_dims, cellinfo_from_xarray,
-                    _inherit_metadata_from_xarray, assign_session_coord)
+from .utils import (dataarray_from_template, find_nested_dims,
+                    cellinfo_from_xarray, _inherit_metadata_from_xarray,
+                    assign_session_coord)
 
 
 # TODO: ! adapt for multiple cells
@@ -170,37 +171,34 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
 
     # turn to xarray
     # --------------
-    cells = frate.cell.values
-
-    # perm
-    dims = ['perm'] + frate_dims[1:]
-    coords = {dim: frate.coords[dim].values.copy() for dim in frate_dims[1:]}
+    stat_dims = frate_dims[1:]
 
     if n_perm > 0:
-        results['dist'] = xr.DataArray(data=results['dist'], dims=dims,
-                                       coords=coords, name=stat_name)
+        results['dist'] = dataarray_from_template(
+            results['dist'], frate, ['perm'] + stat_dims,
+            coords={'perm': np.arange(results['dist'].shape[0])},
+            name=stat_name, inherit=False)
         use_data = results['stat']
     else:
         use_data = results
         results = dict()
 
-    # stat
-    results['stat'] = xr.DataArray(
-        data=use_data, dims=dims[1:], coords=coords, name=stat_name)
+    results['stat'] = dataarray_from_template(
+        use_data, frate, stat_dims, name=stat_name, inherit=False)
 
-    # thresh
     if n_perm > 0:
         if isinstance(results['thresh'], list) and len(results['thresh']) == 2:
-            # two-tail thresholds
-            dims2 = ['tail'] + dims[1:]
-            results['thresh'] = np.stack(results['thresh'], axis=0)
-            coords.update({'tail': ['pos', 'neg']})
+            thresh_data = np.stack(results['thresh'], axis=0)
+            thresh_dims = ['tail'] + stat_dims
+            thresh_coords = {'tail': ['pos', 'neg']}
         else:
-            dims2 = dims[1:]
-            coords.update({'tail': np.array('pos')})
+            thresh_data = results['thresh']
+            thresh_dims = stat_dims
+            thresh_coords = None
 
-        results['thresh'] = xr.DataArray(
-            data=results['thresh'], dims=dims2, coords=coords, name=stat_name)
+        results['thresh'] = dataarray_from_template(
+            thresh_data, frate, thresh_dims, coords=thresh_coords,
+            name=stat_name, inherit=False)
 
     # copy unit information
     # TODO: use a separate utility function
@@ -209,16 +207,12 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
         if 'coord_units' in frate.attrs:
             results[key].attrs['coord_units'] = frate.attrs['coord_units']
 
-    # add cell coords
-    # TODO: move after Dataset creation
-    copy_coords = find_nested_dims(frate, 'cell')
-    if len(copy_coords) > 0:
-        for key in results.keys():
-            results[key] = _inherit_metadata_from_xarray(
-                frate, results[key], 'cell', copy_coords=copy_coords)
-
     # transform to dataset:
     results = xr.Dataset(results)
+
+    # add cell coords
+    results = _inherit_metadata_from_xarray(
+        frate, results, 'cell')
 
     return results
 

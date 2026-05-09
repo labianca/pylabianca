@@ -6,7 +6,7 @@ import pytest
 
 import pylabianca as pln
 from pylabianca.utils import (_get_trial_boundaries, find_cells,
-                              _inherit_metadata)
+                              _inherit_metadata, dataarray_from_template)
 from pylabianca.testing import random_xarray, random_spikes
 
 
@@ -61,6 +61,90 @@ def test_inherit_metadata():
     assert isinstance(coords['a'], tuple)
     assert coords['b'][0] == 'trial'
     assert (coords['b'][1] == metadata['b']).all()
+
+
+def test_dataarray_from_template():
+    import xarray as xr
+
+    template = xr.DataArray(
+        np.zeros((2, 3)),
+        dims=['cell', 'time'],
+        coords={
+            'cell': ['a', 'b'],
+            'time': [0., 0.1, 0.2],
+            'region': ('cell', ['amy', 'hip']),
+            'quality': ('cell', [0.8, 0.9]),
+            'window': ('time', ['pre', 'stim', 'post'])
+        }
+    )
+    data = np.ones((2, 3))
+    attrs = {'unit': 'z'}
+
+    result = dataarray_from_template(
+        data, template, ['cell', 'time'], name='scores', attrs=attrs)
+
+    assert result.name == 'scores'
+    assert result.attrs == attrs
+    assert result.dims == ('cell', 'time')
+    np.testing.assert_array_equal(result.values, data)
+    np.testing.assert_array_equal(result.coords['cell'].values, ['a', 'b'])
+    np.testing.assert_array_equal(result.coords['time'].values,
+                                  [0., 0.1, 0.2])
+    np.testing.assert_array_equal(result.coords['region'].values,
+                                  ['amy', 'hip'])
+    np.testing.assert_array_equal(result.coords['quality'].values,
+                                  [0.8, 0.9])
+    np.testing.assert_array_equal(result.coords['window'].values,
+                                  ['pre', 'stim', 'post'])
+
+
+def test_dataarray_from_template_inherit_list():
+    import xarray as xr
+
+    template = xr.DataArray(
+        np.zeros((2, 3)),
+        dims=['cell', 'time'],
+        coords={
+            'cell': ['a', 'b'],
+            'time': [0., 0.1, 0.2],
+            'region': ('cell', ['amy', 'hip']),
+            'window': ('time', ['pre', 'stim', 'post'])
+        }
+    )
+
+    result = dataarray_from_template(
+        np.ones((2, 3)), template, ['cell', 'time'], inherit=['cell'])
+
+    assert 'region' in result.coords
+    assert 'window' not in result.coords
+    np.testing.assert_array_equal(result.coords['cell'].values, ['a', 'b'])
+    np.testing.assert_array_equal(result.coords['time'].values,
+                                  [0., 0.1, 0.2])
+
+
+def test_dataarray_from_template_coord_override():
+    import xarray as xr
+
+    template = xr.DataArray(
+        np.zeros(2),
+        dims=['cell'],
+        coords={
+            'cell': ['a', 'b'],
+            'region': ('cell', ['amy', 'hip'])
+        }
+    )
+    coords = {
+        'cell': ['x', 'y'],
+        'region': ('cell', ['ctx', 'thal'])
+    }
+
+    result = dataarray_from_template(
+        np.ones(2), template, ['cell'], coords=coords, inherit=False)
+
+    assert 'region' in result.coords
+    np.testing.assert_array_equal(result.coords['cell'].values, ['x', 'y'])
+    np.testing.assert_array_equal(result.coords['region'].values,
+                                  ['ctx', 'thal'])
 
 
 def test_cellinfo_from_xarray():

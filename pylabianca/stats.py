@@ -442,6 +442,7 @@ def find_percentile_threshold(perm_data, percentile=None, tail='both',
         negative tails).
     '''
     import xarray as xr
+    from .utils import dataarray_from_template
 
     msg = 'perm_data should be xarray.DataArray'
     assert isinstance(perm_data, xr.DataArray), msg
@@ -477,12 +478,9 @@ def find_percentile_threshold(perm_data, percentile=None, tail='both',
         perm_data_dims = list(perm_data.dims)
         perm_data_dims.pop(perm_dim_idx)
 
-        dims = ['tail'] + perm_data_dims
-        coords = {'tail': tail_coords}
-        for dim_idx, dim_name in enumerate(perm_data_dims):
-            coords[dim_name] = perm_data.coords[dim_name].data
-
-        thresholds = xr.DataArray(thresholds, dims=dims, coords=coords)
+        thresholds = dataarray_from_template(
+            thresholds, perm_data, ['tail'] + perm_data_dims,
+            coords={'tail': tail_coords})
 
     return thresholds
 
