@@ -2,6 +2,7 @@ from numbers import Real
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from .analysis import nested_groupby_apply
 from .utils import (dataarray_from_template, find_nested_dims,
@@ -9,7 +10,6 @@ from .utils import (dataarray_from_template, find_nested_dims,
                     assign_session_coord)
 
 
-# TODO: ! adapt for multiple cells
 # TODO: ensure same ``frate`` explanation for all functions
 #         Xarray with spike rate  or spike density containing ``'cell'``,
 #        ``'trial'`` and ``'time'`` dimensions.
@@ -40,45 +40,31 @@ def explained_variance(frate, groupby, kind='omega'):
     is_omega = kind == 'omega'
 
     global_avg = frate.mean(dim='trial')
-    has_time = 'time' in frate.dims
-    if has_time:
-        n_times = len(frate.coords['time'])
-
     groups, per_group = np.unique(frate.coords[groupby], return_counts=True)
     n_groups = len(groups)
 
     SS_total = ((frate - global_avg) ** 2).sum(dim='trial')
-    SS_between = (np.zeros((n_groups, n_times))
-                  if has_time else np.zeros(n_groups))
-
-    if is_omega:
-        SS_within = SS_between.copy()
-
-    for idx, (label, arr) in enumerate(frate.groupby(groupby)):
-        # are group labels always sorted when using .groupby?
-        group_avg = arr.mean(dim='trial')
-        SS_between[idx] = per_group[idx] * (group_avg - global_avg) ** 2
-
-        if is_omega:
-            within_group = ((arr - group_avg) ** 2).sum(dim='trial')
-            SS_within[idx] = within_group
-
-    SS_between = SS_between.sum(axis=0)
+    group_avg = frate.groupby(groupby).mean(dim='trial')
+    group_counts = xr.DataArray(
+        per_group, dims=[groupby], coords={groupby: groups}
+    )
+    SS_between = (group_counts * (group_avg - global_avg) ** 2).sum(dim=groupby)
 
     if not is_omega:
         es = SS_between / SS_total
         es.name = 'eta squared'
     else:
+        within_group = (frate.groupby(groupby) - group_avg) ** 2
+        SS_within = within_group.sum(dim='trial')
         df = n_groups - 1
         n_trials = len(frate.coords['trial'])
-        MSE = SS_within.sum(axis=0) / (n_trials - n_groups)
+        MSE = SS_within / (n_trials - n_groups)
         es = (SS_between - df * MSE) / (SS_total + MSE)
         es.name = 'omega squared'
 
     return es
 
 
-# TODO: ! adapt for multiple cells
 def depth_of_selectivity(frate, groupby):
     '''Compute depth of selectivity for given category.
 
@@ -104,8 +90,11 @@ def depth_of_selectivity(frate, groupby):
     if singleton and r_max.item() == 0:
         return 0, avg_by_probe
 
-    numerator = n_categories - (avg_by_probe / r_max).sum(dim=groupby)
-    selectivity = numerator / (n_categories - 1)
+    normalized = xr.where(r_max == 0, 0, avg_by_probe / r_max)
+    numerator = n_categories - normalized.sum(dim=groupby)
+    selectivity = xr.where(
+        r_max == 0, 0, numerator / (n_categories - 1)
+    )
     selectivity.name = 'depth of selectivity'
 
     return selectivity, avg_by_probe
