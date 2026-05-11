@@ -1,3 +1,5 @@
+from numbers import Number
+
 import numpy as np
 
 
@@ -10,8 +12,9 @@ import numpy as np
 #       seaborn.axisgrid.FacetGrid, seaborn._core.subplots
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
-                labels=True, col=None, row=None, **kwargs):
-    '''Plot spike rate with standard error of the mean.
+                labels=True, col=None, row=None, errorbar='se', n_boot=None,
+                seed=None, **kwargs):
+    '''Plot spike rate with a shaded error interval.
 
     Parameters
     ----------
@@ -19,10 +22,10 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         Xarray with at least two dimensions: one is plotted along the x axis
         (this is controlled with ``x_dim`` argument); the other is reduced
         by averaging (see ``reduce_dim`` argument below). The averaged
-        dimension also gives rise to the standard error of the mean, which is
-        plotted as a shaded area.
+        dimension also gives rise to the error interval, which is plotted as
+        a shaded area.
     reduce_dim : str
-        The dimension to reduce (average). The standard error is also computed
+        The dimension to reduce (average). The error interval is also computed
         along this dimension. If ``reduce_dim`` is ``None`` (default) then the
         following dimensions are tested in this order: ``['trial', 'fold',
         'perm', 'permutation', 'cell', 'spike']``. If none of these dimensions
@@ -52,6 +55,19 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
     row : str | None
         Dimension to use for creating row facets. Each unique value in this
         dimension will be plotted in a separate row. Default is ``None``.
+    errorbar : str, (str, number) tuple, callable or None
+        Error interval to show as a shaded area. Uses seaborn-style
+        specification: one of ``'ci'``, ``'pi'``, ``'se'`` or ``'sd'``, a
+        tuple with the method name and level, a callable mapping a vector to
+        a ``(min, max)`` interval, or ``None`` to hide the interval. Defaults
+        to ``'se'``.
+    n_boot : int | None
+        Number of bootstrap samples. When ``None`` (default), ``'ci'`` uses a
+        parametric t interval and ``'se'`` uses the analytic standard error.
+        When an integer, ``'ci'`` and ``'se'`` are estimated by bootstrap.
+    seed : int | numpy.random.Generator | numpy.random.RandomState | None
+        Seed or random number generator used when bootstrapping confidence
+        intervals. Defaults to ``None``.
     kwargs : dict
         Additional keyword arguments for the plot.
 
@@ -61,6 +77,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         Axis with the plot. If ``col`` or ``row`` are specified, returns an
         array of axes.
     '''
+    _validate_errorbar_arg(errorbar)
+
     # Handle faceting by col and row
     if col is not None or row is not None:
         import matplotlib.pyplot as plt
@@ -94,7 +112,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 plot_shaded(arr_facet, reduce_dim=reduce_dim, groupby=groupby,
                            ax=ax_ij, x_dim=x_dim, legend=legend,
                            legend_pos=legend_pos, colors=colors, labels=labels,
-                           col=None, row=None, **kwargs)
+                           col=None, row=None, errorbar=errorbar,
+                           n_boot=n_boot, seed=seed, **kwargs)
 
                 # Add titles for facets
                 title_parts = []
@@ -162,7 +181,8 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
 
     ax = plot_xarray_shaded(
         arr, reduce_dim=reduce_dim, x_dim=x_dim, groupby=groupby, ax=ax,
-        legend=legend, legend_pos=legend_pos, colors=colors, **kwargs
+        legend=legend, legend_pos=legend_pos, colors=colors,
+        errorbar=errorbar, n_boot=n_boot, seed=seed, **kwargs
     )
 
     # clean up ax title if groupby is used
@@ -197,7 +217,7 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
 # TODO: allow different error shades
 def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
                        ax=None, legend=True, legend_pos=None, colors=None,
-                       **kwargs):
+                       errorbar='se', n_boot=None, seed=None, **kwargs):
     """
     Plot xarray with error bar shade.
 
@@ -207,10 +227,10 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         Xarray with at least two dimensions: one is plotted along the x axis
         (this is controlled with ``x_dim`` argument); the other is reduced
         by averaging (see ``reduce_dim`` argument below). The averaged
-        dimension also gives rise to the standard error of the mean, which is
-        plotted as a shaded area.
+        dimension also gives rise to the error interval, which is plotted as
+        a shaded area.
     reduce_dim : str
-        The dimension to reduce (average). The standard error is also computed
+        The dimension to reduce (average). The error interval is also computed
         along this dimension. The default is ``'trial'``.
     x_dim : str
         Dimension to use for the x axis. The default is ``'time'``.
@@ -229,6 +249,19 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         List of RGB arrays to use as colors for condition groups. Can also be
         a dictionary linking condition names / values and RBG arrays. Default
         is ``None`` which uses the default matplotlib color cycle.
+    errorbar : str, (str, number) tuple, callable or None
+        Error interval to show as a shaded area. Uses seaborn-style
+        specification: one of ``'ci'``, ``'pi'``, ``'se'`` or ``'sd'``, a
+        tuple with the method name and level, a callable mapping a vector to
+        a ``(min, max)`` interval, or ``None`` to hide the interval. Defaults
+        to ``'se'``.
+    n_boot : int | None
+        Number of bootstrap samples. When ``None`` (default), ``'ci'`` uses a
+        parametric t interval and ``'se'`` uses the analytic standard error.
+        When an integer, ``'ci'`` and ``'se'`` are estimated by bootstrap.
+    seed : int | numpy.random.Generator | numpy.random.RandomState | None
+        Seed or random number generator used when bootstrapping confidence
+        intervals. Defaults to ``None``.
     kwargs : dict
         Additional keyword arguments for the plot.
 
@@ -240,20 +273,22 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
     import matplotlib.pyplot as plt
     assert reduce_dim is not None
 
+    _validate_errorbar_arg(errorbar)
+
     if ax is None:
         _, ax = plt.subplots()
 
-    # compute mean, std and n
+    # compute mean and error interval
     if groupby is not None:
-        arr = arr.groupby(groupby)
+        arr_grouped = arr.groupby(groupby)
+    else:
+        arr_grouped = arr
 
-    # calculate standard error of the mean
-    avg = arr.mean(dim=reduce_dim)
-    std = arr.std(dim=reduce_dim)
-    n = arr.count(dim=reduce_dim)
-    std_err = std / np.sqrt(n)
-    ci_low = avg - std_err
-    ci_high = avg + std_err
+    avg = arr_grouped.mean(dim=reduce_dim)
+    ci_low, ci_high = _compute_error_interval(
+        arr, arr_grouped, avg, reduce_dim, groupby, errorbar,
+        n_boot=n_boot, seed=seed
+    )
 
     # handle colors
     group_names = (avg.coords[groupby].values if groupby is not None
@@ -294,22 +329,218 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
                 color_map, val, **kwargs)
 
             avg.sel(**sel).plot(label=val, ax=ax, **line_args)
-            ax.fill_between(avg.coords[x_dim], ci_low.sel(**sel),
-                            ci_high.sel(**sel), alpha=0.3, linewidth=0,
-                            color=color)
+            if ci_low is not None:
+                ax.fill_between(avg.coords[x_dim], ci_low.sel(**sel),
+                                ci_high.sel(**sel), alpha=0.3, linewidth=0,
+                                color=color)
     else:
         color, line_args = _get_color_and_line_args(
                 color_map, 'base', **kwargs)
 
         avg.plot(ax=ax, **line_args)
-        ax.fill_between(avg.coords[x_dim], ci_low, ci_high, linewidth=0,
-                        alpha=0.3, color=color)
+        if ci_low is not None:
+            ax.fill_between(avg.coords[x_dim], ci_low, ci_high, linewidth=0,
+                            alpha=0.3, color=color)
 
     if groupby is not None and legend:
         pos = 'best' if legend_pos is None else legend_pos
         ax.legend(title=f'{groupby}:', loc=pos)
 
     return ax
+
+
+def _validate_errorbar_arg(arg):
+    default_levels = {'ci': 95, 'pi': 95, 'se': 1, 'sd': 1}
+    usage = '`errorbar` must be a callable, string, or (string, number) tuple'
+
+    if arg is None:
+        return None, None
+    if callable(arg):
+        return arg, None
+    if isinstance(arg, str):
+        method = arg
+        level = default_levels.get(method, None)
+    else:
+        try:
+            method, level = arg
+        except (ValueError, TypeError) as err:
+            raise err.__class__(usage) from err
+
+    if method not in default_levels:
+        options = ', '.join([f"'{opt}'" for opt in default_levels])
+        raise ValueError(f'errorbar must be one of {options}.')
+    if not isinstance(level, Number):
+        raise TypeError(usage)
+
+    return method, level
+
+
+def _validate_n_boot(n_boot):
+    if n_boot is None:
+        return
+    if not isinstance(n_boot, Number) or int(n_boot) != n_boot or n_boot <= 0:
+        raise ValueError('n_boot must be a positive integer or None.')
+
+
+def _compute_error_interval(arr, arr_grouped, avg, reduce_dim, groupby,
+                            errorbar, n_boot=None, seed=None):
+    method, level = _validate_errorbar_arg(errorbar)
+    _validate_n_boot(n_boot)
+
+    if method is None:
+        return None, None
+    elif method == 'sd':
+        err = arr_grouped.std(dim=reduce_dim, ddof=1) * level
+        return avg - err, avg + err
+    elif method == 'se':
+        if n_boot is None:
+            err = _standard_error(arr_grouped, reduce_dim)
+        else:
+            err = _bootstrap_standard_error(
+                arr, reduce_dim, groupby, n_boot, seed
+            )
+        err = err * level
+        return avg - err, avg + err
+    elif method == 'pi':
+        edge = (100 - level) / 2
+        q = [edge / 100, (100 - edge) / 100]
+        interval = arr_grouped.quantile(q, dim=reduce_dim)
+    elif method == 'ci':
+        if n_boot is None:
+            return _parametric_confidence_interval(
+                arr_grouped, avg, reduce_dim, level
+            )
+        interval = _bootstrap_confidence_interval(
+            arr, reduce_dim, groupby, level, n_boot, seed
+        )
+    else:
+        if groupby is None:
+            interval = _callable_interval(arr, reduce_dim, method)
+        else:
+            interval = arr.groupby(groupby).map(
+                lambda x: _callable_interval(x, reduce_dim, method)
+            )
+
+    return _split_interval(interval)
+
+
+def _standard_error(arr, reduce_dim):
+    n = arr.count(dim=reduce_dim)
+    return arr.std(dim=reduce_dim, ddof=1) / np.sqrt(n)
+
+
+def _parametric_confidence_interval(arr_grouped, avg, reduce_dim, level):
+    import xarray as xr
+    from scipy import stats
+
+    n = arr_grouped.count(dim=reduce_dim)
+    df = n - 1
+    alpha = 1 - (level / 100)
+    crit = xr.apply_ufunc(lambda x: stats.t.ppf(1 - alpha / 2, x), df)
+    err = _standard_error(arr_grouped, reduce_dim) * crit
+
+    return avg - err, avg + err
+
+
+def _bootstrap_confidence_interval(arr, reduce_dim, groupby, level, n_boot,
+                                   seed):
+    rng = _check_random_state(seed)
+    if groupby is None:
+        interval = _bootstrap_interval(
+            arr, reduce_dim, level, n_boot, rng, return_ci=True
+        )
+    else:
+        interval = arr.groupby(groupby).map(
+            lambda x: _bootstrap_interval(
+                x, reduce_dim, level, n_boot, rng, return_ci=True)
+        )
+
+    return interval
+
+
+def _bootstrap_standard_error(arr, reduce_dim, groupby, n_boot, seed):
+    rng = _check_random_state(seed)
+    if groupby is None:
+        return _bootstrap_interval(
+            arr, reduce_dim, None, n_boot, rng, return_ci=False
+        )
+    return arr.groupby(groupby).map(
+        lambda x: _bootstrap_interval(
+            x, reduce_dim, None, n_boot, rng, return_ci=False)
+    )
+
+
+def _split_interval(interval):
+    if 'quantile' in interval.dims:
+        return interval.isel(quantile=0), interval.isel(quantile=1)
+    return (interval.sel(errorbar_bound='low'),
+            interval.sel(errorbar_bound='high'))
+
+
+def _bootstrap_interval(arr, reduce_dim, level, n_boot, rng, return_ci=True):
+    import inspect
+    import xarray as xr
+    from scipy import stats
+
+    axis = arr.get_axis_num(reduce_dim)
+    kwargs = dict(
+        n_resamples=int(n_boot), vectorized=True, paired=False, axis=axis,
+        method='percentile', batch=min(int(n_boot), 1000)
+    )
+    if level is not None:
+        kwargs['confidence_level'] = level / 100
+
+    has_rng_arg = 'rng' in inspect.signature(stats.bootstrap).parameters
+    rng_arg = 'rng' if has_rng_arg else 'random_state'
+    kwargs[rng_arg] = rng
+
+    res = stats.bootstrap((arr.values,), np.nanmean, **kwargs)
+    dims = [dim for dim in arr.dims if dim != reduce_dim]
+    coords = {dim: arr.coords[dim] for dim in dims if dim in arr.coords}
+
+    if return_ci:
+        data = np.stack(
+            [res.confidence_interval.low, res.confidence_interval.high],
+            axis=-1
+        )
+        return xr.DataArray(
+            data, dims=dims + ['errorbar_bound'],
+            coords={**coords, 'errorbar_bound': ['low', 'high']}
+        )
+
+    return xr.DataArray(res.standard_error, dims=dims, coords=coords)
+
+
+def _check_random_state(seed):
+    if isinstance(seed, (np.random.Generator, np.random.RandomState)):
+        return seed
+    return np.random.default_rng(seed)
+
+
+def _callable_interval(arr, reduce_dim, func):
+    def call_1d(vals):
+        vals = np.asarray(vals)
+        vals = vals[~np.isnan(vals)]
+        if len(vals) <= 1:
+            return np.array([np.nan, np.nan])
+        interval = np.asarray(func(vals), dtype=float)
+        if interval.shape != (2,):
+            raise ValueError('errorbar callable must return a length-2 '
+                             'interval.')
+        return interval
+
+    return _apply_interval_func(arr, reduce_dim, call_1d)
+
+
+def _apply_interval_func(arr, reduce_dim, func):
+    import xarray as xr
+
+    interval = xr.apply_ufunc(
+        func, arr, input_core_dims=[[reduce_dim]],
+        output_core_dims=[['errorbar_bound']], vectorize=True,
+        output_dtypes=[float]
+    )
+    return interval.assign_coords(errorbar_bound=['low', 'high'])
 
 
 def check_coord(xarr, coord_name):
