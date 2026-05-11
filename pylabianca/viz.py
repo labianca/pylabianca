@@ -7,12 +7,11 @@ import numpy as np
 #       groupby coord name in legend "title"
 # TODO: when using col and row consider placing the legend in only one of
 #       the subplots or outside (on the margins)
-# TODO: allow for colors (use ``mpl.colors.to_rgb('C1')`` etc.)
 # TODO: check if using some functionality from seaborn makes sense
 #       seaborn.axisgrid.FacetGrid, seaborn._core.subplots
 def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
                 x_dim=None, legend=True, legend_pos=None, colors=None,
-                labels=True, col=None, row=None, errorbar='se', n_boot=None,
+                labels=True, col=None, row=None, errorbar='se', n_boot=0,
                 seed=None, **kwargs):
     '''Plot spike rate with a shaded error interval.
 
@@ -57,12 +56,18 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
         dimension will be plotted in a separate row. Default is ``None``.
     errorbar : str, (str, number) tuple, callable or None
         Error interval to show as a shaded area. Uses seaborn-style
-        specification: one of ``'ci'``, ``'pi'``, ``'se'`` or ``'sd'``, a
-        tuple with the method name and level, a callable mapping a vector to
-        a ``(min, max)`` interval, or ``None`` to hide the interval. Defaults
-        to ``'se'``.
-    n_boot : int | None
-        Number of bootstrap samples. When ``None`` (default), ``'ci'`` uses a
+        specification, can be either:
+        * ``'ci'`` - confidence interval;
+        * ``'pi'`` - percentile interval;
+        * ``'se'`` - standard error of the mean;
+        * ``'sd'`` - standard deviation;
+        * a tuple with the method name (any of the above) and a level, for
+          example ``('ci', 99)`` for a 99% confidence interval;
+        * a callable mapping a vector to a ``(min, max)`` interval;
+        * or ``None`` to hide the interval.
+        Defaults to ``'se'``.
+    n_boot : int
+        Number of bootstrap samples. When ``0`` (default), ``'ci'`` uses a
         parametric t interval and ``'se'`` uses the analytic standard error.
         When an integer, ``'ci'`` and ``'se'`` are estimated by bootstrap.
     seed : int | numpy.random.Generator | numpy.random.RandomState | None
@@ -217,7 +222,7 @@ def plot_shaded(arr, reduce_dim=None, groupby=None, ax=None,
 # TODO: allow different error shades
 def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
                        ax=None, legend=True, legend_pos=None, colors=None,
-                       errorbar='se', n_boot=None, seed=None, **kwargs):
+                       errorbar='se', n_boot=0, seed=None, **kwargs):
     """
     Plot xarray with error bar shade.
 
@@ -251,12 +256,18 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         is ``None`` which uses the default matplotlib color cycle.
     errorbar : str, (str, number) tuple, callable or None
         Error interval to show as a shaded area. Uses seaborn-style
-        specification: one of ``'ci'``, ``'pi'``, ``'se'`` or ``'sd'``, a
-        tuple with the method name and level, a callable mapping a vector to
-        a ``(min, max)`` interval, or ``None`` to hide the interval. Defaults
-        to ``'se'``.
-    n_boot : int | None
-        Number of bootstrap samples. When ``None`` (default), ``'ci'`` uses a
+        specification, can be either:
+        * ``'ci'`` - confidence interval;
+        * ``'pi'`` - percentile interval;
+        * ``'se'`` - standard error of the mean;
+        * ``'sd'`` - standard deviation;
+        * a tuple with the method name (any of the above) and a level, for
+          example ``('ci', 99)`` for a 99% confidence interval;
+        * a callable mapping a vector to a ``(min, max)`` interval;
+        * or ``None`` to hide the interval.
+        Defaults to ``'se'``.
+    n_boot : int
+        Number of bootstrap samples. When ``0`` (default), ``'ci'`` uses a
         parametric t interval and ``'se'`` uses the analytic standard error.
         When an integer, ``'ci'`` and ``'se'`` are estimated by bootstrap.
     seed : int | numpy.random.Generator | numpy.random.RandomState | None
@@ -273,7 +284,7 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
     import matplotlib.pyplot as plt
     assert reduce_dim is not None
 
-    _validate_errorbar_arg(errorbar)
+    errorbar_method, errorbar_level = _validate_errorbar_arg(errorbar)
 
     if ax is None:
         _, ax = plt.subplots()
@@ -285,8 +296,10 @@ def plot_xarray_shaded(arr, reduce_dim=None, x_dim='time', groupby=None,
         arr_grouped = arr
 
     avg = arr_grouped.mean(dim=reduce_dim)
+
     ci_low, ci_high = _compute_error_interval(
-        arr, arr_grouped, avg, reduce_dim, groupby, errorbar,
+        arr, arr_grouped, avg, reduce_dim, groupby,
+        errorbar_method, errorbar_level,
         n_boot=n_boot, seed=seed
     )
 
@@ -376,49 +389,50 @@ def _validate_errorbar_arg(arg):
 
 
 def _validate_n_boot(n_boot):
-    if n_boot is None:
-        return
-    if not isinstance(n_boot, Number) or int(n_boot) != n_boot or n_boot <= 0:
-        raise ValueError('n_boot must be a positive integer or None.')
+    if not isinstance(n_boot, Number) or int(n_boot) != n_boot or n_boot < 0:
+        raise ValueError('n_boot must be a non-negative integer or None.')
 
 
 def _compute_error_interval(arr, arr_grouped, avg, reduce_dim, groupby,
-                            errorbar, n_boot=None, seed=None):
-    method, level = _validate_errorbar_arg(errorbar)
+                            errorbar_method, errorbar_level, n_boot=0,
+                            seed=None):
     _validate_n_boot(n_boot)
+    rng = _check_random_state(seed, errorbar_method, n_boot)
 
-    if method is None:
+    if errorbar_method is None:
         return None, None
-    elif method == 'sd':
-        err = arr_grouped.std(dim=reduce_dim, ddof=1) * level
+    elif errorbar_method == 'sd':
+        err = arr_grouped.std(dim=reduce_dim, ddof=1) * errorbar_level
         return avg - err, avg + err
-    elif method == 'se':
+    elif errorbar_method == 'se':
         if n_boot is None:
             err = _standard_error(arr_grouped, reduce_dim)
         else:
-            err = _bootstrap_standard_error(
-                arr, reduce_dim, groupby, n_boot, seed
+            err = _bootstrap_error_interval(
+                arr, reduce_dim, groupby, None, n_boot, rng, return_ci=False
             )
-        err = err * level
+        err = err * errorbar_level
         return avg - err, avg + err
-    elif method == 'pi':
-        edge = (100 - level) / 2
+    elif errorbar_method == 'pi':
+        edge = (100 - errorbar_level) / 2
         q = [edge / 100, (100 - edge) / 100]
         interval = arr_grouped.quantile(q, dim=reduce_dim)
-    elif method == 'ci':
-        if n_boot is None:
+    elif errorbar_method == 'ci':
+        if n_boot == 0:
             return _parametric_confidence_interval(
-                arr_grouped, avg, reduce_dim, level
+                arr_grouped, avg, reduce_dim, errorbar_level
             )
-        interval = _bootstrap_confidence_interval(
-            arr, reduce_dim, groupby, level, n_boot, seed
+        interval = _bootstrap_error_interval(
+            arr, reduce_dim, groupby, errorbar_level, n_boot, rng,
+            return_ci=True
         )
     else:
         if groupby is None:
-            interval = _callable_interval(arr, reduce_dim, method)
+            interval = _callable_interval(arr, reduce_dim, errorbar_method)
         else:
             interval = arr.groupby(groupby).map(
-                lambda x: _callable_interval(x, reduce_dim, method)
+                lambda x: _callable_interval(
+                    x, reduce_dim, errorbar_method)
             )
 
     return _split_interval(interval)
@@ -442,31 +456,11 @@ def _parametric_confidence_interval(arr_grouped, avg, reduce_dim, level):
     return avg - err, avg + err
 
 
-def _bootstrap_confidence_interval(arr, reduce_dim, groupby, level, n_boot,
-                                   seed):
-    rng = _check_random_state(seed)
+def _bootstrap_error_interval(arr, groupby, *args):
     if groupby is None:
-        interval = _bootstrap_interval(
-            arr, reduce_dim, level, n_boot, rng, return_ci=True
-        )
-    else:
-        interval = arr.groupby(groupby).map(
-            lambda x: _bootstrap_interval(
-                x, reduce_dim, level, n_boot, rng, return_ci=True)
-        )
-
-    return interval
-
-
-def _bootstrap_standard_error(arr, reduce_dim, groupby, n_boot, seed):
-    rng = _check_random_state(seed)
-    if groupby is None:
-        return _bootstrap_interval(
-            arr, reduce_dim, None, n_boot, rng, return_ci=False
-        )
+        return _bootstrap_interval(arr, *args)
     return arr.groupby(groupby).map(
-        lambda x: _bootstrap_interval(
-            x, reduce_dim, None, n_boot, rng, return_ci=False)
+        lambda x: _bootstrap_interval(x, *args)
     )
 
 
@@ -511,7 +505,9 @@ def _bootstrap_interval(arr, reduce_dim, level, n_boot, rng, return_ci=True):
     return xr.DataArray(res.standard_error, dims=dims, coords=coords)
 
 
-def _check_random_state(seed):
+def _check_random_state(seed, method, n_boot):
+    if method not in ['se', 'ci'] or n_boot == 0:
+        return None
     if isinstance(seed, (np.random.Generator, np.random.RandomState)):
         return seed
     return np.random.default_rng(seed)
