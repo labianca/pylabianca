@@ -405,11 +405,11 @@ def _compute_error_interval(arr, arr_grouped, avg, reduce_dim, groupby,
         err = arr_grouped.std(dim=reduce_dim, ddof=1) * errorbar_level
         return avg - err, avg + err
     elif errorbar_method == 'se':
-        if n_boot is None:
+        if n_boot == 0:
             err = _standard_error(arr_grouped, reduce_dim)
         else:
             err = _bootstrap_error_interval(
-                arr, reduce_dim, groupby, None, n_boot, rng, return_ci=False
+                arr, groupby, reduce_dim, None, n_boot, rng, False
             )
         err = err * errorbar_level
         return avg - err, avg + err
@@ -423,8 +423,7 @@ def _compute_error_interval(arr, arr_grouped, avg, reduce_dim, groupby,
                 arr_grouped, avg, reduce_dim, errorbar_level
             )
         interval = _bootstrap_error_interval(
-            arr, reduce_dim, groupby, errorbar_level, n_boot, rng,
-            return_ci=True
+            arr, groupby, reduce_dim, errorbar_level, n_boot, rng, True
         )
     else:
         if groupby is None:

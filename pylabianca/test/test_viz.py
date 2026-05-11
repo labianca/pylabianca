@@ -167,7 +167,7 @@ def test_plot_shaded_errorbar_ci_callable_and_none(monkeypatch):
     pln.plot_shaded(xarr, ax=ax, errorbar='se', n_boot=20, seed=0)
     boot = stats.bootstrap(
         (data,), np.nanmean, n_resamples=20, vectorized=True, axis=0,
-        method='percentile', rng=np.random.default_rng(0)
+        method='percentile', **{rng_arg: np.random.default_rng(0)}
     )
     avg = data.mean(axis=0)
     np.testing.assert_allclose(bands[0][0], avg - boot.standard_error)
