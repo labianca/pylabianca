@@ -1061,20 +1061,23 @@ def xarray_to_dict(xarr, ses_coord='sub', reduce_coords=True,
                         'xarray.Dataset.')
 
     _check_ses_coord(xarr, ses_coord, ses_name)
-    sessions, ses_idx = np.unique(xarr.coords[ses_coord].values, return_index=True)
+    sessions_all = xarr.coords[ses_coord]
+    assert len(sessions_all.dims) == 1
+    obs_dim = sessions_all.dims[0]
+    sessions, ses_idx = np.unique(sessions_all.values, return_index=True)
 
     sort_idx = np.argsort(ses_idx)
     sessions = sessions[sort_idx]
     ses_idx = ses_idx[sort_idx]
-    ses_idx = np.append(ses_idx, xarr.cell.shape[0])
+    ses_idx = np.append(ses_idx, xarr.coords[obs_dim].shape[0])
 
     for idx, ses in enumerate(sessions):
-        arr = xarr.isel(cell=slice(ses_idx[idx], ses_idx[idx + 1]))
+        arr = xarr.isel({obs_dim: slice(ses_idx[idx], ses_idx[idx + 1])})
         if reduce_coords:
             new_coords = dict()
             drop_coords = list()
-            if 'cell' in arr.coords and 'trial' in arr.coords:
-                nested_coords = find_nested_dims(arr, ('cell', 'trial'))
+            if 'trial' in arr.coords:
+                nested_coords = find_nested_dims(arr, (obs_dim, 'trial'))
             else:
                 nested_coords = list()
 
