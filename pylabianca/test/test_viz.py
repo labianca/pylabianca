@@ -71,22 +71,20 @@ def test_plot_shaded():
     pln.plot_shaded(xarr_one_cell)
 
 
-@pytest.mark.parametrize(
-    'errorbar',
-    ['se', ('se', 2), 'sd', ('sd', 2), ('pi', 50), ('ci', 95)]
-)
-def test_plot_shaded_errorbar(errorbar, monkeypatch):
+def _simple_data():
     data = np.array([
         [1., 2., 3.],
         [3., 6., 9.],
         [5., 10., 15.],
     ])
     time = np.array([0., 1., 2.])
-    xarr = xr.DataArray(data, dims=('trial', 'time'),
-                        coords={'time': time})
+    xarr = xr.DataArray(data, dims=('trial', 'time'), coords={'time': time})
+    return xarr
 
+
+def _monkeypath_fillbetween(ax, monkeypatch):
+    bands = list()
     _, ax = plt.subplots()
-    bands = []
     fill_between = ax.fill_between
 
     def capture_fill_between(x, y1, y2, *args, **kwargs):
@@ -94,6 +92,16 @@ def test_plot_shaded_errorbar(errorbar, monkeypatch):
         return fill_between(x, y1, y2, *args, **kwargs)
 
     monkeypatch.setattr(ax, 'fill_between', capture_fill_between)
+    return ax, bands
+
+
+@pytest.mark.parametrize(
+    'errorbar',
+    ['se', ('se', 2), 'sd', ('sd', 2), ('pi', 50), ('ci', 95)]
+)
+def test_plot_shaded_errorbar(errorbar, monkeypatch):
+    xarr = _simple_data()
+    ax, bands = _monkeypath_fillbetween(monkeypatch)
     pln.plot_shaded(xarr, ax=ax, errorbar=errorbar)
 
     avg = xarr.mean(dim='trial')
@@ -132,31 +140,19 @@ def test_plot_shaded_errorbar(errorbar, monkeypatch):
 
 
 def test_plot_shaded_errorbar_ci_callable_and_none(monkeypatch):
-    data = np.array([
-        [1., 2., 3.],
-        [3., 6., 9.],
-        [5., 10., 15.],
-    ])
-    xarr = xr.DataArray(data, dims=('trial', 'time'),
-                        coords={'time': [0., 1., 2.]})
-
-    _, ax = plt.subplots()
-    bands = []
-    fill_between = ax.fill_between
-
-    def capture_fill_between(x, y1, y2, *args, **kwargs):
-        bands.append((np.asarray(y1), np.asarray(y2)))
-        return fill_between(x, y1, y2, *args, **kwargs)
-
-    monkeypatch.setattr(ax, 'fill_between', capture_fill_between)
-    pln.plot_shaded(xarr, ax=ax, errorbar=('ci', 95), n_boot=20, seed=0)
-
+    import inspect
     from scipy import stats
 
+    xarr = _simple_data()
+    ax, bands = _monkeypath_fillbetween(monkeypatch)
+    pln.plot_shaded(xarr, ax=ax, errorbar=('ci', 95), n_boot=20, seed=0)
+
+    rng_arg = ('rng' if 'rng' in inspect.signature(stats.bootstrap).parameters
+               else 'random_state')
     boot = stats.bootstrap(
         (data,), np.nanmean, n_resamples=20, vectorized=True, axis=0,
         confidence_level=0.95, method='percentile',
-        rng=np.random.default_rng(0)
+        **{rng_arg: np.random.default_rng(0)}
     )
 
     assert len(bands) == 1
