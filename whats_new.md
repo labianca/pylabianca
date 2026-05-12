@@ -43,6 +43,7 @@ ENH: `pylabianca.stats.cluster_based_test()` now infers the statistical test to 
 ENH: `pylabianca.stats.cluster_based_test()` no longer expects the observations dimention (`compare`) to be the first one in the passed DataArray when performing an unpaired (independent) test.
 * ENH: `pylabianca.viz.plot_shaded()` now allows to facet by condition into rows and columns using `row` and `col` arguments
 * ENH: allow passing colors by name to `colors` in `pylabianca.viz.plot_shaded()`.
+* ENH: `pylabianca.viz.plot_shaded()` now accepts an `errorbar` argument to control shaded intervals, including standard error, standard deviation, confidence intervals, percentile intervals and custom callable intervals.
 
 <br/>
 
