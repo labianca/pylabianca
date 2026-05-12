@@ -71,6 +71,177 @@ def test_plot_shaded():
     pln.plot_shaded(xarr_one_cell)
 
 
+def _simple_data():
+    data = np.array([
+        [1., 2., 3.],
+        [3., 6., 9.],
+        [5., 10., 15.],
+    ])
+    time = np.array([0., 1., 2.])
+    xarr = xr.DataArray(data, dims=('trial', 'time'), coords={'time': time})
+    return xarr
+
+
+def _monkeypath_fillbetween(monkeypatch):
+    bands = list()
+    _, ax = plt.subplots()
+    fill_between = ax.fill_between
+
+    def capture_fill_between(x, y1, y2, *args, **kwargs):
+        bands.append((np.asarray(y1), np.asarray(y2)))
+        return fill_between(x, y1, y2, *args, **kwargs)
+
+    monkeypatch.setattr(ax, 'fill_between', capture_fill_between)
+    return ax, bands
+
+
+@pytest.mark.parametrize(
+    'errorbar',
+    ['se', ('se', 2), 'sd', ('sd', 2), ('pi', 50), ('ci', 95)]
+)
+def test_plot_shaded_errorbar(errorbar, monkeypatch):
+    xarr = _simple_data()
+    ax, bands = _monkeypath_fillbetween(monkeypatch)
+    pln.plot_shaded(xarr, ax=ax, errorbar=errorbar)
+
+    avg = xarr.mean(dim='trial')
+    if isinstance(errorbar, tuple):
+        method, level = errorbar
+    else:
+        method, level = errorbar, 1
+
+    if method == 'se':
+        err = xarr.std(dim='trial', ddof=1) / np.sqrt(
+            xarr.count(dim='trial')
+        )
+        expected_low, expected_high = avg - (err * level), avg + (err * level)
+    elif method == 'sd':
+        err = xarr.std(dim='trial', ddof=1)
+        expected_low, expected_high = avg - (err * level), avg + (err * level)
+    elif method == 'pi':
+        q_low = (100 - level) / 2
+        q_high = 100 - q_low
+        expected_low, expected_high = np.nanpercentile(
+            xarr.data, [q_low, q_high], axis=0
+        )
+    elif method == 'ci':
+        from scipy import stats
+
+        err = xarr.std(dim='trial', ddof=1) / np.sqrt(
+            xarr.count(dim='trial')
+        )
+        crit = stats.t.ppf(1 - ((1 - level / 100) / 2),
+                           xarr.sizes['trial'] - 1)
+        expected_low, expected_high = avg - (err * crit), avg + (err * crit)
+
+    assert len(bands) == 1
+    np.testing.assert_allclose(bands[0][0], expected_low)
+    np.testing.assert_allclose(bands[0][1], expected_high)
+
+
+def test_plot_shaded_errorbar_ci_callable_and_none(monkeypatch):
+    import inspect
+    from scipy import stats
+
+    xarr = _simple_data()
+    ax, bands = _monkeypath_fillbetween(monkeypatch)
+    pln.plot_shaded(xarr, ax=ax, errorbar=('ci', 95), n_boot=20, seed=0)
+
+    rng_arg = ('rng' if 'rng' in inspect.signature(stats.bootstrap).parameters
+               else 'random_state')
+    boot = stats.bootstrap(
+        (xarr.data,), np.nanmean, n_resamples=20, vectorized=True, axis=0,
+        confidence_level=0.95, method='percentile',
+        **{rng_arg: np.random.default_rng(0)}
+    )
+
+    assert len(bands) == 1
+    np.testing.assert_allclose(bands[0][0], boot.confidence_interval.low)
+    np.testing.assert_allclose(bands[0][1], boot.confidence_interval.high)
+
+    bands.clear()
+    pln.plot_shaded(xarr, ax=ax, errorbar='se', n_boot=20, seed=0)
+    boot = stats.bootstrap(
+        (xarr.data,), np.nanmean, n_resamples=20, vectorized=True, axis=0,
+        method='percentile', **{rng_arg: np.random.default_rng(0)}
+    )
+    avg = xarr.data.mean(axis=0)
+    np.testing.assert_allclose(bands[0][0], avg - boot.standard_error)
+    np.testing.assert_allclose(bands[0][1], avg + boot.standard_error)
+
+    bands.clear()
+    pln.plot_shaded(
+        xarr, ax=ax, errorbar=lambda x: (np.nanmin(x), np.nanmax(x))
+    )
+    assert len(bands) == 1
+    np.testing.assert_allclose(bands[0][0], xarr.data.min(axis=0))
+    np.testing.assert_allclose(bands[0][1], xarr.data.max(axis=0))
+
+    bands.clear()
+    pln.plot_shaded(xarr, ax=ax, errorbar=None)
+    assert len(bands) == 0
+
+    with pytest.raises(ValueError, match='errorbar must be one of'):
+        pln.plot_shaded(xarr, errorbar='krecik')
+
+
+@pytest.mark.parametrize('errorbar', [1, ['se', 1], ('se',), ('se', 1, 2)])
+def test_plot_shaded_errorbar_invalid_spec(errorbar):
+    with pytest.raises(TypeError, match='`errorbar` must be'):
+        pln.plot_shaded(_simple_data(), errorbar=errorbar)
+
+
+def test_plot_shaded_errorbar_level_must_be_number():
+    with pytest.raises(TypeError, match='`errorbar` must be'):
+        pln.plot_shaded(_simple_data(), errorbar=('se', 'two'))
+
+
+@pytest.mark.parametrize('n_boot', [-1, 1.5, None])
+def test_plot_shaded_n_boot_invalid(n_boot):
+    with pytest.raises(ValueError, match='non-negative integer'):
+        pln.plot_shaded(_simple_data(), n_boot=n_boot)
+
+
+def test_plot_shaded_callable_errorbar_validation(monkeypatch):
+    with pytest.raises(ValueError, match='length-2'):
+        pln.plot_shaded(_simple_data(), errorbar=lambda x: np.array([x.min()]))
+
+    xarr = xr.DataArray(
+        [[1., np.nan], [np.nan, 2.]], dims=('trial', 'time'),
+        coords={'time': [0., 1.]}
+    )
+    ax, bands = _monkeypath_fillbetween(monkeypatch)
+    pln.plot_shaded(
+        xarr, ax=ax, errorbar=lambda x: (np.nanmin(x), np.nanmax(x))
+    )
+    np.testing.assert_allclose(bands[0][0], [np.nan, np.nan])
+    np.testing.assert_allclose(bands[0][1], [np.nan, np.nan])
+
+
+@pytest.mark.parametrize(
+    'errorbar, n_collections',
+    [(('pi', 50), 2), (('ci', 80), 2), (lambda x: (x.min(), x.max()), 2),
+     (None, 0)]
+)
+def test_plot_shaded_errorbar_groupby(errorbar, n_collections):
+    data = np.arange(24., dtype=float).reshape(6, 4)
+    xarr = xr.DataArray(
+        data, dims=('trial', 'time'),
+        coords={
+            'time': [0., 1., 2., 3.],
+            'cond': ('trial', ['A', 'A', 'A', 'B', 'B', 'B']),
+        }
+    )
+
+    ax = pln.plot_shaded(
+        xarr, groupby='cond', errorbar=errorbar, n_boot=10, seed=0,
+        legend=False
+    )
+
+    assert len(ax.lines) == 2
+    assert len(ax.collections) == n_collections
+
+
 def test_plot_shaded_colors():
     df = pd.DataFrame({'condition': ['A'] * 13 + ['B'] * 12})
     spk = random_spikes(
