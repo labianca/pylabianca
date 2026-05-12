@@ -82,7 +82,7 @@ def _simple_data():
     return xarr
 
 
-def _monkeypath_fillbetween(ax, monkeypatch):
+def _monkeypath_fillbetween(monkeypatch):
     bands = list()
     _, ax = plt.subplots()
     fill_between = ax.fill_between
@@ -122,7 +122,7 @@ def test_plot_shaded_errorbar(errorbar, monkeypatch):
         q_low = (100 - level) / 2
         q_high = 100 - q_low
         expected_low, expected_high = np.nanpercentile(
-            data, [q_low, q_high], axis=0
+            xarr.data, [q_low, q_high], axis=0
         )
     elif method == 'ci':
         from scipy import stats
@@ -150,7 +150,7 @@ def test_plot_shaded_errorbar_ci_callable_and_none(monkeypatch):
     rng_arg = ('rng' if 'rng' in inspect.signature(stats.bootstrap).parameters
                else 'random_state')
     boot = stats.bootstrap(
-        (data,), np.nanmean, n_resamples=20, vectorized=True, axis=0,
+        (xarr.data,), np.nanmean, n_resamples=20, vectorized=True, axis=0,
         confidence_level=0.95, method='percentile',
         **{rng_arg: np.random.default_rng(0)}
     )
@@ -162,10 +162,10 @@ def test_plot_shaded_errorbar_ci_callable_and_none(monkeypatch):
     bands.clear()
     pln.plot_shaded(xarr, ax=ax, errorbar='se', n_boot=20, seed=0)
     boot = stats.bootstrap(
-        (data,), np.nanmean, n_resamples=20, vectorized=True, axis=0,
+        (xarr.data,), np.nanmean, n_resamples=20, vectorized=True, axis=0,
         method='percentile', **{rng_arg: np.random.default_rng(0)}
     )
-    avg = data.mean(axis=0)
+    avg = xarr.data.mean(axis=0)
     np.testing.assert_allclose(bands[0][0], avg - boot.standard_error)
     np.testing.assert_allclose(bands[0][1], avg + boot.standard_error)
 
@@ -174,8 +174,8 @@ def test_plot_shaded_errorbar_ci_callable_and_none(monkeypatch):
         xarr, ax=ax, errorbar=lambda x: (np.nanmin(x), np.nanmax(x))
     )
     assert len(bands) == 1
-    np.testing.assert_allclose(bands[0][0], data.min(axis=0))
-    np.testing.assert_allclose(bands[0][1], data.max(axis=0))
+    np.testing.assert_allclose(bands[0][0], xarr.data.min(axis=0))
+    np.testing.assert_allclose(bands[0][1], xarr.data.max(axis=0))
 
     bands.clear()
     pln.plot_shaded(xarr, ax=ax, errorbar=None)
