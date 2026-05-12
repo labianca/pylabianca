@@ -373,11 +373,10 @@ def _validate_errorbar_arg(arg):
     if isinstance(arg, str):
         method = arg
         level = default_levels.get(method, None)
+    elif isinstance(arg, tuple) and len(arg) == 2:
+        method, level = arg
     else:
-        try:
-            method, level = arg
-        except (ValueError, TypeError) as err:
-            raise err.__class__(usage) from err
+        raise TypeError(usage)
 
     if method not in default_levels:
         options = ', '.join([f"'{opt}'" for opt in default_levels])
@@ -390,7 +389,7 @@ def _validate_errorbar_arg(arg):
 
 def _validate_n_boot(n_boot):
     if not isinstance(n_boot, Number) or int(n_boot) != n_boot or n_boot < 0:
-        raise ValueError('n_boot must be a non-negative integer or None.')
+        raise ValueError('n_boot must be a non-negative integer.')
 
 
 def _compute_error_interval(arr, arr_grouped, avg, reduce_dim, groupby,

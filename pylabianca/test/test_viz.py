@@ -185,6 +185,39 @@ def test_plot_shaded_errorbar_ci_callable_and_none(monkeypatch):
         pln.plot_shaded(xarr, errorbar='krecik')
 
 
+@pytest.mark.parametrize('errorbar', [1, ['se', 1], ('se',), ('se', 1, 2)])
+def test_plot_shaded_errorbar_invalid_spec(errorbar):
+    with pytest.raises(TypeError, match='`errorbar` must be'):
+        pln.plot_shaded(_simple_data(), errorbar=errorbar)
+
+
+def test_plot_shaded_errorbar_level_must_be_number():
+    with pytest.raises(TypeError, match='`errorbar` must be'):
+        pln.plot_shaded(_simple_data(), errorbar=('se', 'two'))
+
+
+@pytest.mark.parametrize('n_boot', [-1, 1.5, None])
+def test_plot_shaded_n_boot_invalid(n_boot):
+    with pytest.raises(ValueError, match='non-negative integer'):
+        pln.plot_shaded(_simple_data(), n_boot=n_boot)
+
+
+def test_plot_shaded_callable_errorbar_validation(monkeypatch):
+    with pytest.raises(ValueError, match='length-2'):
+        pln.plot_shaded(_simple_data(), errorbar=lambda x: np.array([x.min()]))
+
+    xarr = xr.DataArray(
+        [[1., np.nan], [np.nan, 2.]], dims=('trial', 'time'),
+        coords={'time': [0., 1.]}
+    )
+    ax, bands = _monkeypath_fillbetween(monkeypatch)
+    pln.plot_shaded(
+        xarr, ax=ax, errorbar=lambda x: (np.nanmin(x), np.nanmax(x))
+    )
+    np.testing.assert_allclose(bands[0][0], [np.nan, np.nan])
+    np.testing.assert_allclose(bands[0][1], [np.nan, np.nan])
+
+
 @pytest.mark.parametrize(
     'errorbar, n_collections',
     [(('pi', 50), 2), (('ci', 80), 2), (lambda x: (x.min(), x.max()), 2),
