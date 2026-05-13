@@ -210,7 +210,8 @@ def _prepare_arrays(frate, compare, paired):
     if compare in frate.dims:
         drop_dims.append(compare)
         dim_idx = frate.dims.index(compare)
-        arrays = [np.squeeze(arr, axis=dim_idx) for arr in arrays]
+        if arrays[0].ndim == frate.ndim:
+            arrays = [np.squeeze(arr, axis=dim_idx) for arr in arrays]
 
         # first dimension (observations) should be reduced
         # TODO: auto-detect observation dimension and make sure it is first
