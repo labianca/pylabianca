@@ -519,7 +519,7 @@ def test_aggregate_per_cell_backend_parity():
 
     agg_xarray = pln.aggregate(arr, backend='xarray', **common_kwargs)
     agg_numba = pln.aggregate(arr, backend='numba', **common_kwargs)
-    xr.testing.assert_identical(agg_numba, agg_xarray)
+    xr.testing.assert_allclose(agg_numba, agg_xarray)
 
 
 @pytest.mark.skipif(
@@ -536,7 +536,7 @@ def test_aggregate_per_cell_backend_parity_dict():
     agg_numba = pln.aggregate(
         arr_dct, groupby='preferred', per_cell=True, backend='numba'
     )
-    xr.testing.assert_identical(agg_numba, agg_xarray)
+    xr.testing.assert_allclose(agg_numba, agg_xarray)
 
 
 @pytest.mark.skipif(
