@@ -21,10 +21,10 @@ jobs:
             apt-get install -y gettext-base
 
             if [ << parameters.mne_version >> == "current" ]; then
-              export XARRAY_VER=">=2026"
+              export XARRAY_SPEC=">=2026"
               export SCIPY_VER=">=1.11.3"
             else
-              export XARRAY_VER="2023.10.1"
+              export XARRAY_SPEC="=2023.10.1"
               export SCIPY_VER="<=1.16.2"
             fi
 
