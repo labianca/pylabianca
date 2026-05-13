@@ -214,6 +214,34 @@ def test_xarr_dct_conversion():
     xarr_2 = pln.dict_to_xarray(x_dct2)
     assert (xarr == xarr_2).all().item()
 
+    # session information can live on a dimension other than cell
+    sessions = np.array(['beh-A01', 'beh-A02'])
+    choices = np.array([
+        ['left', 'right', 'left', 'right'],
+        ['right', 'right', 'left', 'left'],
+    ])
+    arr = xr.DataArray(
+        np.arange(sessions.size * 4).reshape(-1, 4),
+        dims=['session', 'trial'],
+        coords={
+            'trial': np.arange(4),
+            'sub': ('session', sessions),
+            'choice': (('session', 'trial'), choices),
+        },
+        name='reaction_time',
+    )
+    assert 'cell' not in arr.dims
+
+    arr_dct = pln.xarray_to_dict(arr)
+    assert list(arr_dct) == list(sessions)
+    for idx, ses in enumerate(sessions):
+        ses_arr = arr_dct[ses]
+        assert ses_arr.dims == ('session', 'trial')
+        assert ses_arr.shape == (1, 4)
+        assert ses_arr.coords['sub'].item() == ses
+        assert ses_arr.coords['choice'].dims == ('trial',)
+        assert (ses_arr.coords['choice'].values == choices[idx]).all()
+
     # for some reason performing a query will not work without
     # assigning a name to the DataArray
     # we test this here to be warned when this behavior is changed in xarray
