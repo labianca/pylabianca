@@ -1024,7 +1024,7 @@ def xarray_to_dict(xarr, ses_coord='sub', reduce_coords=True,
     '''Convert multi-session xarray to dictionary of session -> xarray pairs.
 
     Note, that it is assumed that each session is a contiguous block in the
-    xarray along the cell dimension.
+    xarray along the dimension of the session coordinate.
 
     Parameters
     ----------

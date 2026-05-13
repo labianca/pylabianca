@@ -22,7 +22,8 @@
 * ENH: `SpikeEpochs.spike_rate()` now has a `count` argument to return spike counts without normalizing by window length.
 * ENH: `Spikes.epoch()` with `backend='numba'` has been further sped up, it is now 30-40 times faster than numpy
 * ENH: `pylabianca.analysis.spike_centered_windows()` (previously `pylabianca.utils.spike_centered_windows()`) has been sped up twofold.
-* ENH: `pylabianca.analysis.xarray_to_dict()` has been sped up considerably. It relies on sessions being concatenated along the cell dimension (so each session being a contiguous block of cells).
+* ENH: `pylabianca.analysis.xarray_to_dict()` has been sped up considerably. It relies on sessions being concatenated along the dimension of the session coordinate (so each session is a contiguous block of observations, usually cells).
+* ENH: `pylabianca.analysis.xarray_to_dict()` can now split xarrays whose session information is defined along any single observation dimension, so the dimension does not have to be named `cell`.
 * ENH: `pylabianca.analysis.aggregate()` receives a `backend` argument that can be set to `'numba'` for per-cell execution (`per_cell=True`) speeding it up considerably.
 * ENH: add `pylabianca.utils._inherit_from_xarray()` to allow inheriting metadata (cell or trial-level additional information) from xarray DataArray to new xarray DataArray.
 * ENH: `pylabianca.analysis.dict_to_xarray()` now allows to pass dictionary of `xarray.Dataset` as input.
