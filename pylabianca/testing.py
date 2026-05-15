@@ -31,7 +31,8 @@ def spk_epochs(ft_data):
 
 
 def random_xarray(n_cells, n_trials, n_times, per_cell_coord=False,
-                  trial_condition_levels=None):
+                  trial_condition_levels=None, signal=0.,
+                  random_state=None):
     """Create a random `(cell, trial, time)` firing-rate-like DataArray.
 
     Parameters
@@ -47,7 +48,13 @@ def random_xarray(n_cells, n_trials, n_times, per_cell_coord=False,
         ``preferred``.
     trial_condition_levels : array-like | None
         Optional condition levels used to generate a trial-wise coordinate
-        named ``cond``.
+        named ``cond``. If ``signal`` is non-zero, these levels are assigned
+        as evenly as possible across trials.
+    signal : float
+        Additive signal placed in all cells for the last condition level.
+        Used only when ``trial_condition_levels`` is not ``None``.
+    random_state : int | None
+        Seed for reproducible data and condition order.
 
     Returns
     -------
@@ -56,16 +63,26 @@ def random_xarray(n_cells, n_trials, n_times, per_cell_coord=False,
     """
     import xarray as xr
 
+    if trial_condition_levels is None and signal != 0.:
+        raise ValueError('signal requires trial_condition_levels.')
+
     letters = np.array(list(ascii_lowercase))
     dim_names = ['cell', 'trial', 'time']
     time = np.linspace(-0.5, 1.5, num=n_times)
-    data = np.random.rand(n_cells, n_trials, n_times)
-    cell_names = [''.join(np.random.choice(letters, 5))
+    rng = np.random.default_rng(random_state)
+    data = rng.random((n_cells, n_trials, n_times))
+    cell_names = [''.join(rng.choice(letters, 5))
                   for _ in range(n_cells)]
 
     coords={'cell': cell_names, 'trial': np.arange(n_trials), 'time': time}
     if trial_condition_levels is not None:
-        levels = np.random.choice(trial_condition_levels, size=n_trials)
+        conditions = np.asarray(trial_condition_levels)
+        if signal == 0.:
+            levels = rng.choice(conditions, size=n_trials)
+        else:
+            levels = np.resize(conditions, n_trials)
+            rng.shuffle(levels)
+            data[:, levels == conditions[-1], :] += signal
         coords['cond'] = ('trial', levels)
 
     xarr = xr.DataArray(data, dims=dim_names, coords=coords)
@@ -73,7 +90,7 @@ def random_xarray(n_cells, n_trials, n_times, per_cell_coord=False,
     if per_cell_coord:
         prefs = np.zeros((n_cells, n_trials), dtype=int)
         for cell_idx in range(n_cells):
-            this_prefs = np.random.choice([0, 1, 2], size=n_trials)
+            this_prefs = rng.choice([0, 1, 2], size=n_trials)
             prefs[cell_idx, :] = this_prefs
 
         xarr = xarr.assign_coords(preferred=(('cell', 'trial'), prefs))
