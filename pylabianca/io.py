@@ -1063,15 +1063,15 @@ def from_spiketools(inst, kind='trials'):
         * ``'times'`` - single array with spike times
     '''
     if kind == 'times':
-        assert inst.ndim == 1
         assert isinstance(inst, np.ndarray)
-        assert all([isinstance(x, np.ndarray) for x in inst])
+        assert inst.ndim == 1
         inst = [inst]
-
-    if kind == 'trials':
+    elif kind == 'trials':
         assert isinstance(inst, list)
         assert all([isinstance(x, np.ndarray) for x in inst])
         assert all([x.ndim == 1 for x in inst])
+    else:
+        raise ValueError(f'Unknown spiketools format "{kind}".')
 
     trial_ids = [np.ones(len(x), dtype=int) * idx
                     for idx, x in enumerate(inst)]
