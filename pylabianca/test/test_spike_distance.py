@@ -70,3 +70,20 @@ def test_xcorr():
     if _has_numba:
         hist3 = _xcorr_hist_cross_numba(times1, times2, bins)
         assert (hist2 == hist3).mean() > 0.95
+
+
+def test_xcorr_lag_coordinates_are_bin_centers():
+    time = [np.array([0., 0.]), np.array([0.1, 0.1])]
+    trial = [np.array([0, 1]), np.array([0, 1])]
+    spk = pln.SpikeEpochs(
+        time, trial, time_limits=(-0.2, 0.2), n_trials=2)
+    bins = np.array([-0.15, -0.05, 0.05, 0.15])
+
+    xcorr = pln.spike_distance.xcorr_hist(
+        spk, picks=[0], picks2=[1], bins=bins, backend='numpy')
+
+    np.testing.assert_allclose(xcorr.lag.values, [-0.1, 0., 0.1])
+    np.testing.assert_array_equal(
+        xcorr.values[0, :2], [[0, 0, 1], [0, 0, 1]])
+    peak_lag = xcorr.lag.values[xcorr.values[0, 0].argmax()]
+    assert peak_lag == pytest.approx(0.1)

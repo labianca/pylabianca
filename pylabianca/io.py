@@ -453,7 +453,7 @@ def read_combinato(path, label=None, alignment='both'):
                 has_content = True
                 groups_oi = types[is_SU, 0]
                 groups = np.asarray(sorting_file['groups'])
-                groups_sel = np.insin(groups[:, 1], groups_oi)
+                groups_sel = np.isin(groups[:, 1], groups_oi)
                 groups = groups[groups_sel, :]
 
                 spike_classes = np.asarray(sorting_file['classes'])
@@ -1063,15 +1063,15 @@ def from_spiketools(inst, kind='trials'):
         * ``'times'`` - single array with spike times
     '''
     if kind == 'times':
-        assert inst.ndim == 1
         assert isinstance(inst, np.ndarray)
-        assert all([isinstance(x, np.ndarray) for x in inst])
+        assert inst.ndim == 1
         inst = [inst]
-
-    if kind == 'trials':
+    elif kind == 'trials':
         assert isinstance(inst, list)
         assert all([isinstance(x, np.ndarray) for x in inst])
         assert all([x.ndim == 1 for x in inst])
+    else:
+        raise ValueError(f'Unknown spiketools format "{kind}".')
 
     trial_ids = [np.ones(len(x), dtype=int) * idx
                     for idx, x in enumerate(inst)]

@@ -358,7 +358,7 @@ def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
 
     # calc bin_centers
     bin_widths = np.diff(bins)
-    bin_centers = bins[:-1] + bin_widths
+    bin_centers = bins[:-1] + (bin_widths / 2)
 
     # smooth with gaussian if needed
     # TODO: DRY with _spike_density

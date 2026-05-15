@@ -259,6 +259,39 @@ def test_read_write_fieldtrip(tmp_path):
     io_roundtrip(spk_raw, filepath, kind='raw')
 
 
+def test_from_spiketools_times_roundtrip():
+    spike_times = np.array([0.1, 0.25, 0.7])
+
+    spk = pln.io.from_spiketools(spike_times, kind='times')
+
+    assert isinstance(spk, pln.SpikeEpochs)
+    assert spk.n_trials == 1
+    assert spk.n_units() == 1
+    np.testing.assert_array_equal(spk.time[0], spike_times)
+    np.testing.assert_array_equal(
+        spk.trial[0], np.zeros(len(spike_times), dtype=int))
+
+    roundtrip = pln.io.to_spiketools(spk)
+    assert len(roundtrip) == 1
+    np.testing.assert_array_equal(roundtrip[0], spike_times)
+
+
+def test_from_spiketools_trials_roundtrip():
+    trial_spikes = [
+        np.array([0.1, 0.2]),
+        np.array([]),
+        np.array([0.4]),
+    ]
+
+    spk = pln.io.from_spiketools(trial_spikes, kind='trials')
+    roundtrip = pln.io.to_spiketools(spk)
+
+    assert spk.n_trials == len(trial_spikes)
+    assert len(roundtrip) == len(trial_spikes)
+    for actual, expected in zip(roundtrip, trial_spikes):
+        np.testing.assert_array_equal(actual, expected)
+
+
 def test_neuralynx_no_records(tmp_path):
     from pylabianca.neuralynx_io import (
         read_raw_header, write_ncs, NCS_RECORD, load_ncs)
