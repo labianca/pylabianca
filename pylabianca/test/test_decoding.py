@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -6,32 +8,37 @@ import pylabianca as pln
 from pylabianca.testing import random_xarray
 
 
-def _simple_decoding_score(X, y, time=None):
-    """Small deterministic decoding stand-in for wrapper tests."""
+def _condition_mean_difference(X, y):
     levels = np.unique(y)
     assert len(levels) == 2
+    axis = (0, 1) if X.ndim == 3 else None
+    return X[y == levels[1]].mean(axis=axis) - X[y == levels[0]].mean(
+        axis=axis)
 
-    if X.ndim == 3:
-        score = X[y == levels[1]].mean(axis=(0, 1))
-        score -= X[y == levels[0]].mean(axis=(0, 1))
-        return xr.DataArray(score, dims=['time'], coords={'time': time})
 
-    score = X[y == levels[1]].mean() - X[y == levels[0]].mean()
-    return score
+def _simple_decoding_score(X, y, time=None):
+    """Small deterministic decoding stand-in for wrapper tests."""
+    assert X.ndim == 3
+    score = _condition_mean_difference(X, y)
+    return xr.DataArray(score, dims=['time'], coords={'time': time})
 
 
 def _fold_score(arr, target='cond'):
     values = arr.transpose('trial', 'cell', 'time').values
     y = arr.coords[target].values
-    levels = np.unique(y)
-    score = values[y == levels[1]].mean(axis=(0, 1))
-    score -= values[y == levels[0]].mean(axis=(0, 1))
+    score = _condition_mean_difference(values, y)
     return xr.DataArray(
         np.stack([score, score + 0.1], axis=0),
         dims=['fold', 'time'],
         coords={'fold': [0, 1], 'time': arr.time.values},
         name='score'
     )
+
+
+def _add_condition_signal(arr, cells, time_idx, signal=2.):
+    levels = np.unique(arr.cond.values)
+    trials = arr.cond.values == levels[-1]
+    arr.data[np.ix_(cells, trials, time_idx)] += signal
 
 
 def test_random_xarray_condition_signal_uses_cond_coord():
@@ -75,9 +82,9 @@ def test_frate_to_sklearn_selection_and_decimation():
 
 def test_frate_to_sklearn_without_time_dimension():
     arr = random_xarray(
-        n_cells=4, n_trials=10, n_times=5,
+        n_cells=4, n_trials=10, n_times=1,
         trial_condition_levels=(0, 1), signal=1., random_state=1)
-    arr = arr.isel(time=2)
+    arr = arr.isel(time=0)
 
     X, y, time = pln.decoding.frate_to_sklearn(arr, target='cond')
 
@@ -138,15 +145,13 @@ def test_join_subjects_shuffle_is_reproducible():
 
 
 def test_resample_decoding_with_arrays_returns_xarray():
+    args = dict(
+        n_trials=12, n_times=5, trial_condition_levels=(0, 1), signal=1.)
     Xs = [
-        random_xarray(
-            n_cells=3, n_trials=12, n_times=5,
-            trial_condition_levels=(0, 1), signal=1.,
-            random_state=4).values.transpose(1, 0, 2),
-        random_xarray(
-            n_cells=2, n_trials=12, n_times=5,
-            trial_condition_levels=(0, 1), signal=1.,
-            random_state=5).values.transpose(1, 0, 2),
+        random_xarray(n_cells=3, random_state=4, **args).values.transpose(
+            1, 0, 2),
+        random_xarray(n_cells=2, random_state=5, **args).values.transpose(
+            1, 0, 2),
     ]
     ys = [np.resize([0, 1], 12), np.resize([1, 0], 12)]
     time = np.linspace(-0.1, 0.3, 5)
