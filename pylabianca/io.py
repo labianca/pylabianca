@@ -453,7 +453,7 @@ def read_combinato(path, label=None, alignment='both'):
                 has_content = True
                 groups_oi = types[is_SU, 0]
                 groups = np.asarray(sorting_file['groups'])
-                groups_sel = np.insin(groups[:, 1], groups_oi)
+                groups_sel = np.isin(groups[:, 1], groups_oi)
                 groups = groups[groups_sel, :]
 
                 spike_classes = np.asarray(sorting_file['classes'])
