@@ -50,7 +50,6 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVC
     from sklearn.model_selection import StratifiedKFold, LeaveOneOut
-    from mne.decoding import GeneralizingEstimator, SlidingEstimator
 
     if n_pca > 0:
         if clf is not None:
@@ -85,6 +84,8 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
 
     # use simple sliding estimator or generalization across time
     if not one_time_sample:
+        from mne.decoding import GeneralizingEstimator, SlidingEstimator
+
         estimator = (SlidingEstimator if not time_generalization
                      else GeneralizingEstimator)
         estimator = estimator(

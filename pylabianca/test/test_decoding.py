@@ -53,7 +53,6 @@ def test_frate_to_sklearn_selection_and_decimation():
     arr = random_xarray(
         n_cells=5, n_trials=12, n_times=8,
         trial_condition_levels=(0, 1), signal=1., random_state=0)
-    arr.name = 'frate'
     block = np.tile([1, 2], 6)
     arr = arr.assign_coords(block=('trial', block))
     arr = arr.transpose('time', 'cell', 'trial')

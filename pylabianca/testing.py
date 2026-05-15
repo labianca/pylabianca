@@ -85,7 +85,7 @@ def random_xarray(n_cells, n_trials, n_times, per_cell_coord=False,
             data[:, levels == conditions[-1], :] += signal
         coords['cond'] = ('trial', levels)
 
-    xarr = xr.DataArray(data, dims=dim_names, coords=coords)
+    xarr = xr.DataArray(data, dims=dim_names, coords=coords, name='frate')
 
     if per_cell_coord:
         prefs = np.zeros((n_cells, n_trials), dtype=int)
