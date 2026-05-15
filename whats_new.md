@@ -49,10 +49,10 @@ ENH: `pylabianca.stats.cluster_based_test()` no longer expects the observations 
 <br/>
 
 * FIX: `pylabianca.analysis.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if session order was not alphabetical in the concatenated xarray. Now `pylabianca.analysis.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
-* FIX: corrected `pylabianca.io.read_combinato()` group filtering, fixed `pylabianca.io.from_spiketools(kind='times')` for 1D spike-time arrays, and made `pylabianca.spike_distance.xcorr_hist()` report lag coordinates as bin centers.
 * FIX: make `pylabianca.analysis.xarray_to_dict()` work also on arrays without cell x trial multi-dim coords (e.g. `('cell', 'trial')`), which are common after concatenating multiple sessions.
 * FIX: saving pylabianca created xarrays like firing rate to NetCDF now works without the need to clear attributes (previously a dictionary of coord units was stored in the attributes, which caused an error when writing the file).
 * FIX: `SpikeEpochs.n_spikes(per_epoch=True)` used spike rate calculation to count spikes in each epoch. This was unnecessary (and possibly slow) and in rare cases could lead to wrong results (probably numerical error when multiplying spike rate by window duration and immediately turning to int, without rounding). Now `SpikeEpochs.n_spikes(per_epoch=True)` counts spikes directly using `pylabianca.utils._get_trial_boundaries`.
+* FIX: `pylabianca.spike_distance.xcorr_hist()` now reports lag coordinates as bin centers instead of bin right edges.
 * FIX: mne compatibility - use the `copy=False` argument in `.get_data()` method (introduced in newer mne versions)
 * FIX: made `Spikes.epoch()` raise a more informative error when no `event_id` values were found in the provided `events` array. When some of the `event_id` values are missing, a warning is raised and the function proceeds with the available values.
 * FIX: fixed error when passing a single integer to `event_id` in `Spikes.epoch()`.
@@ -68,6 +68,8 @@ ENH: `pylabianca.stats.cluster_based_test()` no longer expects the observations 
 * FIX: `pylabianca.viz.plot_waveform()` (as well as `.plot_waveform()` methods of `Spikes` and `SpikeEpochs`) now produces a clearer error when no waveforms are present in the data.
 * FIX: fixed `pval_text=False` still giving p value text (but without text boxes) in `pylabianca.viz.add_highlights()`
 FIX: `pylabianca.stats.cluster_based_test()` no longer returns stats and clusters arrays being n_timepoints x 1 when performing a paired (repeated) test.
+* FIX: corrected `pylabianca.io.read_combinato()` group filtering.
+* FIX: fixed `pylabianca.io.from_spiketools(kind='times')` for 1D spike-time arrays.
 * FIX: `pylabianca.io.read_spikes_neo()` started raising errors on new pandas version when reading fieldtrip example spike data. Newer pandas for some reason started to generate StringArray columns when converting the header to pandas dataframe (although the docs seem to suggest that StringArray is experimental), which lead to TypeError when creating the `pylabinaca.Spikes()` object. This is now fixed.
 * FIX: `pylabianca.viz.add_highlights()` now correctly uses 'time' dimension as x coordinate, even if it is not the last dimension in the DataArray
 * FIX: `pylabianca.analysis.aggregate()` now works with `xarray.DataArray` input to `zscore` (previously it would raise an error). When aggregating a dictionary of DataArrays `zscore` (if in the form of arrays) has to be a matching dictionary of DataArrays as well.
