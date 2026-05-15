@@ -165,6 +165,75 @@ def test_resample_decoding_with_arrays_returns_xarray():
     np.testing.assert_array_equal(out.time.values, time)
 
 
+def test_run_decoding_array_uses_condition_signal():
+    signal = random_xarray(
+        n_cells=4, n_trials=60, n_times=3,
+        trial_condition_levels=(0, 1), signal=2., random_state=11)
+    noise = random_xarray(
+        n_cells=4, n_trials=60, n_times=3,
+        trial_condition_levels=(0, 1), signal=1e-12, random_state=12)
+
+    signal_X, signal_y, _ = pln.decoding.frate_to_sklearn(
+        signal, target='cond')
+    noise_X, noise_y, _ = pln.decoding.frate_to_sklearn(noise, target='cond')
+
+    signal_score = pln.decoding.run_decoding_array(
+        signal_X[..., 0], signal_y, n_splits=4, random_state=0).mean()
+    noise_score = pln.decoding.run_decoding_array(
+        noise_X[..., 0], noise_y, n_splits=4, random_state=0).mean()
+
+    assert signal_score > 0.95
+    assert noise_score < 0.75
+
+
+def test_run_decoding_array_decodes_signal_timepoints():
+    arr = random_xarray(
+        n_cells=6, n_trials=80, n_times=6,
+        trial_condition_levels=(0, 1), random_state=13)
+    _add_condition_signal(arr, np.arange(6), np.array([2, 3]), signal=3.)
+
+    X, y, time = pln.decoding.frate_to_sklearn(
+        arr, target='cond', decim=1)
+    scores = pln.decoding.run_decoding_array(
+        X, y, n_splits=4, random_state=0, time=time)
+    mean_scores = scores.mean('fold')
+
+    assert scores.dims == ('fold', 'time')
+    np.testing.assert_array_equal(scores.time.values, arr.time.values)
+    assert bool((mean_scores.isel(time=[2, 3]) > 0.95).all())
+    assert bool((mean_scores.isel(time=[0, 1, 4, 5]) < 0.75).all())
+
+
+def test_run_decoding_array_time_generalization_tracks_pattern_change():
+    arr = random_xarray(
+        n_cells=4, n_trials=80, n_times=4,
+        trial_condition_levels=(0, 1), random_state=14)
+    _add_condition_signal(arr, np.array([0]), np.array([0, 1]), signal=3.)
+    _add_condition_signal(arr, np.array([1]), np.array([2, 3]), signal=3.)
+
+    X, y, time = pln.decoding.frate_to_sklearn(
+        arr, target='cond', decim=1)
+    scores = pln.decoding.run_decoding_array(
+        X, y, n_splits=4, random_state=0, time=time,
+        time_generalization=True)
+    mean_scores = scores.mean('fold')
+
+    assert scores.dims == ('fold', 'train_time', 'test_time')
+    np.testing.assert_array_equal(scores.train_time.values, arr.time.values)
+    np.testing.assert_array_equal(scores.test_time.values, arr.time.values)
+
+    early = [0, 1]
+    late = [2, 3]
+    assert bool((mean_scores.isel(train_time=early, test_time=early)
+                 > 0.95).all())
+    assert bool((mean_scores.isel(train_time=late, test_time=late)
+                 > 0.95).all())
+    assert bool((mean_scores.isel(train_time=early, test_time=late)
+                 < 0.75).all())
+    assert bool((mean_scores.isel(train_time=late, test_time=early)
+                 < 0.75).all())
+
+
 def test_resample_decoding_validates_inputs():
     with pytest.raises(ValueError, match='Either frates or Xs and ys'):
         pln.decoding.resample_decoding(_simple_decoding_score)
@@ -176,6 +245,46 @@ def test_resample_decoding_validates_inputs():
     }
     with pytest.raises(ValueError, match='target must be provided'):
         pln.decoding.resample_decoding(_simple_decoding_score, frates=frates)
+
+
+def test_decoding_input_errors_are_informative():
+    from sklearn.svm import SVC
+
+    arr = random_xarray(
+        n_cells=3, n_trials=12, n_times=2,
+        trial_condition_levels=(0, 1), signal=1., random_state=15)
+
+    with pytest.raises(ValueError, match='specify target'):
+        pln.decoding.frate_to_sklearn(arr)
+
+    with pytest.raises(ValueError, match='specify target'):
+        pln.decoding.frates_dict_to_sklearn({'sub-01': arr})
+
+    with pytest.raises(ValueError, match='Cannot use PCA'):
+        pln.decoding.run_decoding_array(
+            np.zeros((12, 3)), arr.cond.values, clf=SVC(), n_pca=1)
+
+    with pytest.raises(AssertionError):
+        pln.decoding.run_decoding(arr, target='cond', decode_across='freq')
+
+
+def test_max_corr_classifier_suppresses_constant_class_warning():
+    clf = pln.decoding.maxCorrClassifier()
+    X = np.array([
+        [1., 1.],
+        [1., 1.],
+        [3., 0.],
+        [3., 0.],
+    ])
+    y = np.array(['flat', 'flat', 'spread', 'spread'])
+    clf.fit(X, y)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always', RuntimeWarning)
+        pred = clf.predict(np.array([[1., 1.], [3., 0.]]))
+
+    np.testing.assert_array_equal(pred, ['flat', 'spread'])
+    assert not caught
 
 
 def test_permute_decoding_average_folds_returns_permutation_xarray():
