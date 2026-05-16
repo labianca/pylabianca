@@ -115,7 +115,7 @@ def depth_of_selectivity(frate, groupby):
 #           (important for t test interpretation for example)
 # TODO: change tail order to neg, pos?
 def compute_selectivity_continuous(frate, compare='image', n_perm=500,
-                                   n_jobs=1):
+                                   n_jobs=1, stat_fun='auto'):
     '''
     Compute population selectivity for specific experimental category.
 
@@ -133,6 +133,12 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     n_jobs : int
         Number of parallel jobs. No parallel computation is done when
         ``n_jobs=1`` (default).
+    stat_fun : {'auto', 'kruskal'} | callable
+        Statistic used for selectivity testing. ``'auto'`` uses the current
+        default: independent t test for two groups and ANOVA F test for more
+        than two groups. ``'kruskal'`` uses the nonparametric Kruskal-Wallis H
+        statistic and positive-tail permutation thresholds. A callable can be
+        passed for custom statistics.
 
     Returns
     -------
@@ -151,7 +157,7 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
           present in the ``frate``)
     '''
     import xarray as xr
-    from .stats import permutation_test
+    from .stats import permutation_test, _resolve_stat_fun
 
     has_time = 'time' in frate.dims
 
@@ -163,11 +169,12 @@ def compute_selectivity_continuous(frate, compare='image', n_perm=500,
     # permutations
     # ------------
     arrs = [arr.values for _, arr in frate.groupby(compare)]
-    stat_name = 't value' if len(arrs) == 2 else 'F value'
-    stat_unit = stat_name[0]
+    stat_fun, tail, stat_name, stat_unit = _resolve_stat_fun(
+        stat_fun, n_groups=len(arrs))
     results = permutation_test(
         *arrs, paired=False, n_perm=n_perm,
-        return_pvalue=False, return_distribution=True, n_jobs=n_jobs)
+        return_pvalue=False, return_distribution=True, n_jobs=n_jobs,
+        stat_fun=stat_fun, tail=tail)
 
     # turn to xarray
     # --------------
@@ -1185,147 +1192,3 @@ def compute_selectivity_multisession(frate, compare=None, select=None,
     all_results = xr.concat(all_results, dim='cell')
 
     return all_results
-
-
-# TODO: compare with time resolved selectivity
-def compute_selectivity_windows(spk, windows=None, compare='image',
-                                baseline=None, test='kruskal', n_perm=2000,
-                                progress=True):
-    '''
-    Compute selectivity for each cell in specific time windows.
-
-    Parameters
-    ----------
-    spk : SpikeEpochs
-        Spike epochs object.
-    windows : dict of tuples
-        Dictionary with keys being the names of the windows and values being
-        ``(start, end)`` tuples of window time limits in seconds.
-    compare : str
-        Metadata category to compare. Defaults to ``'image'``. If ``None``,
-        the average firing rate is compared to the baseline.
-    baseline : None | xarray.DataArray
-        Baseline firing rate to compare to.
-    test : str
-        Test to use for computing selectivity. Can be ``'kruskal'`` or
-        ``'permut'``. Defaults to ``'kruskal'``.
-    n_perm : int
-        Number of permutations to use for permutation test.
-    progress : bool | str
-        Whether to show a progress bar. If string, it can be ``'text'`` for
-        text progress bar or ``'notebook'`` for a notebook progress bar.
-
-    Returns
-    -------
-    selectivity : dict of pandas.DataFrame
-        Dictionary of dataframes with selectivity for each cell. Each
-        dictionary key and each dataframe corresponds to a time window of given
-        name.
-    '''
-    from scipy.stats import kruskal
-    from sarna.utils import progressbar
-
-    use_test = kruskal if test == 'kruskal' else permutation_test
-    test_args = {'n_perm': n_perm} if test == 'permut' else {}
-
-    if windows is None:
-        windows = {'early': (0.1, 0.6), 'late': (0.6, 1.1)}
-
-    columns = ['neuron', 'region', f'{test}_stat', f'{test}_pvalue', 'DoS']
-    has_region = 'region' in spk.cellinfo
-    if not has_region:
-        columns.pop(1)
-
-    if compare is not None:
-        level_labels = np.unique(spk.metadata[compare])
-        n_levels = len(level_labels)
-        level_cols = [f'FR_{compare}{lb}' for lb in level_labels]
-        level_cols_norm = (list() if baseline is None else
-                        [f'nFR_{compare}{lb}' for lb in level_labels])
-        columns += level_cols + level_cols_norm
-    else:
-        columns += ['FR_baseline', 'FR_condition', 'nFR_condition']
-
-    frate, df = dict(), dict()
-    for name, limits in windows.items():
-        frate[name] = spk.spike_rate(tmin=limits[0], tmax=limits[1],
-                                     step=False)
-        df[name] = pd.DataFrame(columns=columns)
-
-    n_cells = len(spk)
-    n_windows = len(windows.keys())
-    pbar = progressbar(progress, total=n_cells * n_windows)
-    for cell_idx in range(n_cells):
-        if has_region:
-            brain_region = spk.cellinfo.loc[cell_idx, 'region']
-
-        for window in windows.keys():
-            if has_region:
-                df[window].loc[cell_idx, 'region'] = brain_region
-            df[window].loc[cell_idx, 'neuron'] = spk.cell_names[cell_idx]
-
-            if not (frate[window][cell_idx].values > 0).any():
-                stat, pvalue = np.nan, 1.
-            elif compare is not None:
-                data = [arr.values for label, arr in
-                        frate[window][cell_idx].groupby(compare)]
-                stat, pvalue = use_test(*data, **test_args)
-            elif compare is None and baseline is not None:
-                data = [frate[window][cell_idx].values,
-                        baseline[cell_idx].values]
-                stat, pvalue = use_test(*data, **test_args)
-
-            df[window].loc[cell_idx, f'{test}_stat'] = stat
-            df[window].loc[cell_idx, f'{test}_pvalue'] = pvalue
-
-            # compute DoS
-            if compare is not None:
-                dos, avg = depth_of_selectivity(frate[window][cell_idx],
-                                                by=compare)
-                preferred = int(avg.argmax(dim=compare).item())
-                df[window].loc[cell_idx, 'DoS'] = dos.item()
-                df[window].loc[cell_idx, 'preferred'] = preferred
-
-                # other preferred?
-                perc_of_max = avg / avg[preferred]
-                other_pref = ((perc_of_max < 1.) & (perc_of_max >= 0.75))
-                if other_pref.any().item():
-                    txt = ','.join([str(x) for x in np.where(other_pref)[0]])
-                else:
-                    txt = ''
-                df[window].loc[cell_idx, 'preferred_second'] = txt
-
-            # save firing rate
-            if baseline is not None:
-                base_fr = baseline[cell_idx].mean(dim='trial').item()
-                if base_fr == 0:
-                    if compare is not None and (avg > 0).any().item():
-                        base_fr = avg[avg > 0].min().item()
-                    else:
-                        base_fr = 1.
-
-            if compare is not None:
-                for idx in range(n_levels):
-                    fr = avg[idx].item()
-                    level = avg.coords[compare][idx].item()
-                    df[window].loc[cell_idx, f'FR_{compare}{level}'] = fr
-
-                    if baseline is not None:
-                        nfr = fr / base_fr
-                        df[window].loc[cell_idx, f'nFR_{compare}{level}'] = nfr
-            else:
-                average_fr = frate[window][cell_idx].mean(dim='trial').item()
-                df[window].loc[cell_idx, 'FR_baseline'] = base_fr
-                df[window].loc[cell_idx, 'FR_condition'] = average_fr
-                df[window].loc[cell_idx, 'nFR_condition'] = average_fr / base_fr
-            pbar.update(1)
-    pbar.close()
-
-    for window in windows.keys():
-        df[window] = df[window].infer_objects()
-        if compare is not None:
-            # TODO: not sure if this is the right way to do in all cases
-            df[window].loc[:, 'preferred'] = (
-                df[window]['preferred'].astype('int'))
-
-    return df, frate

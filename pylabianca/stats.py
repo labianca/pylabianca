@@ -2,10 +2,49 @@ import warnings
 import numpy as np
 
 
+def _kruskal_statistic(*arrays):
+    """Calculate vectorized Kruskal-Wallis H statistic."""
+    from scipy.stats import kruskal
+
+    return kruskal(*arrays, axis=0).statistic
+
+
+def _resolve_stat_fun(stat_fun, n_groups=None, tail=None):
+    """Get statistic function, tail, name and unit from user-facing input."""
+    if stat_fun is None:
+        stat_fun = 'auto'
+
+    if isinstance(stat_fun, str):
+        if stat_fun == 'kruskal':
+            stat_fun = _kruskal_statistic
+            if tail is None:
+                tail = 'pos'
+            stat_name = 'Kruskal H'
+            stat_unit = 'H'
+        elif stat_fun == 'auto':
+            if n_groups is None:
+                raise ValueError('n_groups must be provided for auto stat_fun.')
+            if tail is None and n_groups is not None:
+                tail = 'both' if n_groups == 2 else 'pos'
+            stat_name = 't value' if n_groups == 2 else 'F value'
+            stat_unit = stat_name[0]
+        else:
+            raise ValueError(
+                'stat_fun must be "auto", "kruskal" or callable.')
+    elif not callable(stat_fun):
+        raise ValueError('stat_fun must be "auto", "kruskal" or callable.')
+    else:
+        stat_name = getattr(stat_fun, '__name__', 'custom statistic')
+        stat_unit = 'stat'
+
+    return stat_fun, tail, stat_name, stat_unit
+
+
 # TODO: move to borsar
 # TODO: support xarrays and dimension reorg
 def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
-                     return_pvalue=True, return_distribution=True, n_jobs=1):
+                     return_pvalue=True, return_distribution=True, n_jobs=1,
+                     stat_fun='auto', tail=None):
     '''Perform permutation test on the data.
 
     Parameters
@@ -27,6 +66,14 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
         Whether to return the permutation distribution.
     n_jobs : int
         Number of jobs to run the permutations in parallel.
+    stat_fun : {'auto', 'kruskal'} | callable
+        Function used to calculate the test statistic. ``'auto'`` infers the
+        statistic from the number of groups and ``paired``. ``'kruskal'`` uses
+        the nonparametric Kruskal-Wallis H statistic. A callable can be passed
+        for custom statistics.
+    tail : {'both', 'pos', 'neg'} | None
+        Tail of the test. If ``None``, ``'both'`` is used for two groups and
+        ``'pos'`` for more than two groups.
 
     Returns
     -------
@@ -39,12 +86,17 @@ def permutation_test(*arrays, paired=False, n_perm=1_000, progress=False,
         then only the statistic is returned (numpy.ndarray). Only statistic is
         returned also when `n_perm=0`.
     '''
-    import borsar
-
     n_groups = len(arrays)
-    tail = 'both' if n_groups == 2 else 'pos'
-    stat_fun = borsar.stats._find_stat_fun(n_groups=n_groups, paired=paired,
-                                            tail=tail)
+    stat_fun, tail, _, _ = _resolve_stat_fun(
+        stat_fun, n_groups=n_groups, tail=tail)
+
+    needs_borsar = stat_fun == 'auto' or n_perm > 0
+    if needs_borsar:
+        import borsar
+
+    if stat_fun == 'auto':
+        stat_fun = borsar.stats._find_stat_fun(
+            n_groups=n_groups, paired=paired, tail=tail)
 
     has_xarr = all(['DataArray' in str(type(x)) for x in arrays])
     if has_xarr:
