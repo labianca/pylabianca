@@ -6,7 +6,7 @@ import xarray as xr
 import pylabianca as pln
 from pylabianca.analysis import (
     _symmetric_window_samples, _gauss_kernel_samples)
-from pylabianca.testing import random_spikes
+from pylabianca.testing import random_spikes, random_xarray
 from pylabianca.selectivity import (
     compute_selectivity_continuous, compute_selectivity_multisession)
 
@@ -44,6 +44,7 @@ def _effect_size_from_f_statistic(*groups, kind='omega'):
 
 
 def test_selectivity_continuous():
+    """Test continuous selectivity defaults and metadata inheritance."""
     spk_epochs = random_spikes(
         n_cells=20, n_trials=60, n_spikes=(10, 50))
 
@@ -121,7 +122,67 @@ def test_selectivity_continuous():
     assert sel['stat'].shape[0] == fr.shape[0]
 
 
+def test_selectivity_continuous_auto_stat_fun_is_default():
+    """Test that explicit auto stat_fun matches the default statistic."""
+    fr = random_xarray(
+        3, 12, 4, trial_condition_levels=['A', 'B'], signal=0.4,
+        random_state=11)
+
+    sel_default = compute_selectivity_continuous(
+        fr, compare='cond', n_perm=0)
+    sel_auto = compute_selectivity_continuous(
+        fr, compare='cond', n_perm=0, stat_fun='auto')
+
+    assert sel_default.equals(sel_auto)
+
+
+def test_selectivity_continuous_kruskal_matches_scipy():
+    """Test Kruskal selectivity statistic against SciPy reference."""
+    fr = random_xarray(
+        4, 15, 5, trial_condition_levels=['A', 'B', 'C'], signal=0.5,
+        random_state=12)
+    fr_tr = fr.transpose('trial', 'cell', 'time')
+    arrs = [arr.values for _, arr in fr_tr.groupby('cond')]
+    expected = stats.kruskal(*arrs, axis=0).statistic
+
+    sel = compute_selectivity_continuous(
+        fr, compare='cond', n_perm=0, stat_fun='kruskal')
+
+    np.testing.assert_allclose(sel['stat'].values, expected)
+    assert sel['stat'].dims == ('cell', 'time')
+    assert sel['stat'].attrs['unit'] == 'H'
+
+
+def test_selectivity_continuous_kruskal_permutation_output():
+    """Test Kruskal permutation output dimensions and positive threshold."""
+    fr = random_xarray(
+        3, 12, 4, trial_condition_levels=['A', 'B', 'C'], signal=0.5,
+        random_state=13)
+
+    sel = compute_selectivity_continuous(
+        fr, compare='cond', n_perm=20, stat_fun='kruskal')
+
+    assert sel['dist'].dims == ('perm', 'cell', 'time')
+    assert sel['thresh'].dims == ('cell', 'time')
+    assert 'tail' not in sel['thresh'].dims
+    assert sel['dist'].shape == (20, 3, 4)
+    is_expected = sel['thresh'] == np.percentile(sel['dist'], 95, axis=0)
+    assert is_expected.all().item()
+
+
+def test_selectivity_continuous_rejects_unknown_stat_fun():
+    """Test that unknown selectivity statistics raise a clear error."""
+    fr = random_xarray(
+        2, 8, 3, trial_condition_levels=['A', 'B'], signal=0.5,
+        random_state=14)
+
+    with pytest.raises(ValueError, match='stat_fun must be'):
+        compute_selectivity_continuous(
+            fr, compare='cond', n_perm=0, stat_fun='lieber_biber')
+
+
 def test_cluster_based_selectivity():
+    """Test cluster-based selectivity and cellinfo propagation."""
     # arguments used in assess_selectivity to filter obtained clusters
     asses_args = dict(min_cluster_p=0.01, window_of_interest=(0.25, 0.75),
         min_time_in_window=0.15, min_depth_of_selectivity=0.15, min_pev=0.1,

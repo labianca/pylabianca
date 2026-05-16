@@ -4,7 +4,7 @@ import pytest
 
 from functools import partial
 from scipy.ndimage import gaussian_filter1d
-from scipy.stats import ttest_rel, ttest_ind, f_oneway
+from scipy.stats import ttest_rel, ttest_ind, f_oneway, kruskal
 
 import pylabianca as pln
 
@@ -43,6 +43,35 @@ def test_permutation_test_n_perm_0():
 
     assert isinstance(stats, np.ndarray)
     assert stats.shape == (20,)
+
+
+def test_permutation_test_custom_stat_n_perm_0():
+    """Test custom statistic calculation without permutation thresholding."""
+    arr1 = np.random.rand(10, 20)
+    arr2 = np.random.rand(15, 20)
+
+    def mean_difference(a, b):
+        """Calculate mean difference across observations."""
+        return a.mean(axis=0) - b.mean(axis=0)
+
+    stats = pln.stats.permutation_test(
+        arr1, arr2, n_perm=0, stat_fun=mean_difference, tail='both')
+
+    np.testing.assert_allclose(stats, mean_difference(arr1, arr2))
+
+
+def test_permutation_test_kruskal_stat_n_perm_0():
+    """Test Kruskal statistic shortcut without permutation thresholding."""
+    arr1 = np.random.rand(10, 20)
+    arr2 = np.random.rand(15, 20)
+    arr3 = np.random.rand(12, 20)
+
+    stats = pln.stats.permutation_test(
+        arr1, arr2, arr3, n_perm=0, stat_fun='kruskal')
+    expected = kruskal(arr1, arr2, arr3, axis=0).statistic
+
+    assert stats.shape == (20,)
+    np.testing.assert_allclose(stats, expected)
 
 
 def test_cluster_based_test_from_permutations():
