@@ -321,6 +321,121 @@ def test_neuralynx_no_records(tmp_path):
     assert data['time'].shape == (0,)
 
 
+def _minimal_ncs_records(n_records=2):
+    from pylabianca.neuralynx_io import NCS_RECORD
+
+    records = np.zeros(n_records, dtype=NCS_RECORD)
+    records['TimeStamp'] = np.arange(n_records, dtype=np.uint64) * 256000
+    records['ChannelNumber'] = 1
+    records['SampleFreq'] = 2000
+    records['NumValidSamples'] = 512
+    records['Samples'] = np.arange(
+        n_records * 512, dtype=np.int16).reshape(n_records, 512)
+
+    return records
+
+
+def _minimal_ncs_header(old_preamble=(), cheetah_rev='5.6.3'):
+    from pylabianca.neuralynx_io import HEADER_LENGTH
+
+    lines = [
+        '######## Neuralynx Data File Header',
+        *old_preamble,
+        '-FileType CSC',
+        '-FileVersion 3.3.0',
+        '-RecordSize 1044',
+        '-CheetahRev ' + cheetah_rev,
+        '-NLX_Base_Class_Name CSC17',
+        '-NLX_Base_Class_Type CscAcqEnt',
+        '-SamplingFrequency 2000',
+        '-ADBitVolts 0.000000061037020770982053',
+        '-ADMaxValue 32767',
+    ]
+    raw_header = '\r\n'.join(lines).encode('ascii')
+    return raw_header + b'\0' * (HEADER_LENGTH - len(raw_header))
+
+
+def _old_ncs_header_case(file_name_line, time_opened_line, cheetah_rev,
+                         time_closed_line=None, case_id=None):
+    preamble = [file_name_line, time_opened_line]
+    expected = {
+        'FileName': file_name_line.split('File Name', 1)[1].lstrip(': '),
+        'TimeOpened': 'Time Opened',
+        'FileType': 'CSC',
+        'CheetahRev': cheetah_rev,
+    }
+    if time_closed_line is not None:
+        preamble.append(time_closed_line)
+        expected['TimeClosed'] = 'Time Closed'
+
+    return pytest.param(
+        {'preamble': preamble, 'expected': expected},
+        id=case_id)
+
+
+def test_neuralynx_estimate_record_count(tmp_path):
+    from pylabianca.neuralynx_io import (
+        HEADER_LENGTH, NCS_RECORD, estimate_record_count)
+
+    n_records = 3
+    ncs_file = tmp_path / 'test_record_count.ncs'
+    ncs_file.write_bytes(
+        b'\0' * HEADER_LENGTH
+        + b'\0' * (n_records * NCS_RECORD.itemsize))
+
+    assert estimate_record_count(ncs_file, NCS_RECORD) == n_records
+
+    ncs_file.write_bytes(ncs_file.read_bytes() + b'x')
+    expected = n_records + 1 / NCS_RECORD.itemsize
+    with pytest.warns(UserWarning, match='not divisible by record size'):
+        assert estimate_record_count(ncs_file, NCS_RECORD) == expected
+
+    too_small_file = tmp_path / 'too_small.ncs'
+    too_small_file.write_bytes(b'\0' * (HEADER_LENGTH - 1))
+    with pytest.raises(ValueError, match='Too small to be a valid .ncs file'):
+        estimate_record_count(too_small_file, NCS_RECORD)
+
+
+@pytest.mark.parametrize(
+    'case',
+    [
+        _old_ncs_header_case(
+            '## File Name C:\\CheetahData\\2013-08-18_09-06-16\\CSC17.ncs',
+            '## Time Opened (m/d/y): 8/18/2013 (h:m:s.ms) 9:6:36.401',
+            '5.6.3',
+            time_closed_line=(
+                '## Time Closed (m/d/y): 8/18/2013 '
+                '(h:m:s.ms) 10:26:2.464'),
+            case_id='cheetah-5-with-time-closed'),
+        _old_ncs_header_case(
+            '## File Name: D:\\Cheetah_Data\\2003-2-26_13-9-56\\CSC4.Ncs',
+            '## Time Opened: (m/d/y): 2/26/2003 At Time: 13:9:58.250',
+            '3.0.6',
+            case_id='cheetah-3-without-time-closed'),
+    ]
+)
+def test_neuralynx_old_format_ncs_header(tmp_path, case):
+    from pylabianca.neuralynx_io import load_ncs, write_ncs
+
+    expected = case['expected']
+    raw_header = _minimal_ncs_header(
+        case['preamble'], cheetah_rev=expected['CheetahRev'])
+    records = _minimal_ncs_records()
+    ncs_file = tmp_path / 'old_format.ncs'
+    write_ncs(ncs_file, records, raw_header)
+
+    data = load_ncs(ncs_file, load_time=False, rescale_data=False)
+
+    for key, value in expected.items():
+        if key.startswith('Time'):
+            assert data['header'][key].startswith(value)
+        else:
+            assert data['header'][key] == value
+    assert ('TimeClosed' in data['header']) == ('TimeClosed' in expected)
+    assert data['data'].shape == (records.size * 512,)
+    np.testing.assert_array_equal(data['data'][:512], records[0]['Samples'])
+
+
 def test_neuralynx_no_scaling_info(tmp_path):
     from pylabianca.neuralynx_io import (
         read_raw_header, read_records, write_ncs, load_ncs,
