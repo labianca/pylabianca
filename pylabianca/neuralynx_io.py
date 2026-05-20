@@ -220,6 +220,37 @@ def read_raw_header(fid):
     return raw_hdr
 
 
+def _parse_old_format_header(hdr_lines, hdr):
+    # Some legacy Cheetah headers (observed in 3.x and 5.x NCS files) start
+    # with a non-parameter preamble: "## File Name", "## Time Opened", and
+    # sometimes "## Time Closed". Modern headers instead use dash-prefixed
+    # parameters such as "-OriginalFileName", "-TimeCreated", "-TimeClosed".
+    file_name_parts = hdr_lines[1].split()
+    old_format = (len(file_name_parts) >= 3
+                  and file_name_parts[1:3] in (['File', 'Name'],
+                                                ['File', 'Name:']))
+    if not old_format:
+        return 1
+
+    try:
+        hdr['FileName'] = ' '.join(file_name_parts[3:])
+    except:
+        warnings.warn(
+            'Unable to parse original file path from the Neuralynx header.')
+
+    parse_rest_from = 2
+    if (parse_rest_from < len(hdr_lines)
+            and hdr_lines[parse_rest_from].startswith('## Time Opened')):
+        hdr['TimeOpened'] = hdr_lines[parse_rest_from][3:]
+        parse_rest_from += 1
+    if (parse_rest_from < len(hdr_lines)
+            and hdr_lines[parse_rest_from].startswith('## Time Closed')):
+        hdr['TimeClosed'] = hdr_lines[parse_rest_from][3:]
+        parse_rest_from += 1
+
+    return parse_rest_from
+
+
 def parse_header(raw_hdr):
     # Parse the header string into a dictionary of name value pairs
     hdr = dict()
@@ -235,20 +266,7 @@ def parse_header(raw_hdr):
     if hdr_lines[0] != '######## Neuralynx Data File Header':
         warnings.warn('Unexpected start to header: ' + hdr_lines[0])
 
-    # Try to read the original file path
-    old_format = hdr_lines[1].split()[1:3] == ['File', 'Name']
-    parse_rest_from = 4 if old_format else 1
-
-    if old_format:
-        try:
-            hdr['FileName']  = ' '.join(hdr_lines[1].split()[3:])
-        except:
-            warnings.warn(
-                'Unable to parse original file path from the Neuralynx header.')
-
-        # Process lines with file opening and closing times
-        hdr['TimeOpened'] = hdr_lines[2][3:]
-        hdr['TimeClosed'] = hdr_lines[3][3:]
+    parse_rest_from = _parse_old_format_header(hdr_lines, hdr)
 
     # Read the parameters, assuming "-PARAM_NAME PARAM_VALUE" format
     for line_idx, line in enumerate(hdr_lines[parse_rest_from:],
