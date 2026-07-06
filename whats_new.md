@@ -3,6 +3,7 @@
 ## DEV (upcoming version 0.4)
 
 * DEV: Set up automated testing on CircleCI and code coverage tracking with codecov.com
+* DEV: refactor `pylabianca.decoding.run_decoding_array()` to use private helpers for constructing the decoding estimator and cross-validation splitter.
 
 <br/>
 
@@ -51,6 +52,7 @@ ENH: `pylabianca.stats.cluster_based_test()` no longer expects the observations 
 <br/>
 
 * FIX: `pylabianca.analysis.xarray_to_dict()` used xarray `.groupby(session_coord)` to iterate over concatenated xarray and split it into dictionary of session name -> session xarray mappings. This had the unfortunate consequence of changing the order of sessions in the dictionary, if session order was not alphabetical in the concatenated xarray. Now `pylabianca.analysis.xarray_to_dict()` does not use `.groupby()` and preserves the order of sessions in the dictionary.
+* FIX: `pylabianca.decoding.run_decoding_array()` now constructs xarray fold coordinates correctly when using leave-one-out cross-validation with `n_splits='loo'`.
 * FIX: make `pylabianca.analysis.xarray_to_dict()` work also on arrays without cell x trial multi-dim coords (e.g. `('cell', 'trial')`), which are common after concatenating multiple sessions.
 * FIX: saving pylabianca created xarrays like firing rate to NetCDF now works without the need to clear attributes (previously a dictionary of coord units was stored in the attributes, which caused an error when writing the file).
 * FIX: `SpikeEpochs.n_spikes(per_epoch=True)` used spike rate calculation to count spikes in each epoch. This was unnecessary (and possibly slow) and in rare cases could lead to wrong results (probably numerical error when multiplying spike rate by window duration and immediately turning to int, without rounding). Now `SpikeEpochs.n_spikes(per_epoch=True)` counts spikes directly using `pylabianca.utils._get_trial_boundaries`.

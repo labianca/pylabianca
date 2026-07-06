@@ -46,10 +46,35 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
     scores : array, shape (n_splits, n_times, n_times)
         Decoding scores.
     '''
+    estimator = _make_decoding_estimator(
+        X, C=C, scoring=scoring, n_jobs=n_jobs,
+        time_generalization=time_generalization, clf=clf, n_pca=n_pca
+    )
+    spl = _make_cv_splitter(n_splits=n_splits, random_state=random_state)
+
+    # do the k-fold
+    scores = list()
+    for train_index, test_index in spl.split(X, y):
+        estimator.fit(X=X[train_index],
+                      y=y[train_index])
+        score = estimator.score(X=X[test_index],
+                                y=y[test_index])
+        scores.append(score)
+
+    scores = np.stack(scores, axis=0)
+
+    if time is not None:
+        scores = _scores_as_xarray(scores, scoring, 'time', time,
+                                   time_generalization)
+
+    return scores
+
+
+def _make_decoding_estimator(X, C=1., scoring='accuracy', n_jobs=1,
+                             time_generalization=False, clf=None, n_pca=0):
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVC
-    from sklearn.model_selection import StratifiedKFold, LeaveOneOut
 
     if n_pca > 0:
         if clf is not None:
@@ -59,28 +84,17 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
         from sklearn.decomposition import PCA
         pca = PCA(n_components=n_pca)
 
-    # handle data with only one time point / aggregated time window
-    one_time_sample = False
-    if X.ndim == 2:
-        one_time_sample = True
-
-    # k-fold object
-    if isinstance(n_splits, str) and n_splits == 'loo':
-        # use leave one out cross validation
-        spl = LeaveOneOut()
-    else:
-        spl = StratifiedKFold(
-            n_splits=n_splits,
-            shuffle=True,
-            random_state=random_state
-        )
-
     # classification pipeline
     if clf is None:
         steps = [StandardScaler(), SVC(C=C, kernel='linear')]
         if n_pca > 0:
             steps.insert(1, pca)
         clf = make_pipeline(*steps)
+
+    # handle data with only one time point / aggregated time window
+    one_time_sample = False
+    if X.ndim == 2:
+        one_time_sample = True
 
     # use simple sliding estimator or generalization across time
     if not one_time_sample:
@@ -95,22 +109,24 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
     else:
         estimator = clf
 
-    # do the k-fold
-    scores = list()
-    for train_index, test_index in spl.split(X, y):
-        estimator.fit(X=X[train_index],
-                      y=y[train_index])
-        score = estimator.score(X=X[test_index],
-                                y=y[test_index])
-        scores.append(score)
+    return estimator
 
-    scores = np.stack(scores, axis=0)
 
-    if time is not None:
-        scores = _scores_as_xarray(scores, scoring, n_splits, 'time', time,
-                                   time_generalization)
+def _make_cv_splitter(n_splits=6, random_state=None):
+    from sklearn.model_selection import StratifiedKFold, LeaveOneOut
 
-    return scores
+    # k-fold object
+    if isinstance(n_splits, str) and n_splits == 'loo':
+        # use leave one out cross validation
+        spl = LeaveOneOut()
+    else:
+        spl = StratifiedKFold(
+            n_splits=n_splits,
+            shuffle=True,
+            random_state=random_state
+        )
+
+    return spl
 
 
 # TODO: decode_across is not actually used
@@ -180,12 +196,14 @@ def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
     return scores
 
 
-def _scores_as_xarray(scores, scoring, n_splits, decode_across, time_dim,
+def _scores_as_xarray(scores, scoring, decode_across, time_dim,
                       time_generalization):
     import xarray as xr
 
     name = scoring
-    coords = {'fold': np.arange(n_splits)}
+    n_splits_int = scores.shape[0]
+    coords = {'fold': np.arange(n_splits_int)}
+
     if time_generalization:
         dims = ['fold', 'train_' + decode_across, 'test_' + decode_across]
         coords[dims[1]] = time_dim

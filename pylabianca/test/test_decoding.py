@@ -186,6 +186,37 @@ def test_run_decoding_array_uses_condition_signal():
     assert noise_score < 0.75
 
 
+def test_run_decoding_array_returns_array_for_2d_input():
+    arr = random_xarray(
+        n_cells=4, n_trials=40, n_times=1,
+        trial_condition_levels=(0, 1), signal=2., random_state=16)
+
+    X, y, time = pln.decoding.frate_to_sklearn(arr.isel(time=0),
+                                               target='cond')
+    scores = pln.decoding.run_decoding_array(
+        X, y, n_splits=4, random_state=0, time=time)
+
+    assert isinstance(scores, np.ndarray)
+    assert scores.shape == (4,)
+
+
+def test_run_decoding_array_loo_returns_time_xarray():
+    arr = random_xarray(
+        n_cells=4, n_trials=12, n_times=3,
+        trial_condition_levels=(0, 1), signal=2., random_state=17)
+
+    X, y, time = pln.decoding.frate_to_sklearn(
+        arr, target='cond', decim=1)
+    scores = pln.decoding.run_decoding_array(
+        X, y, n_splits='loo', random_state=0, time=time)
+
+    assert isinstance(scores, xr.DataArray)
+    assert scores.dims == ('fold', 'time')
+    assert scores.shape == (12, 3)
+    np.testing.assert_array_equal(scores.fold.values, np.arange(12))
+    np.testing.assert_array_equal(scores.time.values, arr.time.values)
+
+
 def test_run_decoding_array_decodes_signal_timepoints():
     arr = random_xarray(
         n_cells=6, n_trials=80, n_times=6,
@@ -198,7 +229,10 @@ def test_run_decoding_array_decodes_signal_timepoints():
         X, y, n_splits=4, random_state=0, time=time)
     mean_scores = scores.mean('fold')
 
+    assert isinstance(scores, xr.DataArray)
     assert scores.dims == ('fold', 'time')
+    assert scores.shape == (4, 6)
+    assert scores.name == 'accuracy'
     np.testing.assert_array_equal(scores.time.values, arr.time.values)
     assert bool((mean_scores.isel(time=[2, 3]) > 0.95).all())
     assert bool((mean_scores.isel(time=[0, 1, 4, 5]) < 0.75).all())
@@ -218,7 +252,10 @@ def test_run_decoding_array_time_generalization_tracks_pattern_change():
         time_generalization=True)
     mean_scores = scores.mean('fold')
 
+    assert isinstance(scores, xr.DataArray)
     assert scores.dims == ('fold', 'train_time', 'test_time')
+    assert scores.shape == (4, 4, 4)
+    assert scores.name == 'accuracy'
     np.testing.assert_array_equal(scores.train_time.values, arr.time.values)
     np.testing.assert_array_equal(scores.test_time.values, arr.time.values)
 
@@ -317,7 +354,7 @@ def test_run_decoding_returns_time_xarray(monkeypatch):
         np.testing.assert_array_equal(time, arr.time.values[::2])
         scores = np.zeros((n_splits, len(time)))
         return pln.decoding._scores_as_xarray(
-            scores, scoring, n_splits, 'time', time, time_generalization)
+            scores, scoring, 'time', time, time_generalization)
 
     monkeypatch.setattr(
         pln.decoding, 'run_decoding_array', fake_run_decoding_array)
