@@ -64,7 +64,7 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
     scores = np.stack(scores, axis=0)
 
     if time is not None:
-        scores = _scores_as_xarray(scores, scoring, n_splits, 'time', time,
+        scores = _scores_as_xarray(scores, scoring, 'time', time,
                                    time_generalization)
 
     return scores
@@ -196,12 +196,14 @@ def run_decoding(arr, target, decode_across='time', decim=1, n_splits=6, C=1.,
     return scores
 
 
-def _scores_as_xarray(scores, scoring, n_splits, decode_across, time_dim,
+def _scores_as_xarray(scores, scoring, decode_across, time_dim,
                       time_generalization):
     import xarray as xr
 
     name = scoring
-    coords = {'fold': np.arange(n_splits)}
+    n_splits_int = scores.shape[0]
+    coords = {'fold': np.arange(n_splits_int)}
+
     if time_generalization:
         dims = ['fold', 'train_' + decode_across, 'test_' + decode_across]
         coords[dims[1]] = time_dim
