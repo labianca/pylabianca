@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pytest
 import xarray as xr
+from sklearn.base import BaseEstimator
 
 import pylabianca as pln
 from pylabianca.testing import random_xarray
@@ -56,10 +57,7 @@ def _proba_decoding_data(n_times=None):
     return X, y, time, trial_proba
 
 
-class _IndexProbaClassifier:
-    def get_params(self, deep=True):
-        return {}
-
+class _IndexProbaClassifier(BaseEstimator):
     def fit(self, X, y):
         self.classes_ = np.unique(y)
         return self
@@ -67,15 +65,15 @@ class _IndexProbaClassifier:
     def score(self, X, y):
         return 0.
 
+    def predict(self, X):
+        return self.classes_[(X[:, 0] >= 0.5).astype(int)]
+
     def predict_proba(self, X):
         second_class = X[:, 0]
         return np.column_stack([1. - second_class, second_class])
 
 
-class _ScoreOnlyClassifier:
-    def get_params(self, deep=True):
-        return {}
-
+class _ScoreOnlyClassifier(BaseEstimator):
     def fit(self, X, y):
         return self
 
