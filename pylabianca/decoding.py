@@ -144,7 +144,7 @@ def _predict_fold_proba(estimator, X, test_index):
     if proba is None:
         raise ValueError('predict_proba returned None.')
 
-    return np.asarray(proba, dtype=float)
+    return proba
 
 
 def _probas_as_trial_array(fold_probas, test_indices, n_trials):
