@@ -54,14 +54,19 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
     estimator = _make_decoding_estimator(
         X, C=C, scoring=scoring, n_jobs=n_jobs,
         time_generalization=time_generalization, clf=clf, n_pca=n_pca,
-        random_state=random_state, return_proba=return_proba
+        return_proba=return_proba
     )
+    if return_proba and not hasattr(estimator, 'predict_proba'):
+        raise ValueError(
+            'return_proba=True requires an estimator with a '
+            'predict_proba method.'
+        )
     spl = _make_cv_splitter(n_splits=n_splits, random_state=random_state)
 
     # do the k-fold
     scores = list()
-    probas = None
-    classes = None
+    fold_probas = list()
+    test_indices = list()
     for train_index, test_index in spl.split(X, y):
         estimator.fit(X=X[train_index],
                       y=y[train_index])
@@ -70,28 +75,16 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
         scores.append(score)
 
         if return_proba:
-            try:
-                proba = np.asarray(
-                    estimator.predict_proba(X[test_index]), dtype=float)
-            except AttributeError as exc:
-                raise ValueError(
-                    'return_proba=True requires an estimator with a '
-                    'predict_proba method.'
-                ) from exc
-            if probas is None:
-                probas = np.full((len(y),) + proba.shape[1:],
-                                 np.nan, dtype=float)
-                classes = _get_estimator_classes(estimator)
-            probas[test_index] = proba
+            fold_probas.append(_predict_fold_proba(
+                estimator, X, test_index))
+            test_indices.append(test_index)
 
     scores = np.stack(scores, axis=0)
 
     if return_proba:
-        scores = _decoding_results_as_xarray(
-            scores, probas, scoring, 'time', time, time_generalization,
-            classes
-        )
-        return scores
+        probas = _probas_as_trial_array(fold_probas, test_indices, len(y))
+        return _scores_and_probas_as_xarray(
+            scores, probas, scoring, 'time', time, time_generalization, y)
 
     if time is not None:
         scores = _scores_as_xarray(scores, scoring, 'time', time,
@@ -102,7 +95,7 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
 
 def _make_decoding_estimator(X, C=1., scoring='accuracy', n_jobs=1,
                              time_generalization=False, clf=None, n_pca=0,
-                             random_state=None, return_proba=False):
+                             return_proba=False):
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVC
@@ -119,8 +112,7 @@ def _make_decoding_estimator(X, C=1., scoring='accuracy', n_jobs=1,
     if clf is None:
         steps = [
             StandardScaler(),
-            SVC(C=C, kernel='linear', probability=return_proba,
-                random_state=random_state)
+            SVC(C=C, kernel='linear', probability=return_proba)
         ]
         if n_pca > 0:
             steps.insert(1, pca)
@@ -147,17 +139,22 @@ def _make_decoding_estimator(X, C=1., scoring='accuracy', n_jobs=1,
     return estimator
 
 
-def _get_estimator_classes(estimator):
-    if hasattr(estimator, 'classes_'):
-        return estimator.classes_
-    if hasattr(estimator, 'estimators_'):
-        first_estimator = estimator.estimators_[0]
-        if hasattr(first_estimator, 'classes_'):
-            return first_estimator.classes_
+def _predict_fold_proba(estimator, X, test_index):
+    proba = estimator.predict_proba(X[test_index])
+    if proba is None:
+        raise ValueError('predict_proba returned None.')
 
-    raise ValueError(
-        'Could not determine class labels from the fitted estimator.'
-    )
+    return np.asarray(proba, dtype=float)
+
+
+def _probas_as_trial_array(fold_probas, test_indices, n_trials):
+    shape = (n_trials,) + fold_probas[0].shape[1:]
+    probas = np.full(shape, np.nan, dtype=float)
+
+    for proba, test_index in zip(fold_probas, test_indices):
+        probas[test_index] = proba
+
+    return probas
 
 
 def _make_cv_splitter(n_splits=6, random_state=None):
@@ -252,11 +249,17 @@ def _scores_as_xarray(scores, scoring, decode_across, time_dim,
     n_splits_int = scores.shape[0]
     coords = {'fold': np.arange(n_splits_int)}
 
-    if time_generalization:
+    if scores.ndim == 1:
+        dims = ['fold']
+    elif time_generalization:
+        if time_dim is None:
+            time_dim = np.arange(scores.shape[1])
         dims = ['fold', 'train_' + decode_across, 'test_' + decode_across]
         coords[dims[1]] = time_dim
         coords[dims[2]] = time_dim
     else:
+        if time_dim is None:
+            time_dim = np.arange(scores.shape[1])
         dims = ['fold'] + [decode_across]
         coords[decode_across] = time_dim
 
@@ -267,26 +270,17 @@ def _scores_as_xarray(scores, scoring, decode_across, time_dim,
     return scores
 
 
-def _decoding_results_as_xarray(scores, probas, scoring, decode_across,
-                                time_dim, time_generalization, classes):
+def _scores_and_probas_as_xarray(scores, probas, scoring, decode_across,
+                                 time_dim, time_generalization, y):
     import xarray as xr
 
-    if scores.ndim == 1:
-        score = xr.DataArray(
-            scores, dims=['fold'],
-            coords={'fold': np.arange(scores.shape[0])},
-            name='score'
-        )
-    else:
-        if time_dim is None:
-            time_dim = np.arange(scores.shape[1])
-        score = _scores_as_xarray(
-            scores, 'score', decode_across, time_dim, time_generalization)
+    score = _scores_as_xarray(
+        scores, 'score', decode_across, time_dim, time_generalization)
 
     proba_dims = ['trial'] + list(score.dims[1:]) + ['class']
     proba = xr.DataArray(
         probas, dims=proba_dims,
-        coords={'trial': np.arange(probas.shape[0]), 'class': classes}
+        coords={'trial': np.arange(probas.shape[0]), 'class': np.unique(y)}
     )
     proba = proba.assign_coords({
         dim: score.coords[dim] for dim in score.dims[1:]
