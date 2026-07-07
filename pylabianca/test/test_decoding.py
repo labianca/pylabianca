@@ -41,6 +41,21 @@ def _add_condition_signal(arr, cells, time_idx, signal=2.):
     arr.data[np.ix_(cells, trials, time_idx)] += signal
 
 
+def _proba_decoding_data(n_times=None):
+    y = np.array([0, 1] * 6)
+    trial_proba = np.linspace(0., 1., y.size)
+
+    if n_times is None:
+        X = np.column_stack([trial_proba, np.zeros(y.size)])
+        time = None
+    else:
+        time = np.linspace(0.1, 0.3, n_times)
+        X = np.zeros((y.size, 2, n_times))
+        X[:, 0, :] = trial_proba[:, None]
+
+    return X, y, time, trial_proba
+
+
 class _IndexProbaClassifier:
     def get_params(self, deep=True):
         return {}
@@ -55,6 +70,17 @@ class _IndexProbaClassifier:
     def predict_proba(self, X):
         second_class = X[:, 0]
         return np.column_stack([1. - second_class, second_class])
+
+
+class _ScoreOnlyClassifier:
+    def get_params(self, deep=True):
+        return {}
+
+    def fit(self, X, y):
+        return self
+
+    def score(self, X, y):
+        return 0.
 
 
 def test_random_xarray_condition_signal_uses_cond_coord():
@@ -217,9 +243,7 @@ def test_run_decoding_array_returns_array_for_2d_input():
 
 
 def test_run_decoding_array_returns_trial_aligned_proba():
-    y = np.array([0, 1] * 6)
-    trial_proba = np.arange(y.size) / (y.size - 1)
-    X = np.column_stack([trial_proba, np.zeros(y.size)])
+    X, y, _, trial_proba = _proba_decoding_data()
 
     out = pln.decoding.run_decoding_array(
         X, y, n_splits=3, random_state=0, clf=_IndexProbaClassifier(),
@@ -308,11 +332,7 @@ def test_run_decoding_array_time_generalization_tracks_pattern_change():
 
 
 def test_run_decoding_array_time_generalization_returns_proba():
-    y = np.array([0, 1] * 6)
-    time = np.array([0.1, 0.2, 0.3])
-    trial_proba = np.linspace(0., 1., y.size)
-    X = np.zeros((y.size, 2, time.size))
-    X[:, 0, :] = trial_proba[:, None]
+    X, y, time, trial_proba = _proba_decoding_data(n_times=3)
 
     out = pln.decoding.run_decoding_array(
         X, y, n_splits=4, random_state=0, time=time,
@@ -364,6 +384,11 @@ def test_decoding_input_errors_are_informative():
     with pytest.raises(ValueError, match='Cannot use PCA'):
         pln.decoding.run_decoding_array(
             np.zeros((12, 3)), arr.cond.values, clf=SVC(), n_pca=1)
+
+    with pytest.raises(ValueError, match='predict_proba'):
+        pln.decoding.run_decoding_array(
+            np.zeros((12, 3)), arr.cond.values, clf=_ScoreOnlyClassifier(),
+            return_proba=True)
 
     with pytest.raises(AssertionError):
         pln.decoding.run_decoding(arr, target='cond', decode_across='freq')
