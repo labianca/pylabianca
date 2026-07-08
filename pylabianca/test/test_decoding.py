@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pytest
 import xarray as xr
+from sklearn.base import BaseEstimator
 
 import pylabianca as pln
 from pylabianca.testing import random_xarray
@@ -39,6 +40,45 @@ def _add_condition_signal(arr, cells, time_idx, signal=2.):
     levels = np.unique(arr.cond.values)
     trials = arr.cond.values == levels[-1]
     arr.data[np.ix_(cells, trials, time_idx)] += signal
+
+
+def _proba_decoding_data(n_times=None):
+    y = np.array([0, 1] * 6)
+    trial_proba = np.linspace(0., 1., y.size)
+
+    if n_times is None:
+        X = np.column_stack([trial_proba, np.zeros(y.size)])
+        time = None
+    else:
+        time = np.linspace(0.1, 0.3, n_times)
+        X = np.zeros((y.size, 2, n_times))
+        X[:, 0, :] = trial_proba[:, None]
+
+    return X, y, time, trial_proba
+
+
+class _IndexProbaClassifier(BaseEstimator):
+    def fit(self, X, y):
+        self.classes_ = np.unique(y)
+        return self
+
+    def score(self, X, y):
+        return 0.
+
+    def predict(self, X):
+        return self.classes_[(X[:, 0] >= 0.5).astype(int)]
+
+    def predict_proba(self, X):
+        second_class = X[:, 0]
+        return np.column_stack([1. - second_class, second_class])
+
+
+class _ScoreOnlyClassifier(BaseEstimator):
+    def fit(self, X, y):
+        return self
+
+    def score(self, X, y):
+        return 0.
 
 
 def test_random_xarray_condition_signal_uses_cond_coord():
@@ -200,6 +240,24 @@ def test_run_decoding_array_returns_array_for_2d_input():
     assert scores.shape == (4,)
 
 
+def test_run_decoding_array_returns_trial_aligned_proba():
+    X, y, _, trial_proba = _proba_decoding_data()
+
+    out = pln.decoding.run_decoding_array(
+        X, y, n_splits=3, random_state=0, clf=_IndexProbaClassifier(),
+        return_proba=True)
+
+    assert isinstance(out, xr.Dataset)
+    assert out.score.dims == ('fold',)
+    assert out.proba.dims == ('trial', 'class')
+    assert out.score.shape == (3,)
+    assert out.proba.shape == (12, 2)
+    np.testing.assert_array_equal(out.trial.values, np.arange(y.size))
+    np.testing.assert_array_equal(out['class'].values, [0, 1])
+    np.testing.assert_allclose(out.proba.sel({'class': 1}).values,
+                               trial_proba)
+
+
 def test_run_decoding_array_loo_returns_time_xarray():
     arr = random_xarray(
         n_cells=4, n_trials=12, n_times=3,
@@ -271,6 +329,30 @@ def test_run_decoding_array_time_generalization_tracks_pattern_change():
                  < 0.75).all())
 
 
+def test_run_decoding_array_time_generalization_returns_proba():
+    X, y, time, trial_proba = _proba_decoding_data(n_times=3)
+
+    out = pln.decoding.run_decoding_array(
+        X, y, n_splits=4, random_state=0, time=time,
+        time_generalization=True, clf=_IndexProbaClassifier(),
+        return_proba=True)
+
+    assert isinstance(out, xr.Dataset)
+    assert out.score.dims == ('fold', 'train_time', 'test_time')
+    assert out.proba.dims == ('trial', 'train_time', 'test_time', 'class')
+    assert out.score.shape == (4, 3, 3)
+    assert out.proba.shape == (12, 3, 3, 2)
+    assert out.score.attrs['scoring'] == 'accuracy'
+    np.testing.assert_array_equal(out.train_time.values, time)
+    np.testing.assert_array_equal(out.test_time.values, time)
+    np.testing.assert_array_equal(out['class'].values, [0, 1])
+    np.testing.assert_allclose(out.proba.sum('class'), 1.)
+    expected = np.broadcast_to(trial_proba[:, None, None],
+                               out.proba.shape[:-1])
+    np.testing.assert_allclose(out.proba.sel({'class': 1}).values,
+                               expected)
+
+
 def test_resample_decoding_validates_inputs():
     with pytest.raises(ValueError, match='Either frates or Xs and ys'):
         pln.decoding.resample_decoding(_simple_decoding_score)
@@ -300,6 +382,11 @@ def test_decoding_input_errors_are_informative():
     with pytest.raises(ValueError, match='Cannot use PCA'):
         pln.decoding.run_decoding_array(
             np.zeros((12, 3)), arr.cond.values, clf=SVC(), n_pca=1)
+
+    with pytest.raises(ValueError, match='predict_proba'):
+        pln.decoding.run_decoding_array(
+            np.zeros((12, 3)), arr.cond.values, clf=_ScoreOnlyClassifier(),
+            return_proba=True)
 
     with pytest.raises(AssertionError):
         pln.decoding.run_decoding(arr, target='cond', decode_across='freq')
