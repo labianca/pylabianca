@@ -250,18 +250,18 @@ def _scores_as_xarray(scores, scoring, decode_across, time_dim,
     coords = {'fold': np.arange(n_splits_int)}
 
     if scores.ndim == 1:
-        dims = ['fold']
-    elif time_generalization:
-        if time_dim is None:
-            time_dim = np.arange(scores.shape[1])
-        dims = ['fold', 'train_' + decode_across, 'test_' + decode_across]
-        coords[dims[1]] = time_dim
-        coords[dims[2]] = time_dim
+        dims = ["fold"]
     else:
         if time_dim is None:
             time_dim = np.arange(scores.shape[1])
-        dims = ['fold'] + [decode_across]
-        coords[decode_across] = time_dim
+
+        if time_generalization:
+            dims = ["fold", "train_" + decode_across, "test_" + decode_across]
+            coords[dims[1]] = time_dim
+            coords[dims[2]] = time_dim
+        else:
+            dims = ["fold"] + [decode_across]
+            coords[decode_across] = time_dim
 
     scores = xr.DataArray(
         scores, dims=dims, coords=coords, name=name,
