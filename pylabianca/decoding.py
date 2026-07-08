@@ -275,19 +275,16 @@ def _scores_and_probas_as_xarray(scores, probas, scoring, decode_across,
     import xarray as xr
 
     score = _scores_as_xarray(
-        scores, 'score', decode_across, time_dim, time_generalization)
-
-    proba_dims = ['trial'] + list(score.dims[1:]) + ['class']
-    proba = xr.DataArray(
-        probas, dims=proba_dims,
-        coords={'trial': np.arange(probas.shape[0]), 'class': np.unique(y)}
+        scores, "score", decode_across, time_dim, time_generalization
     )
-    proba = proba.assign_coords({
-        dim: score.coords[dim] for dim in score.dims[1:]
-    })
 
-    out = xr.Dataset({'score': score, 'proba': proba})
-    out['score'].attrs['scoring'] = scoring
+    proba_dims = ["trial"] + list(score.dims[1:]) + ["class"]
+    coords = {"trial": np.arange(probas.shape[0]), "class": np.unique(y)}
+    coords.update({dim: score.coords[dim] for dim in score.dims[1:]})
+    proba = xr.DataArray(probas, dims=proba_dims, coords=coords)
+
+    out = xr.Dataset({"score": score, "proba": proba})
+    out["score"].attrs["scoring"] = scoring
 
     return out
 
