@@ -75,8 +75,7 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
         scores.append(score)
 
         if return_proba:
-            fold_probas.append(_predict_fold_proba(
-                estimator, X, test_index))
+            fold_probas.append(estimator.predict_proba(X[test_index]))
             test_indices.append(test_index)
 
     scores = np.stack(scores, axis=0)
@@ -137,14 +136,6 @@ def _make_decoding_estimator(X, C=1., scoring='accuracy', n_jobs=1,
         estimator = clf
 
     return estimator
-
-
-def _predict_fold_proba(estimator, X, test_index):
-    proba = estimator.predict_proba(X[test_index])
-    if proba is None:
-        raise ValueError('predict_proba returned None.')
-
-    return proba
 
 
 def _probas_as_trial_array(fold_probas, test_indices, n_trials):
