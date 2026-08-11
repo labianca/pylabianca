@@ -226,6 +226,32 @@ def test_run_decoding_array_uses_condition_signal():
     assert noise_score < 0.75
 
 
+def test_default_decoding_does_not_request_svc_probabilities():
+    X, y, _, _ = _proba_decoding_data()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', FutureWarning)
+        scores = pln.decoding.run_decoding_array(
+            X, y, n_splits=3, random_state=0)
+
+    assert scores.shape == (3,)
+
+
+def test_default_decoding_calibrates_requested_probabilities():
+    arr = random_xarray(
+        n_cells=4, n_trials=40, n_times=1,
+        trial_condition_levels=(0, 1), signal=2., random_state=18)
+    X, y, _ = pln.decoding.frate_to_sklearn(
+        arr.isel(time=0), target='cond')
+
+    out = pln.decoding.run_decoding_array(
+        X, y, n_splits=4, random_state=0, return_proba=True)
+
+    assert out.score.shape == (4,)
+    assert out.proba.shape == (40, 2)
+    np.testing.assert_allclose(out.proba.sum('class'), 1.)
+
+
 def test_run_decoding_array_returns_array_for_2d_input():
     arr = random_xarray(
         n_cells=4, n_trials=40, n_times=1,

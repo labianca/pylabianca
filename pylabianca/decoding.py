@@ -43,7 +43,9 @@ def run_decoding_array(X, y, n_splits=6, C=1., scoring='accuracy',
         0 (default), no dimensionality reduction is performed.
     return_proba : bool
         If True, return an xarray Dataset containing scores and out-of-fold
-        trial-aligned class probabilities from ``predict_proba``.
+        trial-aligned class probabilities from ``predict_proba``. The default
+        SVM classifier uses sigmoid calibration when probabilities are
+        requested.
 
     Returns
     -------
@@ -109,9 +111,15 @@ def _make_decoding_estimator(X, C=1., scoring='accuracy', n_jobs=1,
 
     # classification pipeline
     if clf is None:
+        classifier = SVC(C=C, kernel='linear')
+        if return_proba:
+            from sklearn.calibration import CalibratedClassifierCV
+            classifier = CalibratedClassifierCV(
+                classifier, method='sigmoid', ensemble=False)
+
         steps = [
             StandardScaler(),
-            SVC(C=C, kernel='linear', probability=return_proba)
+            classifier
         ]
         if n_pca > 0:
             steps.insert(1, pca)
