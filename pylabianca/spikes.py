@@ -249,6 +249,9 @@ class SpikeEpochs():
         """
         Calculate cross-correlation histogram.
 
+        For a pair (A, B), lag is the spike time in B minus the spike time
+        in A. A peak at +0.005 s means B tends to fire 5 ms after A.
+
         Parameters
         ----------
         picks : int | str | list-like of int | list-like of str | None
@@ -1160,6 +1163,9 @@ class Spikes(object):
               bins=None, gauss_fwhm=None, backend='auto'):
         """
         Calculate cross-correlation histogram.
+
+        For a pair (A, B), lag is the spike time in B minus the spike time
+        in A. A peak at +0.005 s means B tends to fire 5 ms after A.
 
         Parameters
         ----------

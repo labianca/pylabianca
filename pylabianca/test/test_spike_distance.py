@@ -2,12 +2,7 @@ import numpy as np
 import pylabianca as pln
 import pytest
 
-from pylabianca.utils import download_test_data, get_data_path, has_numba
-
-
-download_test_data()
-data_dir = get_data_path()
-ft_data = pln.utils.get_fieldtrip_data()
+from pylabianca.utils import has_numba
 
 
 def simple_acorr_hist(times, bins):
@@ -32,7 +27,7 @@ def test_xcorr():
         from pylabianca._numba import (_xcorr_hist_auto_numba,
                                        _xcorr_hist_cross_numba)
 
-    spk = pln.io.read_plexon_nex(ft_data)
+    spk = pln.io.read_plexon_nex(pln.utils.get_fieldtrip_data())
     spk_ep = spk.to_epochs()
 
     # read and select
@@ -64,12 +59,45 @@ def test_xcorr():
     hist1 = simple_xcorr_hist(times1, times2, bins)
     hist2 = pln.spike_distance._xcorr_hist_cross_py(times1, times2, bins)
 
-    # for some reason sometimes one spike gets in the adjacent bin
-    assert (hist1 == hist2).mean() > 0.95
+    np.testing.assert_array_equal(hist1, hist2)
 
     if _has_numba:
         hist3 = _xcorr_hist_cross_numba(times1, times2, bins)
         assert (hist2 == hist3).mean() > 0.95
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'numba'])
+def test_xcorr_spike_identity(backend):
+    if backend == 'numba' and not has_numba():
+        pytest.skip('numba is not installed')
+
+    spikes = pln.Spikes([np.array([100, 100, 200, 300]),
+                         np.array([100, 100, 205, 305])], sfreq=1000.)
+    bins = np.array([-7.5, -2.5, 2.5, 7.5]) / 1000
+
+    # Each spike at 100 ms in A pairs with both spikes at 100 ms in B.
+    cross = spikes.xcorr(0, 1, bins=bins, backend=backend)
+    np.testing.assert_array_equal(cross.values[0], [0, 4, 2])
+
+    # Within A, only the two ordered pairs of distinct spikes at 100 ms remain.
+    auto = spikes.xcorr(0, 0, bins=bins, backend=backend)
+    np.testing.assert_array_equal(auto.values[0], [0, 2, 0])
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'numba'])
+def test_xcorr_lag_sign_follows_pair_order(backend):
+    if backend == 'numba' and not has_numba():
+        pytest.skip('numba is not installed')
+
+    times_a = np.array([100, 200, 300])
+    spikes = pln.Spikes([times_a, times_a + 5], sfreq=1000.,
+                        cell_names=['A', 'B'])
+    bins = np.array([-7.5, -2.5, 2.5, 7.5]) / 1000
+    hist = spikes.xcorr(['A', 'B'], ['B', 'A'], bins=bins, backend=backend)
+
+    np.testing.assert_allclose(hist.lag.values, [-0.005, 0., 0.005])
+    np.testing.assert_array_equal(hist.sel(cell='A x B'), [0, 0, 3])
+    np.testing.assert_array_equal(hist.sel(cell='B x A'), [3, 0, 0])
 
 
 def test_xcorr_lag_coordinates_are_bin_centers():
