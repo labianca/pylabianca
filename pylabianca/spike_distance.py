@@ -231,6 +231,9 @@ def xcorr_hist(spk, picks=None, picks2=None, sfreq=500., max_lag=0.2,
                bins=None, gauss_fwhm=None, backend='auto'):
     '''Compute cross-correlation histogram for each trial.
 
+    Lag is the spike time in the second cell minus that in the first cell.
+    Positive lags mean the first cell fired earlier.
+
     Parameters
     ----------
     spk : Spikes | SpikeEpochs
@@ -460,48 +463,29 @@ def _xcorr_hist_auto_py(times, bins, batch_size=1_000):
 
 
 def _xcorr_hist_cross_py(times, times2, bins, batch_size=1_000):
-    '''Compute cross-correlation histogram for a single cell.
-
-    [a little more about memory efficiency and using monotonic relationship to
-     our advantage etc.]'''
+    '''Histogram time differences between two sorted spike trains.'''
     n_times = times.shape[0]
     n_times2 = times2.shape[0]
-    max_lag = max(np.abs(bins[[0, -1]]))
+    min_lag, max_lag = bins[0], bins[-1]
     distances = list()
     n_bins = len(bins) - 1
     counts = np.zeros(n_bins, dtype=int)
 
-    tm_idx_low = 0
-    tm_idx_high = 1
+    first = 0
     in_batch = 0
 
     for idx1 in range(n_times):
         time1 = times[idx1]
 
-        # move forward till tm_idx_high
-        new_tm_idx_low = tm_idx_low
-        for idx2 in range(tm_idx_low, tm_idx_high):
-            if not idx1 == idx2:
-                distance = times2[idx2] - time1
+        while first < n_times2 and times2[first] - time1 < min_lag:
+            first += 1
 
-                if distance < -max_lag:
-                    new_tm_idx_low = idx2
-                else:
-                    distances.append(distance)
-                    in_batch += 1
-
-        tm_idx_low = new_tm_idx_low
-        max_lag_ok = True
-        while max_lag_ok and idx2 < (n_times2 - 1):
-            idx2 += 1
-            if not idx1 == idx2:
-                distance = times2[idx2] - time1
-                max_lag_ok = distance <= max_lag
-
-                if max_lag_ok:
-                    tm_idx_high = idx2
-                    distances.append(distance)
-                    in_batch += 1
+        for idx2 in range(first, n_times2):
+            distance = times2[idx2] - time1
+            if distance > max_lag:
+                break
+            distances.append(distance)
+            in_batch += 1
 
         if in_batch >= batch_size or idx1 == (n_times - 1):
             these_counts, _ = np.histogram(distances, bins)
